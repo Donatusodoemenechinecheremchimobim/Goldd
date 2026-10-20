@@ -5,19 +5,31 @@ interface GoldenMindLogoProps {
   variant?: "full" | "icon" | "horizontal" | "badge" | "hero";
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "hero";
   showText?: boolean;
+  inBlackCircle?: boolean;
 }
 
 // Single SVG Brain Emblem with the intricate gold neural artwork
-// Free-standing, no black circle, colored with the rich golden gradient from the brand picture
-export const GoldenMindBrainIcon: React.FC<{ className?: string; sizeClass?: string }> = ({
+// Displayed inside an elegant luxury black circle with a fine gold border so the gold artwork shows with high contrast
+export const GoldenMindBrainIcon: React.FC<{
+  className?: string;
+  sizeClass?: string;
+  inBlackCircle?: boolean;
+}> = ({
   className = "",
   sizeClass = "w-14 h-14 md:w-16 md:h-16",
+  inBlackCircle = true,
 }) => {
   return (
-    <div className={`relative shrink-0 flex items-center justify-center ${sizeClass} ${className}`}>
+    <div
+      className={`relative shrink-0 flex items-center justify-center overflow-hidden ${
+        inBlackCircle
+          ? "rounded-full bg-[#0E0E0E] border-2 border-[#D4AF37]/80 shadow-[0_4px_24px_rgba(0,0,0,0.35)] ring-1 ring-[#D4AF37]/30 p-[3%]"
+          : ""
+      } ${sizeClass} ${className}`}
+    >
       <svg
-        viewBox="0 345 600 615"
-        className="w-full h-full drop-shadow-[0_2px_8px_rgba(212,175,55,0.45)]"
+        viewBox="0 348 600 605"
+        className="w-full h-full drop-shadow-[0_2px_8px_rgba(212,175,55,0.45)] scale-[1.04]"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -1273,28 +1285,30 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
   variant = "horizontal",
   size = "md",
   showText = true,
+  inBlackCircle = true,
 }) => {
   const sizeMap = {
-    sm: "w-10 h-10",
-    md: "w-14 h-14 md:w-16 md:h-16",
+    sm: "w-11 h-11",
+    md: "w-14 h-14 sm:w-16 sm:h-16",
     lg: "w-20 h-20 md:w-24 md:h-24",
     xl: "w-28 h-28 md:w-32 md:h-32",
     "2xl": "w-36 h-36 md:w-44 md:h-44",
     "3xl": "w-48 h-48 md:w-56 md:h-56",
-    hero: "w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52",
+    hero: "w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60",
   };
 
   if (variant === "icon") {
-    return <GoldenMindBrainIcon className={className} sizeClass={sizeMap[size]} />;
+    return <GoldenMindBrainIcon className={className} sizeClass={sizeMap[size]} inBlackCircle={inBlackCircle} />;
   }
 
   if (variant === "hero") {
     return (
       <div className={`flex flex-col items-center justify-center text-center ${className}`}>
-        {/* Large Prominent Golden Brain Artwork */}
+        {/* Large Prominent Golden Brain Artwork in Black Circle */}
         <GoldenMindBrainIcon
           sizeClass={sizeMap[size] || "w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52"}
           className="hover:scale-105 transition-transform duration-500"
+          inBlackCircle={inBlackCircle}
         />
 
         {showText && (
@@ -1317,7 +1331,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
   if (variant === "full") {
     return (
       <div className={`flex flex-col items-center justify-center text-center ${className}`}>
-        <GoldenMindBrainIcon sizeClass={sizeMap[size] || "w-28 h-28 md:w-36 md:h-36"} />
+        <GoldenMindBrainIcon sizeClass={sizeMap[size] || "w-28 h-28 md:w-36 md:h-36"} inBlackCircle={inBlackCircle} />
         {showText && (
           <div className="mt-4 flex flex-col items-center">
             <span className="font-brand text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.16em] text-[#1C1917] leading-none">
@@ -1338,7 +1352,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
   if (variant === "badge") {
     return (
       <div className={`inline-flex items-center gap-3.5 p-3 rounded-2xl bg-[#FFFDF9] border border-[#D4AF37]/35 shadow-sm ${className}`}>
-        <GoldenMindBrainIcon sizeClass="w-12 h-12" />
+        <GoldenMindBrainIcon sizeClass="w-12 h-12" inBlackCircle={inBlackCircle} />
         <div>
           <p className="font-brand text-base tracking-[0.14em] text-[#1C1917] font-bold leading-tight">
             GOLDEN <span className="text-gold-bright">MIND</span>
@@ -1352,10 +1366,9 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
   }
 
   // Default: Horizontal lockup (Navbar & Footer)
-  // Completely standalone: NO black circle, larger clear emblem, crisp typography
   return (
     <div className={`inline-flex items-center gap-3.5 shrink-0 group ${className}`}>
-      <GoldenMindBrainIcon sizeClass={sizeMap[size]} className="transition-transform duration-300 group-hover:scale-105" />
+      <GoldenMindBrainIcon sizeClass={sizeMap[size]} className="transition-transform duration-300 group-hover:scale-105" inBlackCircle={inBlackCircle} />
 
       {showText && (
         <div className="flex flex-col text-left">
