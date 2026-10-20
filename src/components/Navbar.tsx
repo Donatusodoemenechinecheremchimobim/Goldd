@@ -28,70 +28,70 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       {/* Top Notification / Crisis Assistance Bar */}
-      <div className="bg-[#FAF7F0] border-b border-[#D4AF37]/25 text-xs py-2 px-4 text-center text-[#5C4A1E]">
+      <div className="bg-[#080808] border-b border-stone-800/80 text-xs py-2 px-4 text-center text-stone-300">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 text-[11px] md:text-xs font-medium">
           <div className="flex items-center gap-2 mx-auto md:mx-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#B8860B]"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
             <span>Welcoming New Patients Across Texas · Telehealth & In-Person Appointments Available</span>
           </div>
-          <div className="hidden md:flex items-center gap-6 shrink-0 text-[#7C5E0D]">
-            <a href="tel:4695550188" className="flex items-center gap-1.5 hover:text-[#B8860B] transition-colors">
-              <Phone className="w-3 h-3 text-[#B8860B]" />
+          <div className="hidden md:flex items-center gap-6 shrink-0 text-[#E6C35C]">
+            <a href="tel:4695550188" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
+              <Phone className="w-3 h-3 text-[#D4AF37]" />
               <span>(469) 555-0188</span>
             </a>
-            <span className="text-[#D6CEBE]">|</span>
-            <span className="text-[#665D4F]">Crisis Support: Dial <strong className="text-[#1A1817]">988</strong></span>
+            <span className="text-stone-700">|</span>
+            <span className="text-stone-400">Crisis Support: Dial <strong className="text-[#FFF4BE]">988</strong></span>
           </div>
         </div>
       </div>
 
-      {/* Main Top Navigation Bar (Strict 3-Zone Contract on Clean White Background) */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 transition-all duration-300 shadow-xs">
+      {/* Main Top Navigation Bar (Rich Black Background with Gold Letters) */}
+      <header className="sticky top-0 z-40 bg-[#0A0A0A]/98 backdrop-blur-md border-b border-[#D4AF37]/35 transition-all duration-300 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-6">
-          {/* Zone 1: Brand Wordmark / Logo */}
+          {/* Zone 1: Brand Wordmark / Logo with Gold Letters */}
           <button
             onClick={() => handleNavClick('home')}
             className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1 text-left cursor-pointer"
             aria-label="Golden Mind Psychiatric Home"
           >
-            <GoldenMindLogo variant="horizontal" size="md" />
+            <GoldenMindLogo variant="horizontal" size="md" textColor="gold" />
           </button>
 
           {/* Zone 2: Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-[#292524]">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-stone-200">
             <button
               onClick={() => handleNavClick('home')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'home' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'home' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Home
               {currentPage === 'home' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
             <button
               onClick={() => handleNavClick('about')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'about' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'about' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               About
               {currentPage === 'about' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
             <button
               onClick={() => handleNavClick('services')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'services' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'services' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Services
               {currentPage === 'services' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
@@ -103,22 +103,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <button
                 onClick={() => handleNavClick('conditions-overview')}
-                className={`flex items-center gap-1.5 hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                  currentPage.startsWith('condition') ? 'text-[#B8860B] font-semibold' : ''
+                className={`flex items-center gap-1.5 hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                  currentPage.startsWith('condition') ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
                 }`}
                 aria-expanded={conditionsDropdownOpen}
               >
                 <span>Conditions</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${conditionsDropdownOpen ? 'rotate-180 text-[#B8860B]' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${conditionsDropdownOpen ? 'rotate-180 text-[#D4AF37]' : 'text-stone-400'}`} />
               </button>
 
               {conditionsDropdownOpen && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[460px] p-4 bg-white border border-[#D4AF37]/35 rounded-2xl shadow-xl z-50">
-                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-stone-200">
-                    <span className="text-[11px] font-semibold tracking-wider uppercase text-[#B8860B]">Individual Condition Pages</span>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[460px] p-4 bg-[#121212] border border-[#D4AF37]/40 rounded-2xl shadow-2xl z-50">
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-stone-800">
+                    <span className="text-[11px] font-semibold tracking-wider uppercase text-[#D4AF37]">Individual Condition Pages</span>
                     <button
                       onClick={() => handleNavClick('conditions-overview')}
-                      className="text-xs text-[#57534E] hover:text-[#B8860B] transition-colors font-medium cursor-pointer"
+                      className="text-xs text-stone-400 hover:text-[#D4AF37] transition-colors font-medium cursor-pointer"
                     >
                       View All →
                     </button>
@@ -128,12 +128,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <button
                         key={condition.id}
                         onClick={() => handleNavClick('condition-detail', condition.id)}
-                        className="text-left p-2.5 rounded-xl hover:bg-[#FAF8F2] transition-colors group cursor-pointer border border-transparent hover:border-[#D4AF37]/30"
+                        className="text-left p-2.5 rounded-xl hover:bg-[#1C1C1C] transition-colors group cursor-pointer border border-transparent hover:border-[#D4AF37]/40"
                       >
-                        <p className="text-xs font-semibold text-[#1C1917] group-hover:text-[#B8860B] truncate">
+                        <p className="text-xs font-semibold text-stone-200 group-hover:text-[#D4AF37] truncate">
                           {condition.name.split('(')[0]}
                         </p>
-                        <p className="text-[10px] text-[#78716C] line-clamp-1 mt-0.5">
+                        <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5">
                           {condition.tagline}
                         </p>
                       </button>
@@ -145,58 +145,58 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => handleNavClick('telehealth')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'telehealth' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'telehealth' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Telehealth
               {currentPage === 'telehealth' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
             <button
               onClick={() => handleNavClick('insurance')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'insurance' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'insurance' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Insurance
               {currentPage === 'insurance' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
             <button
               onClick={() => handleNavClick('resources')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'resources' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'resources' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Blog & Resources
               {currentPage === 'resources' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
 
             <button
               onClick={() => handleNavClick('contact')}
-              className={`hover:text-[#B8860B] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'contact' ? 'text-[#B8860B] font-semibold' : ''
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'contact' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
               Contact
               {currentPage === 'contact' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8860B] rounded-full"></span>
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action (Book an Appointment) */}
+          {/* Zone 3: 1 Primary Action (Book an Appointment) + Mobile Hamburger */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => onOpenBooking()}
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_16px_rgba(212,175,55,0.35)] transition-all duration-300 transform active:scale-95 whitespace-nowrap cursor-pointer shadow-sm"
+              className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.45)] transition-all duration-300 transform active:scale-95 whitespace-nowrap cursor-pointer shadow-md"
             >
               <Calendar className="w-3.5 h-3.5 text-[#1C1917]" />
               <span>Book an Appointment</span>
@@ -205,73 +205,73 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Mobile Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl text-[#1C1917] hover:bg-[#FAF8F5] border border-stone-200 transition-colors"
+              className="lg:hidden p-2.5 rounded-xl bg-[#141414] text-[#D4AF37] hover:bg-stone-900 border border-[#D4AF37]/40 transition-colors shadow-xs cursor-pointer"
               aria-label={mobileMenuOpen ? 'Close Menu' : 'Open Menu'}
             >
-              {mobileMenuOpen ? <X className="w-6 h-6 text-[#B8860B]" /> : <Menu className="w-6 h-6 text-[#1C1917]" />}
+              {mobileMenuOpen ? <X className="w-6 h-6 text-[#D4AF37]" /> : <Menu className="w-6 h-6 text-[#D4AF37]" />}
             </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile Drawer (Matching Radiant Souls mobile menu layout on white/clean background) */}
+      {/* Mobile Drawer (Matching black & gold luxury aesthetic) */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-white text-[#1C1917] overflow-y-auto animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[#0A0A0A] text-stone-100 overflow-y-auto animate-in fade-in duration-200">
           {/* Mobile Header with Logo and Close 'X' */}
-          <div className="flex items-center justify-between p-5 border-b border-stone-200 bg-white">
+          <div className="flex items-center justify-between p-5 border-b border-stone-800 bg-[#0A0A0A]">
             <button onClick={() => handleNavClick('home')} className="text-left cursor-pointer">
-              <GoldenMindLogo variant="horizontal" size="md" />
+              <GoldenMindLogo variant="horizontal" size="md" textColor="gold" />
             </button>
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="p-2 rounded-xl text-[#57534E] hover:bg-stone-100 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl text-[#D4AF37] hover:bg-stone-900 border border-[#D4AF37]/35 transition-colors cursor-pointer"
               aria-label="Close menu"
             >
-              <X className="w-7 h-7" />
+              <X className="w-6 h-6" />
             </button>
           </div>
 
-          {/* Mobile Links List (exact style from radiant souls screenshot) */}
-          <div className="flex-1 px-6 py-4 space-y-1 bg-white">
+          {/* Mobile Links List */}
+          <div className="flex-1 px-6 py-4 space-y-1 bg-[#0A0A0A]">
             <button
               onClick={() => handleNavClick('home')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Home
             </button>
 
             <button
               onClick={() => handleNavClick('about')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               About
             </button>
 
             <button
               onClick={() => handleNavClick('services')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Services
             </button>
 
             {/* Mobile Conditions Accordion */}
-            <div className="border-b border-stone-100">
+            <div className="border-b border-stone-800/80">
               <button
                 onClick={() => setMobileConditionsOpen(!mobileConditionsOpen)}
-                className="w-full flex items-center justify-between py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] transition-colors"
+                className="w-full flex items-center justify-between py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] transition-colors"
               >
                 <span>Conditions (Individual Pages)</span>
-                <ChevronDown className={`w-5 h-5 text-[#B8860B] transition-transform ${mobileConditionsOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-5 h-5 text-[#D4AF37] transition-transform ${mobileConditionsOpen ? 'rotate-180' : ''}`} />
               </button>
               {mobileConditionsOpen && (
-                <div className="pl-4 pb-3 space-y-2">
+                <div className="pl-4 pb-3 space-y-2 bg-[#121212] rounded-xl my-2 p-3 border border-stone-850">
                   {conditionsData.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => handleNavClick('condition-detail', c.id)}
-                      className="w-full text-left py-1.5 text-sm text-[#57534E] hover:text-[#B8860B] transition-colors flex items-center gap-2"
+                      className="w-full text-left py-1.5 text-sm text-stone-300 hover:text-[#D4AF37] transition-colors flex items-center gap-2"
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#B8860B]"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
                       <span className="truncate">{c.name.split('(')[0]}</span>
                     </button>
                   ))}
@@ -281,48 +281,48 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => handleNavClick('telehealth')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Telehealth
             </button>
 
             <button
               onClick={() => handleNavClick('insurance')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Insurance
             </button>
 
             <button
               onClick={() => handleNavClick('resources')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Blog & Resources
             </button>
 
             <button
               onClick={() => handleNavClick('contact')}
-              className="w-full text-left py-3.5 text-lg font-medium text-[#1C1917] hover:text-[#B8860B] border-b border-stone-100 transition-colors"
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Contact
             </button>
           </div>
 
           {/* Mobile Bottom Booking CTA */}
-          <div className="p-6 border-t border-stone-200 bg-[#FAF8F5]">
+          <div className="p-6 border-t border-stone-800 bg-[#0E0E0E]">
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 onOpenBooking();
               }}
-              className="w-full py-4 rounded-xl text-center font-bold text-[#1C1917] bg-gold-gradient shadow-md text-base cursor-pointer hover:shadow-lg transition-all"
+              className="w-full py-4 rounded-xl text-center font-bold text-[#1C1917] bg-gold-gradient shadow-lg text-base cursor-pointer hover:shadow-xl transition-all"
             >
               Book Now
             </button>
 
             <div className="mt-4 text-center">
-              <a href="tel:4695550188" className="text-xs text-[#57534E] hover:text-[#B8860B] flex items-center justify-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#B8860B]" />
+              <a href="tel:4695550188" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-[#D4AF37]" />
                 <span>Call Us: (469) 555-0188</span>
               </a>
             </div>

@@ -6,6 +6,7 @@ interface GoldenMindLogoProps {
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "hero";
   showText?: boolean;
   inBlackCircle?: boolean;
+  textColor?: "dark" | "gold";
 }
 
 // Single SVG Brain Emblem with the intricate gold neural artwork
@@ -1286,6 +1287,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
   size = "md",
   showText = true,
   inBlackCircle = true,
+  textColor = "gold",
 }) => {
   const sizeMap = {
     sm: "w-11 h-11",
@@ -1314,7 +1316,8 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
         {showText && (
           <div className="mt-5 flex flex-col items-center">
             <h1 className="font-brand text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-[0.14em] text-[#1C1917] leading-none drop-shadow-xs">
-              GOLDEN <span className="text-gold-bright">MIND</span>
+              <span className="text-[#1C1917]">GOLDEN </span>
+              <span className="text-gold-bright">MIND</span>
             </h1>
             <p className="text-sm sm:text-base md:text-lg font-bold tracking-[0.38em] text-[#9E7206] uppercase font-sans mt-3">
               PSYCHIATRY PLLC
@@ -1334,10 +1337,16 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
         <GoldenMindBrainIcon sizeClass={sizeMap[size] || "w-28 h-28 md:w-36 md:h-36"} inBlackCircle={inBlackCircle} />
         {showText && (
           <div className="mt-4 flex flex-col items-center">
-            <span className="font-brand text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.16em] text-[#1C1917] leading-none">
-              GOLDEN <span className="text-gold-bright">MIND</span>
-            </span>
-            <span className="text-xs sm:text-sm font-bold tracking-[0.36em] text-[#9E7206] uppercase font-sans mt-2">
+            {textColor === "gold" ? (
+              <span className="font-brand text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.16em] text-transparent bg-clip-text bg-gradient-to-r from-[#FFF4BE] via-[#F7D368] to-[#D4AF37] leading-none drop-shadow-[0_1px_6px_rgba(212,175,55,0.35)]">
+                GOLDEN MIND
+              </span>
+            ) : (
+              <span className="font-brand text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.16em] text-[#1C1917] leading-none">
+                GOLDEN <span className="text-gold-bright">MIND</span>
+              </span>
+            )}
+            <span className="text-xs sm:text-sm font-bold tracking-[0.36em] text-[#B8860B] uppercase font-sans mt-2">
               PSYCHIATRY PLLC
             </span>
             <span className="text-[11px] sm:text-xs text-[#78716C] tracking-widest uppercase mt-1">
@@ -1351,13 +1360,13 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
 
   if (variant === "badge") {
     return (
-      <div className={`inline-flex items-center gap-3.5 p-3 rounded-2xl bg-[#FFFDF9] border border-[#D4AF37]/35 shadow-sm ${className}`}>
+      <div className={`inline-flex items-center gap-3.5 p-3 rounded-2xl bg-[#0E0E0E] border border-[#D4AF37]/50 shadow-sm ${className}`}>
         <GoldenMindBrainIcon sizeClass="w-12 h-12" inBlackCircle={inBlackCircle} />
         <div>
-          <p className="font-brand text-base tracking-[0.14em] text-[#1C1917] font-bold leading-tight">
-            GOLDEN <span className="text-gold-bright">MIND</span>
+          <p className="font-brand text-base tracking-[0.14em] text-transparent bg-clip-text bg-gradient-to-r from-[#FFF4BE] via-[#F7D368] to-[#D4AF37] font-bold leading-tight">
+            GOLDEN MIND
           </p>
-          <p className="text-[10px] tracking-[0.28em] text-[#9E7206] font-bold font-sans uppercase">
+          <p className="text-[10px] tracking-[0.28em] text-[#ECC865] font-bold font-sans uppercase">
             PSYCHIATRY CARE
           </p>
         </div>
@@ -1372,12 +1381,25 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
 
       {showText && (
         <div className="flex flex-col text-left">
-          <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.12em] text-[#1C1917] leading-tight transition-colors group-hover:text-[#B8860B]">
-            GOLDEN <span className="text-gold-bright">MIND</span>
-          </span>
-          <span className="text-[10.5px] sm:text-[11.5px] font-bold tracking-[0.32em] text-[#9E7206] leading-tight uppercase font-sans mt-0.5">
-            PSYCHIATRY
-          </span>
+          {textColor === "gold" ? (
+            <>
+              <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.14em] text-transparent bg-clip-text bg-gradient-to-r from-[#FFF4BE] via-[#F7D368] to-[#D4AF37] leading-tight drop-shadow-[0_1px_6px_rgba(212,175,55,0.4)]">
+                GOLDEN MIND
+              </span>
+              <span className="text-[10.5px] sm:text-[11.5px] font-bold tracking-[0.34em] text-[#ECC865] leading-tight uppercase font-sans mt-0.5">
+                PSYCHIATRY
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.12em] text-[#1C1917] leading-tight transition-colors group-hover:text-[#B8860B]">
+                GOLDEN <span className="text-gold-bright">MIND</span>
+              </span>
+              <span className="text-[10.5px] sm:text-[11.5px] font-bold tracking-[0.32em] text-[#9E7206] leading-tight uppercase font-sans mt-0.5">
+                PSYCHIATRY
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>

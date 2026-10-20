@@ -38,7 +38,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
           {/* Column 1: Brand & Head Owner */}
           <div className="lg:col-span-2 space-y-4">
             <button onClick={() => handleLink('home')} className="text-left cursor-pointer">
-              <GoldenMindLogo variant="horizontal" size="md" />
+              <GoldenMindLogo variant="horizontal" size="md" textColor="dark" />
             </button>
             <p className="text-xs md:text-sm text-[#57534E] leading-relaxed max-w-sm">
               Compassionate, expert psychiatric evaluations and medication management led by <span className="text-[#1C1917] font-semibold">Brenda Hobyani, PMHNP-BC</span>. Dedicated to healing minds, restoring balance, and guiding you toward lasting mental wellness.
