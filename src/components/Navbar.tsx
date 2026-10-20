@@ -45,8 +45,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Main Top Navigation Bar (Rich Black Background with Gold Letters) */}
-      <header className="sticky top-0 z-40 bg-[#0A0A0A]/98 backdrop-blur-md border-b border-[#D4AF37]/35 transition-all duration-300 shadow-lg">
+      {/* Main Top Navigation Bar (Deep Pure Black Background with Radiant Gold Letters) */}
+      <header className="sticky top-0 z-40 bg-black border-b border-[#D4AF37]/45 transition-all duration-300 shadow-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-6">
           {/* Zone 1: Brand Wordmark / Logo with Gold Letters */}
           <button
@@ -205,7 +205,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Mobile Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2.5 rounded-xl bg-[#141414] text-[#D4AF37] hover:bg-stone-900 border border-[#D4AF37]/40 transition-colors shadow-xs cursor-pointer"
+              className="lg:hidden p-2.5 rounded-xl bg-black text-[#D4AF37] hover:bg-stone-900 border-2 border-[#D4AF37]/70 transition-all shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
               aria-label={mobileMenuOpen ? 'Close Menu' : 'Open Menu'}
             >
               {mobileMenuOpen ? <X className="w-6 h-6 text-[#D4AF37]" /> : <Menu className="w-6 h-6 text-[#D4AF37]" />}

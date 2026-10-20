@@ -1323,7 +1323,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
               PSYCHIATRY PLLC
             </p>
             <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase mt-2 font-medium">
-              EVIDENCE-BASED PSYCHIATRIC CARE · MESQUITE, TX & TELEHEALTH
+              EVIDENCE-BASED PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
             </p>
           </div>
         )}

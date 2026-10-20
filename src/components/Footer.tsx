@@ -47,7 +47,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
             <div className="pt-2 space-y-2 text-xs">
               <div className="flex items-center gap-2 text-[#44403C]">
                 <MapPin className="w-4 h-4 text-[#B8860B] shrink-0" />
-                <span>Mesquite, Texas · Serving Dallas-Fort Worth & Statewide Telehealth</span>
+                <span>Texas · Telehealth Services from the Comfort of Your Home</span>
               </div>
               <div className="flex items-center gap-2 text-[#44403C]">
                 <Phone className="w-4 h-4 text-[#B8860B] shrink-0" />
