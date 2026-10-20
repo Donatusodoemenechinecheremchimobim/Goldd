@@ -90,7 +90,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle className="w-4 h-4 text-[#B8860B]" />
-              <span className="font-medium text-[#44403C]">In-Person & Telehealth</span>
+              <span className="font-medium text-[#44403C]">100% Telehealth Across Texas</span>
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle className="w-4 h-4 text-[#B8860B]" />
@@ -411,32 +411,32 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
           <div className="space-y-6">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              Flexible Clinical Access
+              100% Telehealth Care Across Texas
             </span>
             <h2 className="text-3xl sm:text-4xl font-serif text-[#1C1917] font-bold leading-tight">
-              Care That Fits Seamlessly Into Your Life
+              Quality Psychiatric Care From the Comfort of Home
             </h2>
             <p className="text-sm text-[#44403C] leading-relaxed">
-              Whether you prefer visiting our serene outpatient practice in Mesquite, Texas or connecting from the privacy of your home or office via secure telehealth, Brenda Hobyani provides the same attentive, high-touch psychiatric medicine.
+              Connect from the privacy and comfort of your home or office anywhere across Texas via secure, encrypted telehealth. Brenda Hobyani, PMHNP-BC provides attentive, comprehensive psychiatric medicine and medication management with zero commute time or waiting rooms.
             </p>
 
             <div className="space-y-3 text-xs sm:text-sm">
               <div className="p-4 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-3">
                 <Video className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-[#1C1917]">Telepsychiatry Across Texas</h4>
+                  <h4 className="font-semibold text-[#1C1917]">HIPAA-Compliant Secure Video Visits</h4>
                   <p className="text-[#57534E] text-xs mt-0.5">
-                    Encrypted HIPAA-compliant video visits. No driving, no waiting rooms, and electronic prescriptions sent directly to your pharmacy.
+                    Connect smoothly on your smartphone, tablet, or computer. Same-week appointments available.
                   </p>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-[#1C1917]">In-Person Outpatient Office</h4>
+                  <h4 className="font-semibold text-[#1C1917]">Direct Electronic Prescriptions</h4>
                   <p className="text-[#57534E] text-xs mt-0.5">
-                    Comfortable, distraction-free clinical setting in Mesquite, Texas for patients who thrive on in-person connection.
+                    Prescriptions sent directly to your local pharmacy anywhere in Texas immediately following your visit.
                   </p>
                 </div>
               </div>
@@ -447,7 +447,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                 onClick={() => onOpenBooking()}
                 className="px-6 py-3.5 rounded-full bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm hover:shadow-[0_4px_20px_rgba(212,175,55,0.35)] transition-all cursor-pointer inline-flex items-center gap-2 shadow-xs"
               >
-                <span>Select Your Visit Format</span>
+                <span>Book a Telehealth Appointment</span>
                 <ArrowRight className="w-4 h-4 text-[#1C1917]" />
               </button>
             </div>
@@ -560,7 +560,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           </div>
 
           <p className="text-xs text-[#78716C] pt-2">
-            Insurance Accepted · Telehealth Across Texas & In-Person Outpatient Visits
+            Insurance Accepted · 100% Telehealth Visits Across Texas
           </p>
         </div>
       </section>

@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 text-[11px] md:text-xs font-medium">
           <div className="flex items-center gap-2 mx-auto md:mx-0">
             <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
-            <span>Welcoming New Patients Across Texas · Telehealth & In-Person Appointments Available</span>
+            <span>Welcoming New Patients Across Texas · 100% Telehealth Visits from the Comfort of Your Home</span>
           </div>
           <div className="hidden md:flex items-center gap-6 shrink-0 text-[#E6C35C]">
             <a href="tel:4695550188" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
