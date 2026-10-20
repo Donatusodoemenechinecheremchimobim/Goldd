@@ -530,9 +530,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
       ========================================================================= */}
       <section className="py-24 text-center px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-[#FAF9F5] border-t border-[#D4AF37]/25">
         <div className="max-w-3xl mx-auto space-y-6 relative z-10">
-          {/* Logo on its own without being in a black circle, enlarged for high clarity */}
+          {/* Logo in Card Format */}
           <div className="flex justify-center mb-4">
-            <GoldenMindLogo variant="icon" size="xl" />
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-lg border border-stone-800 bg-black">
+              <img
+                src="/golden_mind_card.webp"
+                alt="Golden Mind Psychiatry PLLC"
+                className="w-full h-full object-cover"
+              />
+            </div>
           </div>
 
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif text-[#1C1917] font-bold leading-tight">

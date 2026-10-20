@@ -10,17 +10,22 @@ interface AboutPageProps {
 export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking }) => {
   return (
     <div className="min-h-screen bg-white text-[#1C1917] pb-24">
-      {/* Hero Section */}
-      <section className="relative py-16 md:py-24 px-4 sm:px-6 lg:px-8 text-center border-b border-stone-200 overflow-hidden bg-white">
+      {/* Hero Section with Card Format Logo matching user screenshot */}
+      <section className="relative py-12 md:py-20 px-4 sm:px-6 lg:px-8 text-center border-b border-stone-200 overflow-hidden bg-white">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
-        <div className="max-w-4xl mx-auto relative z-10 space-y-4">
-          <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
+        <div className="max-w-4xl mx-auto relative z-10 flex flex-col items-center">
+          {/* Black Card Format with Golden Mind Artwork from user upload */}
+          <div className="w-full max-w-[340px] sm:max-w-[400px] rounded-3xl overflow-hidden shadow-[0_14px_45px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black mb-8 transition-all hover:shadow-[0_18px_55px_rgba(212,175,55,0.25)]">
+            <img
+              src="/golden_mind_card.webp"
+              alt="Golden Mind Psychiatry PLLC"
+              className="w-full h-auto object-cover block"
+            />
+          </div>
+
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-[#B8860B] tracking-tight mb-4">
             About Golden Mind Psychiatry PLLC
-          </span>
-          <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
-            Accessible, Compassionate <br />
-            <span className="text-gold-bright">& Personalized Psychiatric Care.</span>
           </h1>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
             Dedicated to supporting individuals on their journey to emotional well-being, mental stability, and enhanced quality of life.

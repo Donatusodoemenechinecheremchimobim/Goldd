@@ -227,7 +227,13 @@ export const ConditionsOverviewPage: React.FC<ConditionsOverviewPageProps> = ({
         {/* Closing Sanctuary Call to Action */}
         <div className="p-8 md:p-12 rounded-3xl bg-[#FAF9F5] border border-[#D4AF37]/35 text-center space-y-6 shadow-sm">
           <div className="flex justify-center">
-            <GoldenMindLogo variant="icon" size="lg" />
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md border border-stone-800 bg-black">
+              <img
+                src="/golden_mind_card.webp"
+                alt="Golden Mind Psychiatry PLLC"
+                className="w-full h-full object-cover"
+              />
+            </div>
           </div>
 
           <div className="space-y-2 max-w-2xl mx-auto">

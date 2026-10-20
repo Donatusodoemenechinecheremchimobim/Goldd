@@ -2,7 +2,7 @@ import React from "react";
 
 interface GoldenMindLogoProps {
   className?: string;
-  variant?: "full" | "icon" | "horizontal" | "badge" | "hero";
+  variant?: "full" | "icon" | "horizontal" | "badge" | "hero" | "card";
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "hero";
   showText?: boolean;
   inBlackCircle?: boolean;
@@ -1303,26 +1303,21 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
     return <GoldenMindBrainIcon className={className} sizeClass={sizeMap[size]} inBlackCircle={inBlackCircle} />;
   }
 
-  if (variant === "hero") {
+  if (variant === "hero" || variant === "card") {
     return (
       <div className={`flex flex-col items-center justify-center text-center ${className}`}>
-        {/* Large Prominent Golden Brain Artwork in Black Circle */}
-        <GoldenMindBrainIcon
-          sizeClass={sizeMap[size] || "w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52"}
-          className="hover:scale-105 transition-transform duration-500"
-          inBlackCircle={inBlackCircle}
-        />
+        {/* Luxury Rounded Black Card with Golden Mind Artwork from user's upload */}
+        <div className="w-full max-w-[340px] sm:max-w-[400px] md:max-w-[440px] rounded-3xl overflow-hidden shadow-[0_14px_45px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black transition-all duration-300 hover:shadow-[0_18px_55px_rgba(212,175,55,0.25)]">
+          <img
+            src="/golden_mind_card.webp"
+            alt="Golden Mind Psychiatry PLLC"
+            className="w-full h-auto object-cover block"
+          />
+        </div>
 
         {showText && (
-          <div className="mt-5 flex flex-col items-center">
-            <h1 className="font-brand text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-[0.14em] text-[#1C1917] leading-none drop-shadow-xs">
-              <span className="text-[#1C1917]">GOLDEN </span>
-              <span className="text-gold-bright">MIND</span>
-            </h1>
-            <p className="text-sm sm:text-base md:text-lg font-bold tracking-[0.38em] text-[#9E7206] uppercase font-sans mt-3">
-              PSYCHIATRY PLLC
-            </p>
-            <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase mt-2 font-medium">
+          <div className="mt-4 flex flex-col items-center">
+            <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase font-medium">
               EVIDENCE-BASED PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
             </p>
           </div>
