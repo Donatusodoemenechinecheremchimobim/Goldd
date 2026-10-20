@@ -105,8 +105,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           <div className="pt-6">
             <div className="relative rounded-3xl overflow-hidden border border-[#D4AF37]/45 shadow-xl max-w-4xl mx-auto group bg-white">
               <img
-                src="/assets/aistudio/Screenshot_20261020-090011_87b3cf71.jpg"
-                alt="Golden Mind Psychiatric Hero Clinic Interior - A Peaceful Sanctuary in Mesquite, Texas"
+                src="/sanctuary_interior.jpg"
+                alt="Golden Mind Psychiatric Hero Clinic Interior - A Peaceful Sanctuary"
                 className="w-full h-[320px] sm:h-[460px] md:h-[500px] object-cover object-center transition-transform duration-700 group-hover:scale-102"
               />
               {/* Subtle gentle bottom gradient */}
@@ -115,7 +115,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
               <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 flex items-center justify-between text-left">
                 <div className="bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-[#D4AF37]/40 text-xs shadow-md">
                   <span className="text-[#9E7206] font-semibold block text-[10px] uppercase tracking-wider">A Peaceful Sanctuary</span>
-                  <span className="text-[#1C1917] text-xs sm:text-sm font-semibold">Designed for Calm, Supportive Healing in Mesquite, TX</span>
+                  <span className="text-[#1C1917] text-xs sm:text-sm font-semibold">Designed for Calm, Supportive Healing Across Texas</span>
                 </div>
               </div>
             </div>
