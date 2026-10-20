@@ -1,0 +1,6 @@
+{
+  "name": "GOLDEN MIND Psychiatric Care",
+  "description": "Premier psychiatric care, medication management, and telehealth led by Brenda Hobyani, PMHNP-BC. Healing minds and restoring balance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

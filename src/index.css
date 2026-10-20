@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-display: 'Cinzel', 'Playfair Display', serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #FFFFFF;
+    color: #1C1917;
+  }
+
+  h1, h2, h3, .heading-serif {
+    font-family: var(--font-serif);
+  }
+
+  .font-brand {
+    font-family: var(--font-display);
+  }
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #A27616 0%, #C99B26 40%, #E2BE61 70%, #9B7623 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gold-bright {
+  background: linear-gradient(135deg, #B8860B 0%, #D4AF37 50%, #8C6514 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #ECCB6A 0%, #D4AF37 50%, #B8860B 100%);
+}
+
+.bg-gold-gradient:hover {
+  background: linear-gradient(135deg, #F3D57C 0%, #DFBE5A 50%, #A67808 100%);
+}
+
+.bg-gold-subtle {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, rgba(212, 175, 55, 0.02) 100%);
+}
+
+.border-gold-subtle {
+  border-color: rgba(212, 175, 55, 0.35);
+}
+
+.border-gold-glow {
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.15);
+}
+
+.gold-glow {
+  box-shadow: 0 4px 25px rgba(212, 175, 55, 0.18);
+}
