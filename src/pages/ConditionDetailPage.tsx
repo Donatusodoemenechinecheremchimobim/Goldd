@@ -69,9 +69,14 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
         <div className="max-w-4xl mx-auto relative z-10 space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FAF7F0] border border-[#D4AF37]/40 text-xs font-semibold uppercase tracking-wider text-[#9E7206]">
-            <Brain className="w-3.5 h-3.5 text-[#B8860B]" />
-            <span>Individualized Psychiatric Care</span>
+          <div className="flex justify-center mb-4">
+            <div className="w-full max-w-[300px] sm:max-w-[340px] rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black">
+              <img
+                src="/golden_mind_card.webp"
+                alt="Golden Mind Psychiatry PLLC"
+                className="w-full h-auto object-cover block"
+              />
+            </div>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-[#1C1917] tracking-tight leading-tight">
@@ -265,7 +270,7 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
               Ready to Discuss a Personalized Plan with Brenda Hobyani, PMHNP-BC?
             </h3>
             <p className="text-xs sm:text-sm text-[#57534E]">
-              Schedule your comprehensive diagnostic intake. Available via Telehealth across Texas or in-person at our Mesquite clinic.
+              Schedule your comprehensive diagnostic intake. Available via secure Telehealth across Texas from the comfort of your home.
             </p>
           </div>
 

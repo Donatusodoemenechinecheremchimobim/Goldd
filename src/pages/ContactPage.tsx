@@ -51,9 +51,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                 <div className="flex items-start gap-3 text-[#44403C]">
                   <MapPin className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1C1917] block font-semibold">Clinic Location:</strong>
-                    <span>Mesquite, Texas</span>
-                    <p className="text-xs text-[#78716C] mt-0.5">Serving the Dallas-Fort Worth metroplex & statewide via Telehealth</p>
+                    <strong className="text-[#1C1917] block font-semibold">Service Area:</strong>
+                    <span>Texas (100% Telehealth)</span>
+                    <p className="text-xs text-[#78716C] mt-0.5">Serving patients statewide across Texas from the comfort of your home</p>
                   </div>
                 </div>
 

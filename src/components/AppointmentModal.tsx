@@ -69,7 +69,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               Appointment Request Received
             </h3>
             <p className="text-sm text-[#57534E] max-w-md mx-auto leading-relaxed">
-              Thank you, <span className="text-[#1C1917] font-semibold">{formData.fullName}</span>. Your request for a <span className="text-[#1C1917] font-medium">{formData.visitPreference === 'telehealth' ? 'Telehealth Video Visit' : 'In-Person Consultation'}</span> with <strong className="text-[#9E7206]">Brenda Hobyani, PMHNP-BC</strong> has been logged.
+              Thank you, <span className="text-[#1C1917] font-semibold">{formData.fullName}</span>. Your request for a <span className="text-[#1C1917] font-medium">Telehealth Video Visit</span> with <strong className="text-[#9E7206]">Brenda Hobyani, PMHNP-BC</strong> has been logged.
             </p>
 
             <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-xs text-left space-y-2 my-4">
@@ -79,7 +79,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               </div>
               <div className="flex justify-between py-1 border-b border-stone-200">
                 <span className="text-[#78716C]">Visit Format:</span>
-                <span className="text-[#1C1917] capitalize">{formData.visitPreference}</span>
+                <span className="text-[#1C1917]">100% Telehealth Video Visit</span>
               </div>
               <div className="flex justify-between py-1 border-b border-stone-200">
                 <span className="text-[#78716C]">Requested Date & Window:</span>
@@ -117,51 +117,21 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               </p>
             </div>
 
-            {/* Visit Preference Selector */}
+            {/* Visit Format Badge (100% Telehealth) */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#9E7206] uppercase tracking-wider block">
-                1. Select Visit Format
+                1. Visit Format
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, visitPreference: 'telehealth' })}
-                  className={`p-3 rounded-2xl border text-left flex items-start gap-3 cursor-pointer transition-all ${
-                    formData.visitPreference === 'telehealth'
-                      ? 'bg-[#FAF6EA] border-[#D4AF37] shadow-xs'
-                      : 'bg-white border-stone-200 hover:border-stone-300 text-[#78716C]'
-                  }`}
-                >
-                  <Video className={`w-5 h-5 shrink-0 mt-0.5 ${formData.visitPreference === 'telehealth' ? 'text-[#B8860B]' : 'text-[#A8A29E]'}`} />
-                  <div>
-                    <p className={`text-xs font-semibold ${formData.visitPreference === 'telehealth' ? 'text-[#1C1917]' : 'text-[#78716C]'}`}>
-                      Telehealth Video Visit
-                    </p>
-                    <p className="text-[10px] text-[#78716C] mt-0.5">
-                      Anywhere in Texas · Secure HIPAA Room
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, visitPreference: 'in-person' })}
-                  className={`p-3 rounded-2xl border text-left flex items-start gap-3 cursor-pointer transition-all ${
-                    formData.visitPreference === 'in-person'
-                      ? 'bg-[#FAF6EA] border-[#D4AF37] shadow-xs'
-                      : 'bg-white border-stone-200 hover:border-stone-300 text-[#78716C]'
-                  }`}
-                >
-                  <MapPin className={`w-5 h-5 shrink-0 mt-0.5 ${formData.visitPreference === 'in-person' ? 'text-[#B8860B]' : 'text-[#A8A29E]'}`} />
-                  <div>
-                    <p className={`text-xs font-semibold ${formData.visitPreference === 'in-person' ? 'text-[#1C1917]' : 'text-[#78716C]'}`}>
-                      In-Person Clinic Visit
-                    </p>
-                    <p className="text-[10px] text-[#78716C] mt-0.5">
-                      Mesquite, TX Clinic Location
-                    </p>
-                  </div>
-                </button>
+              <div className="p-3.5 rounded-2xl bg-[#FAF6EA] border border-[#D4AF37] shadow-xs flex items-start gap-3">
+                <Video className="w-5 h-5 shrink-0 mt-0.5 text-[#B8860B]" />
+                <div>
+                  <p className="text-xs font-semibold text-[#1C1917]">
+                    100% Telehealth Video Visit
+                  </p>
+                  <p className="text-[11px] text-[#78716C] mt-0.5">
+                    Available Anywhere Across Texas · Encrypted HIPAA Video Room from the Comfort of Your Home
+                  </p>
+                </div>
               </div>
             </div>
 
