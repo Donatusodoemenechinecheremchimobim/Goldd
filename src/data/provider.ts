@@ -27,17 +27,12 @@ export const providerBrenda: ProviderProfile = {
     'Sleep Architecture & Chronic Insomnia'
   ],
   certifications: [
-    'Board Certified Psychiatric Mental Health Nurse Practitioner (ANCC PMHNP-BC)',
-    'Master of Science in Nursing (MSN) - Psychiatric Mental Health',
+    'Board Certified Psychiatric Mental Health Nurse Practitioner (PMHNP-BC)',
     'Licensed Advanced Practice Registered Nurse (APRN)',
-    'DEA Registered & Prescriptive Authority',
-    'Member, American Psychiatric Nurses Association (APNA)',
-    'Specialized Training in Perinatal Mood & Anxiety Disorders (PSI)'
+    'Master of Science in Nursing (MSN) - Psychiatric Mental Health'
   ],
   education: [
-    'Master of Science in Nursing (MSN), Psychiatric-Mental Health Nurse Practitioner Program',
-    'Bachelor of Science in Nursing (BSN), Magna Cum Laude',
-    'Advanced Clinical Practicum in Outpatient Psychopharmacology & Crisis Intervention'
+    'Master of Science in Nursing (MSN), Psychiatric-Mental Health Nurse Practitioner'
   ],
   philosophy: 'Quality psychiatric care should be accessible, personalized, and delivered with genuine compassion. We partner with you to achieve lasting stability, emotional resilience, and peace of mind.',
   quote: 'Healing begins the moment you feel truly seen and understood. My commitment is to guide you back to clarity, balance, and the golden peace of your own mind.'

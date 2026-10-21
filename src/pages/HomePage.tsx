@@ -205,7 +205,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
 
               <div className="mt-4 flex items-center gap-2 text-xs text-[#78716C]">
                 <Award className="w-4 h-4 text-[#B8860B]" />
-                <span className="font-medium text-[#44403C]">ANCC Board-Certified · Prescriptive Authority</span>
+                <span className="font-medium text-[#44403C]">Board-Certified Psychiatric Nurse Practitioner (PMHNP-BC)</span>
               </div>
             </div>
 

@@ -84,7 +84,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
 
             <div className="mt-4 flex items-center gap-2 text-xs text-[#78716C]">
               <Award className="w-4 h-4 text-[#B8860B]" />
-              <span className="font-medium text-[#44403C]">ANCC Board-Certified · DEA Licensed</span>
+              <span className="font-medium text-[#44403C]">Board-Certified Psychiatric Mental Health Nurse Practitioner (PMHNP-BC)</span>
             </div>
           </div>
 
@@ -105,10 +105,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
 
             <div className="space-y-3 text-sm text-[#57534E] leading-relaxed font-normal">
               <p>
-                With extensive clinical training across inpatient psychiatric hospitals, outpatient community health centers, and telepsychiatry, Brenda Hobyani founded Golden Mind Psychiatry PLLC to create a warm, dignified, and scientifically grounded environment where patients are truly heard.
+                Brenda Hobyani, PMHNP-BC founded Golden Mind Psychiatry PLLC to create a warm, dignified, and evidence-based environment where patients across Texas are truly heard and supported from the comfort of their homes.
               </p>
               <p>
-                Brenda specializes in treating complex mood disorders, adult and pediatric ADHD, trauma/PTSD, and perinatal mental health. Her practice harmonizes evidence-based psychopharmacology with integrative lifestyle interventions, restoring the clarity, resilience, and emotional peace needed to thrive.
+                Brenda provides comprehensive psychiatric evaluations, personalized medication management, and specialized treatment for ADHD, anxiety, depression, mood disorders, PTSD, and bipolar disorder.
               </p>
             </div>
 
