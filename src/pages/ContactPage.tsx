@@ -61,7 +61,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                   <Phone className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-[#1C1917] block font-semibold">Phone Support:</strong>
-                    <a href="tel:4695550188" className="hover:text-[#B8860B] transition-colors font-medium">(469) 555-0188</a>
+                    <a href="tel:+14329343185" className="hover:text-[#B8860B] transition-colors font-medium">+1 (432) 934-3185</a>
                     <p className="text-xs text-[#78716C] mt-0.5">Direct patient coordination line</p>
                   </div>
                 </div>

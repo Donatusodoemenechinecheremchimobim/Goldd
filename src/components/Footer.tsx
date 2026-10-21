@@ -51,7 +51,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               </div>
               <div className="flex items-center gap-2 text-[#44403C]">
                 <Phone className="w-4 h-4 text-[#B8860B] shrink-0" />
-                <a href="tel:4695550188" className="hover:text-[#B8860B] transition-colors font-medium">(469) 555-0188</a>
+                <a href="tel:+14329343185" className="hover:text-[#B8860B] transition-colors font-medium">+1 (432) 934-3185</a>
               </div>
               <div className="flex items-center gap-2 text-[#44403C]">
                 <Mail className="w-4 h-4 text-[#B8860B] shrink-0" />

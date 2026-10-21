@@ -35,9 +35,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Welcoming New Patients Across Texas · 100% Telehealth Visits from the Comfort of Your Home</span>
           </div>
           <div className="hidden md:flex items-center gap-6 shrink-0 text-[#E6C35C]">
-            <a href="tel:4695550188" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
+            <a href="tel:+14329343185" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
               <Phone className="w-3 h-3 text-[#D4AF37]" />
-              <span>(469) 555-0188</span>
+              <span>+1 (432) 934-3185</span>
             </a>
             <span className="text-stone-700">|</span>
             <span className="text-stone-400">Crisis Support: Dial <strong className="text-[#FFF4BE]">988</strong></span>
@@ -47,18 +47,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Main Top Navigation Bar (Deep Pure Black Background with Radiant Gold Letters) */}
       <header className="sticky top-0 z-40 bg-black border-b border-[#D4AF37]/45 transition-all duration-300 shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-6">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-4 xl:gap-8">
           {/* Zone 1: Brand Wordmark / Logo with Gold Letters */}
           <button
             onClick={() => handleNavClick('home')}
-            className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1 text-left cursor-pointer"
+            className="shrink-0 flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1 text-left cursor-pointer mr-2 xl:mr-6"
             aria-label="Golden Mind Psychiatric Home"
           >
             <GoldenMindLogo variant="horizontal" size="md" textColor="gold" />
           </button>
 
           {/* Zone 2: Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-stone-200">
+          <nav className="hidden lg:flex items-center gap-3.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium text-stone-200 shrink-0">
             <button
               onClick={() => handleNavClick('home')}
               className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
@@ -321,9 +321,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             <div className="mt-4 text-center">
-              <a href="tel:4695550188" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
+              <a href="tel:+14329343185" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Call Us: (469) 555-0188</span>
+                <span>Call Us: +1 (432) 934-3185</span>
               </a>
             </div>
           </div>

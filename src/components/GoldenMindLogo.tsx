@@ -1371,26 +1371,26 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
 
   // Default: Horizontal lockup (Navbar & Footer)
   return (
-    <div className={`inline-flex items-center gap-3.5 shrink-0 group ${className}`}>
-      <GoldenMindBrainIcon sizeClass={sizeMap[size]} className="transition-transform duration-300 group-hover:scale-105" inBlackCircle={inBlackCircle} />
+    <div className={`inline-flex items-center gap-3 sm:gap-3.5 shrink-0 group ${className}`}>
+      <GoldenMindBrainIcon sizeClass={sizeMap[size]} className="transition-transform duration-300 group-hover:scale-105 shrink-0" inBlackCircle={inBlackCircle} />
 
       {showText && (
-        <div className="flex flex-col text-left">
+        <div className="flex flex-col text-left shrink-0">
           {textColor === "gold" ? (
             <>
-              <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.14em] text-transparent bg-clip-text bg-gradient-to-r from-[#FFF4BE] via-[#F7D368] to-[#D4AF37] leading-tight drop-shadow-[0_1px_6px_rgba(212,175,55,0.4)]">
+              <span className="font-brand text-lg sm:text-xl xl:text-2xl font-bold tracking-[0.12em] text-transparent bg-clip-text bg-gradient-to-r from-[#FFF4BE] via-[#F7D368] to-[#D4AF37] leading-tight drop-shadow-[0_1px_6px_rgba(212,175,55,0.4)] whitespace-nowrap">
                 GOLDEN MIND
               </span>
-              <span className="text-[10.5px] sm:text-[11.5px] font-bold tracking-[0.34em] text-[#ECC865] leading-tight uppercase font-sans mt-0.5">
+              <span className="text-[9.5px] sm:text-[10.5px] xl:text-[11px] font-bold tracking-[0.32em] text-[#ECC865] leading-tight uppercase font-sans mt-0.5 whitespace-nowrap">
                 PSYCHIATRY
               </span>
             </>
           ) : (
             <>
-              <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.12em] text-[#1C1917] leading-tight transition-colors group-hover:text-[#B8860B]">
+              <span className="font-brand text-lg sm:text-xl xl:text-2xl font-bold tracking-[0.12em] text-[#1C1917] leading-tight transition-colors group-hover:text-[#B8860B] whitespace-nowrap">
                 GOLDEN <span className="text-gold-bright">MIND</span>
               </span>
-              <span className="text-[10.5px] sm:text-[11.5px] font-bold tracking-[0.32em] text-[#9E7206] leading-tight uppercase font-sans mt-0.5">
+              <span className="text-[9.5px] sm:text-[10.5px] xl:text-[11px] font-bold tracking-[0.32em] text-[#9E7206] leading-tight uppercase font-sans mt-0.5 whitespace-nowrap">
                 PSYCHIATRY
               </span>
             </>
