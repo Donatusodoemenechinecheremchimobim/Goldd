@@ -293,6 +293,21 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
               className="p-6 rounded-3xl bg-white border border-stone-200 hover:border-[#D4AF37] hover:shadow-md transition-all duration-300 flex flex-col justify-between group shadow-xs"
             >
               <div className="space-y-3">
+                {c.image && (
+                  <div
+                    onClick={() => {
+                      onNavigate('condition-detail', c.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="w-full h-44 rounded-2xl overflow-hidden border border-[#D4AF37]/40 mb-2 cursor-pointer"
+                  >
+                    <img
+                      src={c.image}
+                      alt={c.name}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="w-8 h-8 rounded-xl bg-[#FAF6EA] border border-[#D4AF37]/40 flex items-center justify-center text-[#9E7206] text-xs font-bold">
                     {c.name.charAt(0)}
@@ -400,14 +415,24 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
           <div className="space-y-6">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              100% Telehealth Care Across Texas
+              100% Telehealth-Only Care Across Texas • Adults, Teens &amp; Children
             </span>
             <h2 className="text-3xl sm:text-4xl font-serif text-[#1C1917] font-bold leading-tight">
-              Quality Psychiatric Care From the Comfort of Home
+              Quality Psychiatric Care for Everyone From the Comfort of Home
             </h2>
             <p className="text-sm text-[#44403C] leading-relaxed">
-              Connect from the privacy and comfort of your home or office anywhere across Texas via secure, encrypted telehealth. Brenda Hobyani, PMHNP-BC provides attentive, comprehensive psychiatric medicine and medication management with zero commute time or waiting rooms.
+              Golden Mind Psychiatry PLLC currently provides <strong className="font-semibold text-[#1C1917]">100% telehealth appointments only</strong> (no in-person visits at this time). Telehealth is for <strong className="font-semibold text-[#1C1917]">everyone—adults, teens, and children</strong>. Connect from the privacy and comfort of your home or office anywhere across Texas with Brenda Hobyani, PMHNP-BC for comprehensive psychiatric evaluations and medication management with zero commute time or waiting rooms.
             </p>
+
+            <div className="rounded-3xl overflow-hidden border border-[#D4AF37]/30 shadow-md bg-white p-1.5">
+              <div className="rounded-2xl overflow-hidden aspect-[16/9] bg-stone-100">
+                <img
+                  src="/home_feature.jpg"
+                  alt="Peaceful Reflection and Mental Wellness from the Comfort of Home"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+            </div>
 
             <div className="space-y-3 text-xs sm:text-sm">
               <div className="p-4 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-3">

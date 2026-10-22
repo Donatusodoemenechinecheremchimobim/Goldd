@@ -190,10 +190,33 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
+
+            <button
+              onClick={() => handleNavClick('portal')}
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'portal' ? 'text-[#D4AF37] font-semibold' : 'text-[#E6C35C]'
+              }`}
+            >
+              Client Portal
+              {currentPage === 'portal' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
+              )}
+            </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action (Book an Appointment) + Mobile Hamburger */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Zone 3: Client Portal + Book an Appointment + Mobile Hamburger */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => handleNavClick('portal')}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border transition-all whitespace-nowrap cursor-pointer ${
+                currentPage === 'portal'
+                  ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]'
+                  : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/50 hover:border-[#D4AF37]'
+              }`}
+            >
+              <span>Client Portal</span>
+            </button>
+
             <button
               onClick={() => onOpenBooking()}
               className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.45)] transition-all duration-300 transform active:scale-95 whitespace-nowrap cursor-pointer shadow-md"
@@ -305,6 +328,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
               Contact
+            </button>
+
+            <button
+              onClick={() => handleNavClick('portal')}
+              className="w-full text-left py-3.5 text-lg font-semibold text-[#D4AF37] hover:text-[#FFF4BE] border-b border-stone-800/80 transition-colors"
+            >
+              Client Portal & Provider Workspace
             </button>
           </div>
 

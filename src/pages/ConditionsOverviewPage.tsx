@@ -140,6 +140,19 @@ export const ConditionsOverviewPage: React.FC<ConditionsOverviewPageProps> = ({
             id={category.id}
             className="p-6 sm:p-8 md:p-10 rounded-3xl bg-white border border-stone-200 hover:border-[#D4AF37]/60 transition-all duration-300 shadow-xs hover:shadow-md space-y-6"
           >
+            {category.image && (
+              <div
+                onClick={() => handleSubConditionClick(category.mainConditionId)}
+                className="w-full h-56 sm:h-64 rounded-2xl overflow-hidden border border-[#D4AF37]/40 cursor-pointer group"
+              >
+                <img
+                  src={category.image}
+                  alt={category.name}
+                  className="w-full h-full object-cover object-center group-hover:scale-102 transition-transform duration-500"
+                />
+              </div>
+            )}
+
             {/* Category Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-stone-100">
               <div className="space-y-1 max-w-2xl">

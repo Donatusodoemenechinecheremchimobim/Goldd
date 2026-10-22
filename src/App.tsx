@@ -15,6 +15,7 @@ import { TelehealthPage } from './pages/TelehealthPage';
 import { InsurancePage } from './pages/InsurancePage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { ContactPage } from './pages/ContactPage';
+import { ClientPortalPage } from './pages/ClientPortalPage';
 import { AppointmentModal } from './components/AppointmentModal';
 
 export default function App() {
@@ -32,7 +33,19 @@ export default function App() {
           const conditionId = hash.replace('condition/', '');
           setCurrentPage('condition-detail');
           setCurrentParam(conditionId);
-        } else if (['about', 'services', 'conditions-overview', 'telehealth', 'insurance', 'resources', 'contact', 'home'].includes(hash)) {
+        } else if (
+          [
+            'about',
+            'services',
+            'conditions-overview',
+            'telehealth',
+            'insurance',
+            'resources',
+            'contact',
+            'portal',
+            'home',
+          ].includes(hash)
+        ) {
           setCurrentPage(hash);
         }
       }
@@ -133,6 +146,13 @@ export default function App() {
             onOpenBooking={() => handleOpenBooking()}
           />
         )}
+
+        {currentPage === 'portal' && (
+          <ClientPortalPage
+            onOpenBooking={handleOpenBooking}
+            onNavigate={handleNavigate}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -146,6 +166,7 @@ export default function App() {
         isOpen={bookingModalOpen}
         onClose={() => setBookingModalOpen(false)}
         prefillCondition={prefillCondition}
+        onNavigateToPortal={() => handleNavigate('portal')}
       />
     </div>
   );

@@ -15,16 +15,28 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
       <section className="relative py-16 md:py-24 px-4 sm:px-6 lg:px-8 text-center border-b border-stone-200 overflow-hidden bg-white">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
-        <div className="max-w-4xl mx-auto relative z-10 space-y-4">
-          <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-            Clinical Services & Programs
-          </span>
-          <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
-            Comprehensive Psychiatric Medicine
-          </h1>
-          <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
-            Comprehensive psychiatric evaluations, precision psychopharmacology, and integrative mental healthcare delivered with warmth and dignity.
-          </p>
+        <div className="max-w-4xl mx-auto relative z-10 space-y-6">
+          <div className="space-y-4">
+            <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
+              Clinical Services & Programs
+            </span>
+            <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
+              Comprehensive Psychiatric Medicine
+            </h1>
+            <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
+              Comprehensive psychiatric evaluations, precision psychopharmacology, and integrative mental healthcare delivered with warmth and dignity.
+            </p>
+          </div>
+
+          <div className="pt-2 flex justify-center">
+            <div className="w-full max-w-3xl rounded-3xl overflow-hidden shadow-xl border-2 border-[#D4AF37]/50 bg-white">
+              <img
+                src="/comprehensive_psychiatric_medicine.jpg"
+                alt="Brenda Hobyani, PMHNP-BC - Comprehensive Psychiatric Medicine at Golden Mind Psychiatry"
+                className="w-full h-auto max-h-[480px] object-cover object-top block"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -51,6 +63,24 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
                 <h2 className="text-2xl font-serif font-bold text-[#1C1917]">
                   {service.name}
                 </h2>
+
+                {service.id === 'child-adolescent-care' && (
+                  <div className="rounded-2xl overflow-hidden border border-[#D4AF37]/40 bg-[#FAF7F0] shadow-xs">
+                    <img
+                      src="/child_telehealth_photo.jpg"
+                      alt="Child & Adolescent Telehealth Psychiatric Care"
+                      className="w-full h-48 sm:h-56 object-cover object-center block"
+                    />
+                    <div className="p-3.5 bg-[#FAF7F0] border-t border-[#D4AF37]/25">
+                      <p className="text-xs font-semibold text-[#9E7206]">
+                        100% Telehealth Care for Everyone — Children, Teens &amp; Adults
+                      </p>
+                      <p className="text-[11px] text-[#44403C] mt-0.5 leading-relaxed">
+                        Our practice currently operates 100% via telehealth (no in-person visits). We provide virtual psychiatric care for children, adolescents, and adults across Texas.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <p className="text-xs sm:text-sm text-[#44403C] leading-relaxed font-light whitespace-pre-line">
                   {service.details}

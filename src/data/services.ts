@@ -31,16 +31,16 @@ export const servicesData: Service[] = [
   },
   {
     id: 'telepsychiatry',
-    name: 'Telepsychiatry & Virtual Visits',
-    shortDesc: 'Secure, HIPAA-compliant HD video appointments from the privacy and comfort of your home.',
-    serviceCategory: 'Virtual Video Care',
+    name: 'Telepsychiatry & Virtual Visits (Adults, Teens & Children)',
+    shortDesc: '100% virtual psychiatric care for everyone—adults, teens, and children—from the comfort of home (no in-person visits at this time).',
+    serviceCategory: '100% Virtual Care • All Ages',
     iconName: 'Video',
-    details: 'High-quality psychiatric evaluations and medication management delivered via our encrypted telehealth portal. Receive expert care without traveling, traffic, or sitting in waiting rooms.',
+    details: 'Golden Mind Psychiatry PLLC currently offers 100% telehealth care only (no in-person visits for now). Telehealth is for everyone—adults, teens, and children alike. Receive comprehensive psychiatric evaluations and medication management via our encrypted HIPAA-compliant video portal without traveling, traffic, or waiting rooms.',
     benefits: [
-      'Accessible across Texas and licensed telehealth states',
+      'For everyone: serving Adults (18+), Teens (13–17), and Children (6–12) across Texas',
+      '100% telehealth-only practice—all evaluations and follow-ups conducted virtually',
       '100% confidential and secure HIPAA-compliant video technology',
-      'Flexible scheduling including early morning and evening appointments',
-      'Seamless digital intake and electronic prescriptions'
+      'Seamless digital intake and direct electronic prescriptions to your pharmacy'
     ]
   },
   {

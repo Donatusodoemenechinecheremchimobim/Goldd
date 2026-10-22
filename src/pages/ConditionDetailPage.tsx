@@ -69,15 +69,27 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
         <div className="max-w-4xl mx-auto relative z-10 space-y-6">
-          <div className="flex justify-center mb-4">
-            <div className="w-full max-w-[300px] sm:max-w-[340px] rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black">
-              <img
-                src="/golden_mind_card.webp"
-                alt="Golden Mind Psychiatry PLLC"
-                className="w-full h-auto object-cover block"
-              />
+          {condition.image ? (
+            <div className="flex justify-center mb-6">
+              <div className="w-full max-w-2xl rounded-3xl overflow-hidden shadow-xl border-2 border-[#D4AF37]/50 bg-white">
+                <img
+                  src={condition.image}
+                  alt={condition.name}
+                  className="w-full max-h-[420px] object-cover object-center block"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex justify-center mb-4">
+              <div className="w-full max-w-[300px] sm:max-w-[340px] rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black">
+                <img
+                  src="/golden_mind_card.webp"
+                  alt="Golden Mind Psychiatry PLLC"
+                  className="w-full h-auto object-cover block"
+                />
+              </div>
+            </div>
+          )}
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-[#1C1917] tracking-tight leading-tight">
             {condition.name}
@@ -231,6 +243,32 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
             </ul>
           </div>
         </div>
+
+        {condition.id === 'child-adolescent' && (
+          <div className="rounded-3xl overflow-hidden border-2 border-[#D4AF37]/45 bg-[#FAF7F0] shadow-md grid grid-cols-1 lg:grid-cols-2 items-center">
+            <div className="h-full max-h-[360px] overflow-hidden bg-stone-100">
+              <img
+                src="/child_telehealth_photo.jpg"
+                alt="Child, Adolescent & Telehealth Psychiatry"
+                className="w-full h-full object-cover object-center block"
+              />
+            </div>
+            <div className="p-8 md:p-10 space-y-3 text-center lg:text-left">
+              <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#D4AF37]/40 text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                100% Telehealth Practice • For Children, Teens &amp; Adults
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-serif font-bold text-[#B8860B]">
+                Child, Adolescent &amp; Telehealth Psychiatry
+              </h3>
+              <p className="text-sm sm:text-base text-[#1C1917] leading-relaxed">
+                Psychiatric services for children and adolescents, along with convenient telehealth options from the comfort of home.
+              </p>
+              <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed pt-1 border-t border-[#D4AF37]/25">
+                <strong className="font-semibold text-[#1C1917]">Please Note:</strong> Golden Mind Psychiatry PLLC currently offers <strong className="font-semibold text-[#1C1917]">100% telehealth care only</strong> (no in-person visits at this time). Telehealth is for <strong className="font-semibold text-[#1C1917]">everyone—adults, teens, and children</strong> across Texas.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Frequently Asked Questions */}
         <section className="space-y-6 pt-4">

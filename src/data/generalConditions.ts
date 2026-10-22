@@ -8,6 +8,7 @@ export interface SubCondition {
 export interface GeneralConditionCategory {
   id: string;
   name: string;
+  image?: string;
   tagline: string;
   overview: string;
   mainConditionId: string;
@@ -201,6 +202,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'womens-health-spectrum',
     name: 'Women’s Mental Health & Reproductive Psychiatry',
+    image: '/womens_mental_health.jpg',
     tagline: 'Specialized psychiatric support honoring hormonal transitions throughout womanhood.',
     overview: 'Hormonal fluctuations across menstrual cycles, pregnancy, postpartum, and perimenopause deeply influence neurotransmitter function. Brenda Hobyani offers gentle, safe psychiatric guidance.',
     mainConditionId: 'womens-mental-health',
@@ -300,6 +302,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'child-adolescent-spectrum',
     name: 'Child & Adolescent Behavioral Health',
+    image: '/child_adolescent.jpg',
     tagline: 'Family-centered, conservative psychiatric care supporting youth development and resilience.',
     overview: 'Young minds undergo rapid emotional and hormonal maturation. Brenda Hobyani partners closely with parents and schools to provide conservative, low-dose, compassionate psychiatric care.',
     mainConditionId: 'child-adolescent',

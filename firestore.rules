@@ -1,0 +1,227 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == "chibundusadiq@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'fullName', 'role', 'onboardingCompleted', 'createdAt', 'updatedAt']) &&
+        isValidString(data.uid, 1, 128) &&
+        isValidString(data.email, 3, 256) &&
+        isValidString(data.fullName, 1, 160) &&
+        data.role in ['patient', 'provider'] &&
+        data.onboardingCompleted is bool &&
+        isValidString(data.createdAt, 1, 64) &&
+        isValidString(data.updatedAt, 1, 64);
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll([
+        'patientId', 'patientName', 'patientEmail', 'serviceType',
+        'conditionReason', 'preferredDate', 'preferredTime', 'status',
+        'telehealthUrl', 'preVisitScreenerCompleted', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidString(data.patientId, 1, 128) &&
+      isValidString(data.patientName, 1, 160) &&
+      isValidString(data.patientEmail, 3, 256) &&
+      isValidString(data.serviceType, 1, 200) &&
+      isValidString(data.conditionReason, 1, 200) &&
+      isValidString(data.preferredDate, 1, 64) &&
+      isValidString(data.preferredTime, 1, 100) &&
+      data.status in ['requested', 'confirmed', 'completed', 'cancelled'] &&
+      isValidString(data.telehealthUrl, 1, 300) &&
+      data.preVisitScreenerCompleted is bool &&
+      isValidString(data.createdAt, 1, 64) &&
+      isValidString(data.updatedAt, 1, 64);
+    }
+
+    function isValidIntake(data) {
+      return data.keys().hasAll(['patientId', 'patientName', 'formType', 'title', 'status', 'assignedAt']) &&
+        isValidString(data.patientId, 1, 128) &&
+        isValidString(data.patientName, 1, 160) &&
+        data.formType in ['comprehensive-psychiatric-intake', 'telehealth-consent', 'medical-history'] &&
+        isValidString(data.title, 1, 200) &&
+        data.status in ['pending', 'completed'] &&
+        isValidString(data.assignedAt, 1, 64);
+    }
+
+    function isValidAssessment(data) {
+      return data.keys().hasAll(['patientId', 'patientName', 'type', 'totalScore', 'severity', 'createdAt']) &&
+        isValidString(data.patientId, 1, 128) &&
+        isValidString(data.patientName, 1, 160) &&
+        data.type in ['PHQ-9', 'GAD-7', 'DAILY-MOOD'] &&
+        data.totalScore is number && data.totalScore >= 0 && data.totalScore <= 30 &&
+        data.severity in ['Minimal', 'Mild', 'Moderate', 'Moderately Severe', 'Severe', 'Optimal', 'Balanced', 'Low'] &&
+        isValidString(data.createdAt, 1, 64);
+    }
+
+    function isValidMedication(data) {
+      return data.keys().hasAll([
+        'patientId', 'patientName', 'medicationName', 'dosage',
+        'frequency', 'pharmacy', 'refillsRemaining', 'refillStatus',
+        'prescribedBy', 'updatedAt'
+      ]) &&
+      isValidString(data.patientId, 1, 128) &&
+      isValidString(data.patientName, 1, 160) &&
+      isValidString(data.medicationName, 1, 200) &&
+      isValidString(data.dosage, 1, 100) &&
+      isValidString(data.frequency, 1, 160) &&
+      isValidString(data.pharmacy, 1, 250) &&
+      data.refillsRemaining is number && data.refillsRemaining >= 0 && data.refillsRemaining <= 99 &&
+      data.refillStatus in ['active', 'refill_requested', 'approved_sent', 'denied'] &&
+      isValidString(data.prescribedBy, 1, 160) &&
+      isValidString(data.updatedAt, 1, 64);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll([
+        'patientId', 'patientName', 'senderId', 'senderName',
+        'senderRole', 'subject', 'body', 'read', 'createdAt'
+      ]) &&
+      isValidString(data.patientId, 1, 128) &&
+      isValidString(data.patientName, 1, 160) &&
+      isValidString(data.senderId, 1, 128) &&
+      isValidString(data.senderName, 1, 160) &&
+      data.senderRole in ['patient', 'provider'] &&
+      isValidString(data.subject, 1, 240) &&
+      isValidString(data.body, 1, 5000) &&
+      data.read is bool &&
+      isValidString(data.createdAt, 1, 64);
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll([
+        'patientId', 'patientName', 'description', 'serviceDate',
+        'amount', 'insuranceCoveredAmount', 'patientResponsibility',
+        'status', 'createdAt'
+      ]) &&
+      isValidString(data.patientId, 1, 128) &&
+      isValidString(data.patientName, 1, 160) &&
+      isValidString(data.description, 1, 250) &&
+      isValidString(data.serviceDate, 1, 64) &&
+      data.amount is number && data.amount >= 0 &&
+      data.insuranceCoveredAmount is number && data.insuranceCoveredAmount >= 0 &&
+      data.patientResponsibility is number && data.patientResponsibility >= 0 &&
+      data.status in ['paid', 'due', 'processing'] &&
+      isValidString(data.createdAt, 1, 64);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) &&
+        request.resource.data.uid == resource.data.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isOwner(adminId) || isAdmin();
+      allow create, update: if (isOwner(adminId) || isAdmin()) &&
+        request.resource.data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        request.resource.data.uid == adminId &&
+        request.resource.data.role == 'provider';
+      allow delete: if isOwner(adminId) || isAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.patientId == request.auth.uid ||
+          (resource.data.patientId == 'guest' && resource.data.patientEmail == request.auth.token.email)
+        )
+      );
+      allow create: if isValidAppointment(request.resource.data) && (
+        request.resource.data.patientId == 'guest' ||
+        (isSignedIn() && request.resource.data.patientId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow update: if isValidAppointment(request.resource.data) && (
+        isAdmin() ||
+        (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid) ||
+        (isSignedIn() && resource.data.patientId == 'guest' && resource.data.patientEmail == request.auth.token.email && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /intakes/{intakeId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow create: if isValidIntake(request.resource.data) && (
+        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+      );
+      allow update: if isValidIntake(request.resource.data) && (
+        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /assessments/{assessmentId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow create: if isValidAssessment(request.resource.data) && (
+        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+      );
+      allow update: if isValidAssessment(request.resource.data) && (
+        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /medications/{medicationId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow create: if isValidMedication(request.resource.data) && (
+        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+      );
+      allow update: if isValidMedication(request.resource.data) && (
+        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow create: if isValidMessage(request.resource.data) && (
+        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+      );
+      allow update: if isValidMessage(request.resource.data) && (
+        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow create: if isValidInvoice(request.resource.data) && (
+        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+      );
+      allow update: if isValidInvoice(request.resource.data) && (
+        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

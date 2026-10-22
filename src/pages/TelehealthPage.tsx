@@ -12,19 +12,19 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
       <section className="relative py-16 md:py-24 px-4 sm:px-6 lg:px-8 text-center border-b border-stone-200 overflow-hidden bg-white">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
-        <div className="max-w-4xl mx-auto relative z-10 space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FAF7F0] border border-[#D4AF37]/35 text-xs font-semibold uppercase tracking-wider text-[#9E7206]">
+        <div className="max-w-5xl mx-auto relative z-10 space-y-5">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FAF7F0] border border-[#D4AF37]/45 text-xs font-semibold uppercase tracking-wider text-[#9E7206]">
             <Video className="w-3.5 h-3.5 text-[#B8860B]" />
-            <span>Statewide Telepsychiatry Care</span>
+            <span>100% Telehealth-Only Practice • Adults, Teens &amp; Children</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
-            Expert Psychiatric Care, <br />
-            <span className="text-gold-bright">From the Comfort of Home.</span>
+            Telehealth Psychiatric Care for Everyone — <br />
+            <span className="text-gold-bright">Adults, Teens &amp; Children Across Texas.</span>
           </h1>
 
-          <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
-            Convenient, confidential, and secure HIPAA-compliant virtual psychiatry appointments with Brenda Hobyani, PMHNP-BC anywhere in Texas.
+          <p className="text-base sm:text-lg text-[#44403C] max-w-3xl mx-auto font-light leading-relaxed">
+            Golden Mind Psychiatry PLLC currently operates exclusively as a <strong className="font-semibold text-[#1C1917]">100% virtual telehealth practice</strong> (no in-person visits at this time). Brenda Hobyani, PMHNP-BC provides comprehensive, confidential psychiatric evaluations and medication management for <strong className="font-semibold text-[#1C1917]">adults, adolescents, and children</strong> from the comfort of home.
           </p>
 
           <div className="pt-2 flex justify-center">
@@ -33,8 +33,55 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
               className="px-8 py-3.5 rounded-full font-bold text-sm text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.4)] transition-all cursor-pointer flex items-center gap-2 shadow-sm"
             >
               <Calendar className="w-4 h-4 text-[#1C1917]" />
-              <span>Schedule a Telehealth Visit</span>
+              <span>Schedule a Telehealth Visit (Adults, Teens &amp; Children)</span>
             </button>
+          </div>
+
+          <div className="pt-6 flex justify-center">
+            <div className="w-full max-w-4xl rounded-3xl overflow-hidden shadow-xl border-2 border-[#D4AF37]/50 bg-[#FAF7F0]">
+              <img
+                src="/telehealth_all_ages.jpg"
+                alt="100% Telehealth Psychiatric Care for Adults, Teens, and Children with Brenda Hobyani, PMHNP-BC"
+                className="w-full h-auto max-h-[420px] object-cover object-center block"
+              />
+              <div className="p-6 sm:p-8 text-center bg-[#FAF7F0] border-t border-[#D4AF37]/30 space-y-5">
+                <div className="space-y-2">
+                  <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#D4AF37]/40 text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                    Virtual Care Only • No In-Person Visits Needed
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
+                    Virtual Psychiatric Care for Every Stage of Life
+                  </h2>
+                  <p className="text-sm sm:text-base text-[#44403C] max-w-2xl mx-auto leading-relaxed">
+                    Telehealth is not just for one age group—our 100% virtual clinic serves individuals and families of all ages across Texas.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left pt-2">
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1.5 shadow-2xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">Adults (Ages 18+)</span>
+                    <h3 className="text-sm font-serif font-bold text-[#1C1917]">Adult Telepsychiatry</h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Private video consultations for ADHD, anxiety, depression, bipolar disorder, insomnia, women’s mental health, and addiction recovery.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1.5 shadow-2xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">Teens (Ages 13–17)</span>
+                    <h3 className="text-sm font-serif font-bold text-[#1C1917]">Adolescent Telepsychiatry</h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Supportive virtual evaluations for teen anxiety, academic pressures, mood disorders, ADHD, and emotional regulation.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1.5 shadow-2xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">Children (Ages 6–12)</span>
+                    <h3 className="text-sm font-serif font-bold text-[#1C1917]">Pediatric &amp; Family Care</h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Gentle, family-centered virtual assessments in your child’s familiar home environment with collaborative parent guidance.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -123,6 +170,10 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
           </h3>
 
           {[
+            {
+              q: 'Is Telehealth only for children, or do you see adults and teens too? Do you offer in-person visits?',
+              a: 'Telehealth is for everyone—we treat adults, teens, and children! In fact, Golden Mind Psychiatry PLLC currently operates exclusively via 100% telehealth (there are no in-person office visits at this time). Every patient—whether an adult, adolescent, or child—receives full psychiatric care virtually from the comfort of home.'
+            },
             {
               q: 'Can ADHD or controlled medications be prescribed via Telehealth in Texas?',
               a: 'Yes, licensed psychiatric nurse practitioners with active DEA and state registrations can evaluate and prescribe indicated medications via telehealth following state medical board and federal telehealth rules.'

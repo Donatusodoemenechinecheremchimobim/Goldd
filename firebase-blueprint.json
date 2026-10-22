@@ -1,0 +1,239 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Patient and Provider user profiles for Golden Mind Psychiatry PLLC",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "fullName": { "type": "string", "description": "Full legal name" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "dateOfBirth": { "type": "string", "description": "Date of birth (YYYY-MM-DD)" },
+        "role": { "type": "string", "enum": ["patient", "provider"], "description": "Account role" },
+        "insuranceProvider": { "type": "string", "description": "Primary insurance carrier" },
+        "insuranceMemberId": { "type": "string", "description": "Insurance member ID" },
+        "insuranceGroupNumber": { "type": "string", "description": "Insurance group number" },
+        "preferredPharmacy": { "type": "string", "description": "Preferred Texas pharmacy name and location" },
+        "onboardingCompleted": { "type": "boolean", "description": "Whether automated clinical onboarding has run" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["uid", "email", "fullName", "role", "onboardingCompleted", "createdAt", "updatedAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Provider/Admin role registry for Brenda Hobyani, PMHNP-BC and authorized staff",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["provider"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "100% Telehealth video psychiatric appointments",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string", "description": "Patient UID or 'guest'" },
+        "patientName": { "type": "string" },
+        "patientEmail": { "type": "string", "format": "email" },
+        "patientPhone": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "conditionReason": { "type": "string" },
+        "preferredDate": { "type": "string" },
+        "preferredTime": { "type": "string" },
+        "insuranceProvider": { "type": "string" },
+        "status": { "type": "string", "enum": ["requested", "confirmed", "completed", "cancelled"] },
+        "telehealthUrl": { "type": "string" },
+        "preVisitScreenerCompleted": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "providerNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "patientId",
+        "patientName",
+        "patientEmail",
+        "serviceType",
+        "conditionReason",
+        "preferredDate",
+        "preferredTime",
+        "status",
+        "telehealthUrl",
+        "preVisitScreenerCompleted",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Intake": {
+      "title": "Intake",
+      "description": "Digital psychiatric intake forms and consent documents",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "formType": {
+          "type": "string",
+          "enum": ["comprehensive-psychiatric-intake", "telehealth-consent", "medical-history"]
+        },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "responses": { "type": "object" },
+        "assignedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "patientName", "formType", "title", "status", "assignedAt"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "Standardized PHQ-9, GAD-7, and Daily Mood Tracker logs",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "type": { "type": "string", "enum": ["PHQ-9", "GAD-7", "DAILY-MOOD"] },
+        "totalScore": { "type": "number" },
+        "severity": {
+          "type": "string",
+          "enum": ["Minimal", "Mild", "Moderate", "Moderately Severe", "Severe", "Optimal", "Balanced", "Low"]
+        },
+        "sleepHours": { "type": "number" },
+        "energyLevel": { "type": "number" },
+        "medicationTaken": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "answers": { "type": "array", "items": { "type": "number" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "patientName", "type", "totalScore", "severity", "createdAt"]
+    },
+    "Medication": {
+      "title": "Medication",
+      "description": "Active psychiatric medications and prescription refill workflows",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "medicationName": { "type": "string" },
+        "dosage": { "type": "string" },
+        "frequency": { "type": "string" },
+        "instructions": { "type": "string" },
+        "pharmacy": { "type": "string" },
+        "refillsRemaining": { "type": "number" },
+        "refillStatus": {
+          "type": "string",
+          "enum": ["active", "refill_requested", "approved_sent", "denied"]
+        },
+        "lastRefillRequestedAt": { "type": "string" },
+        "prescribedBy": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "patientId",
+        "patientName",
+        "medicationName",
+        "dosage",
+        "frequency",
+        "pharmacy",
+        "refillsRemaining",
+        "refillStatus",
+        "prescribedBy",
+        "updatedAt"
+      ]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Two-way HIPAA-conscious secure messages between patient and provider",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["patient", "provider"] },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "patientId",
+        "patientName",
+        "senderId",
+        "senderName",
+        "senderRole",
+        "subject",
+        "body",
+        "read",
+        "createdAt"
+      ]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Patient copay and telepsychiatry evaluation billing statements",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "description": { "type": "string" },
+        "serviceDate": { "type": "string" },
+        "amount": { "type": "number" },
+        "insuranceCoveredAmount": { "type": "number" },
+        "patientResponsibility": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "due", "processing"] },
+        "paidAt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "patientId",
+        "patientName",
+        "description",
+        "serviceDate",
+        "amount",
+        "insuranceCoveredAmount",
+        "patientResponsibility",
+        "status",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Patient and Provider user profiles"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Authorized clinical providers/admins"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "100% Telehealth appointments"
+    },
+    "/intakes/{intakeId}": {
+      "schema": { "$ref": "#/entities/Intake" },
+      "description": "Assigned and completed digital psychiatric intake forms"
+    },
+    "/assessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/Assessment" },
+      "description": "PHQ-9, GAD-7, and Daily Mood assessments"
+    },
+    "/medications/{medicationId}": {
+      "schema": { "$ref": "#/entities/Medication" },
+      "description": "Patient medication lists and refill statuses"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Secure direct clinical messages"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Insurance & copay billing statements"
+    }
+  }
+}

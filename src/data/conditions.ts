@@ -271,6 +271,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'womens-mental-health',
     name: 'Women\'s Mental Health & Perinatal Psychiatry',
+    image: '/womens_mental_health.jpg',
     tagline: 'Specialized psychiatric care honoring the hormonal and emotional transitions of womanhood.',
     shortDescription: 'Expert care for Pre-Menstrual Dysphoric Disorder (PMDD), pregnancy and postpartum depression/anxiety, perimenopause, and hormonal mood shifts.',
     overview: 'Women experience distinct neuroendocrine milestones that profoundly impact brain chemistry. Fluctuations in estrogen, progesterone, and neurosteroids can trigger debilitating mood and anxiety episodes during the menstrual cycle, perinatal window, and menopausal transition. Brenda Hobyani, PMHNP-BC has specialized expertise in perinatal mental health, helping women make safe, informed psychiatric decisions with confidence.',
@@ -535,6 +536,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'child-adolescent',
     name: 'Child & Adolescent Psychiatric Care',
+    image: '/child_adolescent.jpg',
     tagline: 'Supportive, family-centered mental healthcare for young minds finding their way.',
     shortDescription: 'Gentle, thorough psychiatric evaluations and conservative treatment for children, pre-teens, and adolescents (ages 6–18).',
     overview: 'Young brains undergo rapid neurodevelopment, and emotional or behavioral struggles during childhood and teenage years can dramatically impact school, friendships, and family life. Brenda Hobyani, PMHNP-BC works collaboratively with parents, pediatricians, and schools, prioritizing conservative, developmentally tailored interventions that protect developing minds.',
