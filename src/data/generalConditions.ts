@@ -19,6 +19,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'depression-spectrum',
     name: 'Depression & Mood Disorders',
+    image: '/depression_care.jpg',
     tagline: 'Gentle, personalized psychopharmacology to lift emotional heaviness and restore vitality.',
     overview: 'Clinical depression is not a personal shortcoming. It is a biological, emotional, and neurochemical state affecting mood, energy, and executive function. We provide personalized care tailored to the specific depressive subtype.',
     mainConditionId: 'depression',
@@ -363,6 +364,40 @@ export const generalConditionsList: GeneralConditionCategory[] = [
         name: 'Vagal Tone & Somatic Nervous System Regulation',
         shortDesc: 'Breathwork, vagal nerve pacing, and somatic methods to reset chronic fight-or-flight states.',
         targetConditionId: 'holistic-integrative',
+      },
+    ],
+  },
+  {
+    id: 'substance-abuse-spectrum',
+    name: 'Substance Abuse & Addiction Recovery',
+    image: '/substance_abuse.jpg',
+    tagline: 'Compassionate, judgment-free psychiatric care supporting lasting recovery and emotional stability.',
+    overview: 'Substance use disorders are frequently intertwined with underlying anxiety, depression, trauma, or untreated ADHD. We offer confidential, stigma-free dual-diagnosis telehealth care across Texas that treats both recovery needs and root mental health drivers.',
+    mainConditionId: 'substance-abuse-addiction',
+    subConditions: [
+      {
+        id: 'dual-diagnosis-care',
+        name: 'Dual-Diagnosis & Co-Occurring Mental Health Care',
+        shortDesc: 'Integrated psychiatric treatment for substance use paired with anxiety, depression, PTSD, or ADHD.',
+        targetConditionId: 'substance-abuse-addiction',
+      },
+      {
+        id: 'alcohol-use-recovery',
+        name: 'Alcohol Use Disorder & Craving Management',
+        shortDesc: 'Evidence-based pharmacotherapy and psychiatric stabilization to reduce cravings and support sobriety.',
+        targetConditionId: 'substance-abuse-addiction',
+      },
+      {
+        id: 'prescription-dependency-support',
+        name: 'Prescription Medication & Substance Dependency Support',
+        shortDesc: 'Closely supervised psychiatric evaluation and tailored recovery planning in a confidential telehealth setting.',
+        targetConditionId: 'substance-abuse-addiction',
+      },
+      {
+        id: 'relapse-prevention-stabilization',
+        name: 'Relapse Prevention & Emotional Stabilization',
+        shortDesc: 'Addressing sleep disruption, rebound anxiety, and mood fluctuations during long-term recovery.',
+        targetConditionId: 'substance-abuse-addiction',
       },
     ],
   },

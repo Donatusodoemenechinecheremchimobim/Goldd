@@ -299,12 +299,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                       onNavigate('condition-detail', c.id);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className="w-full h-44 rounded-2xl overflow-hidden border border-[#D4AF37]/40 mb-2 cursor-pointer"
+                    className="w-full h-48 rounded-2xl overflow-hidden border border-[#D4AF37]/40 mb-2 cursor-pointer"
                   >
                     <img
                       src={c.image}
                       alt={c.name}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      className="w-full h-full object-cover object-[center_20%] group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
                 )}

@@ -74,6 +74,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'depression',
     name: 'Depression & Depressive Disorders',
+    image: '/depression_care.jpg',
     tagline: 'Gentle, compassionate pathways to lift the fog, restore energy, and rediscover hope.',
     shortDescription: 'Personalized psychiatric treatment for Major Depressive Disorder, Persistent Depression (Dysthymia), and Treatment-Resistant Depression.',
     overview: 'Clinical depression is not a personal failure, lack of willpower, or simple sadness. It is a biological, emotional, and neurochemical state that affects how you feel, think, and handle daily activities. Brenda Hobyani, PMHNP-BC approaches depression with deep empathy and scientific rigor, identifying biological drivers, hormonal influences, and psychological stressors to design an integrated treatment roadmap.',
@@ -669,6 +670,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'substance-abuse-addiction',
     name: 'Substance Abuse and Addiction',
+    image: '/substance_abuse.jpg',
     tagline: 'Compassionate, judgment-free psychiatric care supporting lasting recovery and emotional stability.',
     shortDescription: 'Comprehensive dual-diagnosis psychiatric evaluations and medication management for substance use disorders and co-occurring mental health conditions.',
     overview: 'Substance abuse and addiction are complex neurobiological and emotional conditions—often deeply intertwined with underlying anxiety, depression, trauma, or untreated ADHD. At Golden Mind Psychiatry PLLC, Brenda Hobyani, PMHNP-BC provides a safe, stigma-free telehealth environment where patients receive comprehensive dual-diagnosis care that treats both the addiction and the root mental health drivers simultaneously.',
