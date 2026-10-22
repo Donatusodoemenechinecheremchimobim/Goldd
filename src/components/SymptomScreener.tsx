@@ -313,7 +313,7 @@ export const SymptomScreener: React.FC<SymptomScreenerProps> = ({ onOpenBooking 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span className="text-[11px] font-semibold tracking-wider text-[#9E7206] uppercase">
-              Confidential Self-Check Tool · 20 Clinical Indicators Per Condition
+              Confidential Self-Check Tool · “Where Every Mind Is Golden.”
             </span>
             <h3 className="text-xl md:text-2xl font-serif text-[#1C1917] font-bold mt-0.5">
               Comprehensive Psychiatric Symptom Screener

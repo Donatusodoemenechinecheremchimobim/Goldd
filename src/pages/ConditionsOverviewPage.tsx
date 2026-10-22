@@ -56,13 +56,17 @@ export const ConditionsOverviewPage: React.FC<ConditionsOverviewPageProps> = ({
         <div className="max-w-4xl mx-auto relative z-10 space-y-5">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FFFDF7] border border-[#D4AF37]/40 text-xs font-semibold uppercase tracking-wider text-[#9E7206] shadow-xs">
             <Brain className="w-3.5 h-3.5 text-[#B8860B]" />
-            <span>General Conditions & Sub-Specialties Directory</span>
+            <span>General Conditions & Sub-Specialties · “Where Every Mind Is Golden.”</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-serif font-bold text-[#1C1917] tracking-tight leading-tight">
             Comprehensive Conditions <br />
             <span className="text-gold-bright">& Sub-Conditions We Treat</span>
           </h1>
+
+          <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
+            “Where Every Mind Is Golden.”
+          </p>
 
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
             Explore our general psychiatric clinical categories below. Each condition features specific sub-conditions and its own dedicated in-depth care guide led by Brenda Hobyani, PMHNP-BC.
@@ -250,11 +254,14 @@ export const ConditionsOverviewPage: React.FC<ConditionsOverviewPageProps> = ({
           </div>
 
           <div className="space-y-2 max-w-2xl mx-auto">
+            <span className="inline-block px-3.5 py-1 rounded-full bg-white border border-[#D4AF37]/45 text-xs font-serif italic font-bold text-[#9E7206]">
+              “Where Every Mind Is Golden.”
+            </span>
             <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
               Not Certain Which Diagnosis Applies to You?
             </h2>
             <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed">
-              Psychiatric symptoms frequently overlap. During your comprehensive diagnostic evaluation, Brenda Hobyani, PMHNP-BC takes the time to listen to your entire health story to identify root causes and craft a personalized path forward.
+              Psychiatric symptoms frequently overlap. During your comprehensive diagnostic evaluation at Golden Mind Psychiatry PLLC — <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> — Brenda Hobyani, PMHNP-BC takes the time to listen to your entire health story to identify root causes and craft a personalized path forward.
             </p>
           </div>
 

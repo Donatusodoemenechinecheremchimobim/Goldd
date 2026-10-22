@@ -598,6 +598,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 Golden Mind Psychiatry Client Portal
               </h1>
 
+              <p className="text-sm font-serif italic text-[#ECC865] font-semibold">
+                “Where Every Mind Is Golden.”
+              </p>
+
               <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
                 Welcome to your private digital care sanctuary with{' '}
                 <strong className="text-[#D4AF37]">Brenda Hobyani, PMHNP-BC</strong>. Our practice

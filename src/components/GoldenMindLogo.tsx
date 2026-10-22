@@ -1310,13 +1310,16 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
         <div className="w-full max-w-[340px] sm:max-w-[400px] md:max-w-[440px] rounded-3xl overflow-hidden shadow-[0_14px_45px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black transition-all duration-300 hover:shadow-[0_18px_55px_rgba(212,175,55,0.25)]">
           <img
             src="/golden_mind_card.webp"
-            alt="Golden Mind Psychiatry PLLC"
+            alt="Golden Mind Psychiatry PLLC — Where Every Mind Is Golden."
             className="w-full h-auto object-cover block"
           />
         </div>
 
         {showText && (
-          <div className="mt-4 flex flex-col items-center">
+          <div className="mt-5 flex flex-col items-center space-y-2">
+            <p className="font-serif italic text-lg sm:text-xl md:text-2xl font-bold text-[#9E7206] tracking-wide">
+              “Where Every Mind Is Golden.”
+            </p>
             <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase font-medium">
               COMPASSIONATE PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
             </p>
@@ -1344,6 +1347,9 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
             <span className="text-xs sm:text-sm font-bold tracking-[0.36em] text-[#B8860B] uppercase font-sans mt-2">
               PSYCHIATRY PLLC
             </span>
+            <span className="font-serif italic text-xs sm:text-sm font-semibold text-[#9E7206] mt-1">
+              “Where Every Mind Is Golden.”
+            </span>
             <span className="text-[11px] sm:text-xs text-[#78716C] tracking-widest uppercase mt-1">
               BRENDA HOBYANI, PMHNP-BC
             </span>
@@ -1363,6 +1369,9 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
           </p>
           <p className="text-[10px] tracking-[0.28em] text-[#ECC865] font-bold font-sans uppercase">
             PSYCHIATRY CARE
+          </p>
+          <p className="text-[10px] font-serif italic text-[#FFF4BE] mt-0.5">
+            “Where Every Mind Is Golden.”
           </p>
         </div>
       </div>
@@ -1384,6 +1393,9 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
               <span className="text-[9.5px] sm:text-[10.5px] xl:text-[11px] font-bold tracking-[0.32em] text-[#ECC865] leading-tight uppercase font-sans mt-0.5 whitespace-nowrap">
                 PSYCHIATRY
               </span>
+              <span className="text-[9px] sm:text-[10px] font-serif italic text-[#FFF4BE]/90 leading-tight mt-0.5 whitespace-nowrap">
+                “Where Every Mind Is Golden.”
+              </span>
             </>
           ) : (
             <>
@@ -1392,6 +1404,9 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
               </span>
               <span className="text-[9.5px] sm:text-[10.5px] xl:text-[11px] font-bold tracking-[0.32em] text-[#9E7206] leading-tight uppercase font-sans mt-0.5 whitespace-nowrap">
                 PSYCHIATRY
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-serif italic font-semibold text-[#9E7206] leading-tight mt-0.5 whitespace-nowrap">
+                “Where Every Mind Is Golden.”
               </span>
             </>
           )}

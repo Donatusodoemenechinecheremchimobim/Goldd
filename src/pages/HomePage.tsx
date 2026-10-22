@@ -61,7 +61,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
 
           {/* Centered Descriptive Lead Paragraph */}
           <p className="text-base sm:text-lg md:text-xl text-[#57534E] max-w-2xl mx-auto leading-relaxed font-light">
-            Compassionate, expert psychiatric care designed to help you find balance and thrive in a calm, supportive, and confidential environment.
+            Welcome to Golden Mind Psychiatry PLLC — <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> Compassionate, expert psychiatric care designed to help you find balance and thrive in a calm, supportive, and confidential environment.
           </p>
 
           {/* Centered Primary & Secondary Action Buttons */}
@@ -109,9 +109,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
             <div className="relative rounded-3xl overflow-hidden border border-[#D4AF37]/45 shadow-xl max-w-4xl mx-auto group bg-white">
               <img
                 src="/sanctuary_interior.jpg"
-                alt="Golden Mind Psychiatric Hero Clinic Interior - A Peaceful Sanctuary"
+                alt="Golden Mind Psychiatric Hero Clinic Interior - Where Every Mind Is Golden."
                 className="w-full h-[320px] sm:h-[460px] md:h-[500px] object-cover object-center transition-transform duration-700 group-hover:scale-102"
               />
+              <div className="bg-[#FAF7F0] border-t border-[#D4AF37]/35 py-3 px-4 text-center">
+                <p className="font-serif italic text-sm sm:text-base font-bold text-[#9E7206]">
+                  Golden Mind Psychiatry PLLC — “Where Every Mind Is Golden.”
+                </p>
+              </div>
             </div>
           </div>
 
@@ -159,13 +164,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14 space-y-2">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              About Golden Mind Psychiatry PLLC
+              About Golden Mind Psychiatry PLLC · “Where Every Mind Is Golden.”
             </span>
             <h2 className="text-3xl sm:text-4xl font-serif text-[#1C1917] font-bold">
               Accessible, Personalized & Compassionate Care
             </h2>
             <p className="text-xs sm:text-sm text-[#78716C]">
-              Committed to understanding each individual’s unique needs and restoring emotional balance.
+              <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> — Committed to understanding each individual’s unique needs and restoring emotional balance.
             </p>
           </div>
 
@@ -188,6 +193,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                 </h3>
                 <p className="text-xs text-[#57534E] mt-1 font-medium">
                   Head Owner & Lead Psychiatric Clinician
+                </p>
+                <p className="text-xs font-serif italic font-semibold text-[#9E7206] mt-1">
+                  “Where Every Mind Is Golden.”
                 </p>
                 <div className="mt-2.5 pt-2.5 border-t border-[#D4AF37]/25 flex items-center justify-center gap-1.5 text-[11px] text-[#44403C]">
                   <Award className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
@@ -275,10 +283,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
           <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-            Specialized Conditions We Treat
+            Specialized Conditions We Treat · “Where Every Mind Is Golden.”
           </span>
           <h2 className="text-3xl sm:text-4xl font-serif text-[#1C1917] font-bold">
-            Every Mind is Unique. Every Care Plan is Individualized.
+            “Where Every Mind Is Golden.” — Personalized Care for Every Mind
           </h2>
           <p className="text-sm text-[#78716C]">
             Explore our dedicated clinical guides detailing symptoms, modern medication management options, and personalized recovery roadmaps for each condition.
@@ -358,13 +366,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14 space-y-2">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              Our Clinical Philosophy
+              Our Clinical Philosophy · “Where Every Mind Is Golden.”
             </span>
             <h2 className="text-3xl sm:text-4xl font-serif text-[#1C1917] font-bold">
               Modern Science. Compassionate Heart.
             </h2>
             <p className="text-xs sm:text-sm text-[#78716C]">
-              A balanced approach to mental healthcare designed to treat the whole person, not just isolated symptoms.
+              <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> — A balanced approach to mental healthcare designed to treat the whole person, not just isolated symptoms.
             </p>
           </div>
 
@@ -555,12 +563,16 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
             </div>
           </div>
 
+          <div className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#D4AF37]/50 text-xs sm:text-sm font-serif italic font-bold text-[#9E7206] shadow-2xs">
+            “Where Every Mind Is Golden.”
+          </div>
+
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif text-[#1C1917] font-bold leading-tight">
             Your Journey to Clarity Begins With a Conversation
           </h2>
 
           <p className="text-base text-[#57534E] max-w-xl mx-auto font-light leading-relaxed">
-            Take the first step toward lasting emotional balance. Schedule your confidential consultation with Brenda Hobyani, PMHNP-BC today.
+            Take the first step toward lasting emotional balance at Golden Mind Psychiatry PLLC — <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> Schedule your confidential consultation with Brenda Hobyani, PMHNP-BC today.
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -574,7 +586,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           </div>
 
           <p className="text-xs text-[#78716C] pt-2">
-            Insurance Accepted · 100% Telehealth Visits Across Texas
+            Insurance Accepted · 100% Telehealth Visits Across Texas · <span className="font-serif italic text-[#9E7206] font-semibold">“Where Every Mind Is Golden.”</span>
           </p>
         </div>
       </section>

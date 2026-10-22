@@ -438,4 +438,38 @@ export const generalConditionsList: GeneralConditionCategory[] = [
       },
     ],
   },
+  {
+    id: 'pharmacogenomic-spectrum',
+    name: 'Pharmacogenetic & Pharmacogenomic DNA Testing',
+    image: '/pharmacogenetic_testing.jpg',
+    tagline: 'DNA-guided precision psychiatry to reduce trial and error and promote safer, more effective care.',
+    overview: 'Pharmacogenomic testing analyzes a patient’s DNA via a painless cheek swab to identify genetic variations that influence how the body metabolizes psychiatric medications for depression, anxiety, ADHD, bipolar disorder, OCD, and more.',
+    mainConditionId: 'pharmacogenomic-testing',
+    subConditions: [
+      {
+        id: 'pgx-antidepressant-guidance',
+        name: 'Antidepressant & Anxiety Medication DNA Matching',
+        shortDesc: 'Identifying CYP450 liver enzyme variations to select better-tolerated SSRIs, SNRIs, and anxiolytics.',
+        targetConditionId: 'pharmacogenomic-testing',
+      },
+      {
+        id: 'pgx-adhd-mood-stabilizers',
+        name: 'ADHD & Mood Stabilizer Metabolic Profiling',
+        shortDesc: 'Evaluating ultra-rapid or slow metabolism to optimize dosing for stimulants, non-stimulants, and mood stabilizers.',
+        targetConditionId: 'pharmacogenomic-testing',
+      },
+      {
+        id: 'mthfr-folate-pathway',
+        name: 'MTHFR Gene & Neurotransmitter Synthesis Testing',
+        shortDesc: 'Detecting folate conversion variants to guide targeted L-methylfolate and integrative supplementation.',
+        targetConditionId: 'pharmacogenomic-testing',
+      },
+      {
+        id: 'treatment-resistant-pgx',
+        name: 'Prior Medication Side Effects & Treatment Resistance',
+        shortDesc: 'Replacing frustrating trial-and-error prescribing with objective genetic insights shipped directly to your Texas home.',
+        targetConditionId: 'pharmacogenomic-testing',
+      },
+    ],
+  },
 ];

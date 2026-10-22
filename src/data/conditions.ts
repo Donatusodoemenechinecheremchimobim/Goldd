@@ -807,6 +807,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'pharmacogenomic-testing',
     name: 'Pharmacogenomic Testing',
+    image: '/pharmacogenetic_testing.jpg',
     tagline: 'DNA-guided precision psychiatry to reduce trial and error and promote safer, more effective care.',
     shortDescription: 'Pharmacogenomic testing analyzes a patient’s DNA to identify genetic variations that may influence responses to psychiatric medications.',
     overview: 'Pharmacogenomic testing analyzes a patient’s DNA to identify genetic variations that may influence responses to psychiatric medications used to treat depression, anxiety, ADHD, bipolar disorder, schizophrenia, epilepsy, and other neurological conditions. By identifying how the body may metabolize certain medications, testing can help guide personalized treatment decisions, support medication selection, and reduce trial and error to promote safer, more effective care.',

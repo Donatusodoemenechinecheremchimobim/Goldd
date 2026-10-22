@@ -24,11 +24,15 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
             />
           </div>
 
+          <div className="inline-block px-4 py-1.5 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/45 text-sm sm:text-base font-serif italic font-bold text-[#9E7206] mb-3 shadow-2xs">
+            “Where Every Mind Is Golden.”
+          </div>
+
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-[#B8860B] tracking-tight mb-4">
             About Golden Mind Psychiatry PLLC
           </h1>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
-            Dedicated to supporting individuals on their journey to emotional well-being, mental stability, and enhanced quality of life.
+            <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> — Dedicated to supporting individuals on their journey to emotional well-being, mental stability, and enhanced quality of life.
           </p>
         </div>
       </section>
@@ -38,7 +42,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
         <div className="p-8 md:p-10 rounded-3xl bg-[#FAF9F5] border border-[#D4AF37]/35 shadow-sm space-y-6">
           <div className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#9E7206]">
-              Our Foundation & Purpose
+              Our Foundation & Purpose · “Where Every Mind Is Golden.”
             </span>
             <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
               Committed to Understanding Your Unique Needs
@@ -76,6 +80,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
               </h3>
               <p className="text-xs text-[#57534E] mt-1 font-medium">
                 Head Owner & Clinical Director
+              </p>
+              <p className="text-xs font-serif italic font-semibold text-[#9E7206] mt-1">
+                “Where Every Mind Is Golden.”
               </p>
               <div className="mt-2.5 pt-2.5 border-t border-[#D4AF37]/25 flex items-center justify-center gap-1.5 text-[11px] text-[#44403C]">
                 <Award className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
@@ -141,7 +148,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              Patient Journey
+              Patient Journey · “Where Every Mind Is Golden.”
             </span>
             <h2 className="text-3xl font-serif font-bold text-[#1C1917]">
               What to Expect at Golden Mind
