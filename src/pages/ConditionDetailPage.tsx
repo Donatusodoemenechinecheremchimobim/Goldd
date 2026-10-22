@@ -127,6 +127,88 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
 
       {/* Main Content Layout */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 space-y-16">
+        {condition.id === 'adhd' && (
+          <section className="rounded-3xl overflow-hidden border-2 border-[#D4AF37]/45 bg-[#FAF7F0] shadow-md p-6 sm:p-8 md:p-10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+              {/* Left Column: Full Uncropped Infographic */}
+              <div className="lg:col-span-6 flex justify-center">
+                <div className="w-full max-w-lg rounded-2xl overflow-hidden border border-[#D4AF37]/40 bg-white shadow-sm p-2">
+                  <img
+                    src="/adhd_progression.jpg"
+                    alt="ADHD in Childhood to ADHD in Adulthood Lifespan Progression"
+                    className="w-full h-auto object-contain rounded-xl block"
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: Structured Clinical Guidance */}
+              <div className="lg:col-span-6 space-y-5 text-left">
+                <div className="space-y-2">
+                  <span className="inline-block px-3.5 py-1 rounded-full bg-white border border-[#D4AF37]/40 text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                    Lifespan Care • Children, Teens &amp; Adults
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917] leading-tight">
+                    Understanding ADHD Across the Lifespan: Childhood to Adulthood
+                  </h2>
+                  <p className="text-xs sm:text-sm text-[#44403C] leading-relaxed">
+                    ADHD is not a condition that simply disappears with age. When executive functioning challenges go unrecognized or untreated in childhood, they often evolve into complex career, organizational, and emotional hurdles in adulthood.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1 shadow-2xs">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">
+                      Academic to Career Focus
+                    </h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Early classroom focus challenges can transition into workplace overwhelm and burnout without targeted executive support.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1 shadow-2xs">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">
+                      Impulse &amp; Daily Stability
+                    </h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Thoughtful medication management helps calm internal restlessness, supporting safer, more grounded daily decision-making.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1 shadow-2xs">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">
+                      Healthy Dopamine Balance
+                    </h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Proactive neurochemical care supports healthy reward pathways and reduces the urge to self-medicate stress.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white border border-stone-200/90 space-y-1 shadow-2xs">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#9E7206]">
+                      Confidence &amp; Emotional Renewal
+                    </h3>
+                    <p className="text-xs text-[#57534E] leading-relaxed">
+                      Replacing frustration and overwhelm with clarity, structured habits, and renewed personal confidence at any age.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/80 border border-[#D4AF37]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <p className="text-xs text-[#44403C] leading-relaxed">
+                    <strong className="font-semibold text-[#1C1917]">100% Telehealth Across Texas:</strong> Brenda Hobyani, PMHNP-BC provides comprehensive ADHD evaluations and personalized treatment for <strong className="font-semibold text-[#1C1917]">children, teens, and adults</strong>.
+                  </p>
+                  <button
+                    onClick={() => onOpenBooking(condition.name)}
+                    className="px-5 py-2.5 rounded-full bg-gold-gradient text-[#1C1917] font-bold text-xs shrink-0 hover:shadow-sm transition-all cursor-pointer"
+                  >
+                    Book ADHD Evaluation
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Symptoms & Common Presentations */}
         <section id="symptoms-section" className="space-y-6">
           <div className="text-center sm:text-left space-y-1">
