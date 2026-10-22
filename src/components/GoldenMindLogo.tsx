@@ -1318,7 +1318,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
         {showText && (
           <div className="mt-4 flex flex-col items-center">
             <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase font-medium">
-              EVIDENCE-BASED PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
+              COMPASSIONATE PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
             </p>
           </div>
         )}

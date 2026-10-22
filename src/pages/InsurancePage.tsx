@@ -85,7 +85,7 @@ export const InsurancePage: React.FC<InsurancePageProps> = ({ onOpenBooking }) =
             <div className="p-6 rounded-2xl bg-[#FAF8F5] border border-stone-200 space-y-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#9E7206]">Initial Visit</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-serif font-bold text-[#1C1917]">$275</span>
+                <span className="text-3xl font-serif font-bold text-[#1C1917]">$450</span>
                 <span className="text-xs text-[#78716C]">/ Diagnostic Intake</span>
               </div>
               <p className="text-xs text-[#57534E] leading-relaxed">
@@ -96,7 +96,7 @@ export const InsurancePage: React.FC<InsurancePageProps> = ({ onOpenBooking }) =
             <div className="p-6 rounded-2xl bg-[#FAF8F5] border border-stone-200 space-y-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#9E7206]">Follow-Up Visit</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-serif font-bold text-[#1C1917]">$145</span>
+                <span className="text-3xl font-serif font-bold text-[#1C1917]">$250</span>
                 <span className="text-xs text-[#78716C]">/ Medication Follow-Up</span>
               </div>
               <p className="text-xs text-[#57534E] leading-relaxed">

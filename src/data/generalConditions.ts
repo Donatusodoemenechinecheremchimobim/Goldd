@@ -18,7 +18,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'depression-spectrum',
     name: 'Depression & Mood Disorders',
-    tagline: 'Gentle, evidence-based psychopharmacology to lift emotional heaviness and restore vitality.',
+    tagline: 'Gentle, personalized psychopharmacology to lift emotional heaviness and restore vitality.',
     overview: 'Clinical depression is not a personal shortcoming. It is a biological, emotional, and neurochemical state affecting mood, energy, and executive function. We provide personalized care tailored to the specific depressive subtype.',
     mainConditionId: 'depression',
     subConditions: [
@@ -58,7 +58,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
     id: 'anxiety-panic-spectrum',
     name: 'Anxiety, Stress & Panic Disorders',
     tagline: 'Calming the sympathetic nervous system through precision medicine and somatic resilience.',
-    overview: 'Chronic anxiety is characterized by an overactive fight-or-flight response, hypervigilance, and physical tension. Our evidence-informed protocols restore calm and cognitive flexibility.',
+    overview: 'Chronic anxiety is characterized by an overactive fight-or-flight response, hypervigilance, and physical tension. Our personalized clinical protocols restore calm and cognitive flexibility.',
     mainConditionId: 'anxiety-stress',
     subConditions: [
       {
@@ -136,7 +136,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
     id: 'trauma-ptsd-spectrum',
     name: 'Trauma & Stressor-Related Disorders (PTSD)',
     tagline: 'Gentle, trauma-informed stabilization to soothe an overworked alarm system.',
-    overview: 'Trauma leaves a lingering imprint on the amygdala, nervous system, and sleep architecture. We utilize evidence-based medications to dampen hyperarousal and nightmares.',
+    overview: 'Trauma leaves a lingering imprint on the amygdala, nervous system, and sleep architecture. We utilize targeted psychiatric medications to dampen hyperarousal and nightmares.',
     mainConditionId: 'trauma-ptsd',
     subConditions: [
       {
@@ -234,7 +234,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'ocd-spectrum',
     name: 'Obsessive-Compulsive & Related Disorders (OCD)',
-    tagline: 'Evidence-based SSRI optimization and cognitive defusion to break the compulsive loop.',
+    tagline: 'Targeted SSRI optimization and cognitive defusion to break the compulsive loop.',
     overview: 'OCD involves intrusive, distressing thoughts (obsessions) that trigger repetitive mental or behavioral rituals (compulsions). We utilize targeted pharmacotherapy to quiet intrusive thought loops.',
     mainConditionId: 'ocd',
     subConditions: [
@@ -267,7 +267,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'sleep-insomnia-spectrum',
     name: 'Insomnia & Sleep Architecture Disorders',
-    tagline: 'Non-habit-forming medical support and circadian realignment for deep restorative rest.',
+    tagline: 'Targeted medical support and circadian realignment for deep restorative rest.',
     overview: 'Sleep is the brain’s cleansing and restorative phase. Chronic insomnia fuels mood instability and cognitive decline. We address sleep onset, night awakenings, and circadian disruptions.',
     mainConditionId: 'insomnia-sleep',
     subConditions: [
@@ -334,7 +334,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
     id: 'holistic-integrative-spectrum',
     name: 'Holistic & Integrative Psychiatry',
     tagline: 'Treating the whole person through gut-brain science, targeted micronutrients, and lifestyle balance.',
-    overview: 'Mental wellness is fundamentally intertwined with metabolic health, inflammatory balance, gut microbiome signaling, and nervous system regulation. We offer evidence-informed integrative medicine.',
+    overview: 'Mental wellness is fundamentally intertwined with metabolic health, inflammatory balance, gut microbiome signaling, and nervous system regulation. We offer personalized integrative medicine.',
     mainConditionId: 'holistic-integrative',
     subConditions: [
       {

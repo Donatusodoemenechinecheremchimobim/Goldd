@@ -67,24 +67,20 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
                 alt="Brenda Hobyani, PMHNP-BC - Board-Certified Psychiatric Mental Health Nurse Practitioner and Head Owner of Golden Mind Psychiatry"
                 className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-102"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80"></div>
-
-              <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-[#D4AF37]/40 text-center shadow-md">
-                <h3 className="font-serif text-lg font-bold text-[#1C1917]">
-                  Brenda Hobyani
-                </h3>
-                <p className="text-xs font-bold text-[#9E7206]">
-                  PMHNP-BC
-                </p>
-                <p className="text-[11px] text-[#57534E] font-medium">
-                  Head Owner & Clinical Director
-                </p>
-              </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-2 text-xs text-[#78716C]">
-              <Award className="w-4 h-4 text-[#B8860B]" />
-              <span className="font-medium text-[#44403C]">Board-Certified Psychiatric Mental Health Nurse Practitioner (PMHNP-BC)</span>
+            {/* Clean Name & Title Placement Below Portrait (Not hovering over the photo) */}
+            <div className="mt-5 w-full max-w-[380px] p-4 rounded-2xl bg-[#FAF8F2] border border-[#D4AF37]/40 text-center shadow-xs">
+              <h3 className="font-serif text-xl font-bold text-[#1C1917]">
+                Brenda Hobyani, <span className="text-[#9E7206]">PMHNP-BC</span>
+              </h3>
+              <p className="text-xs text-[#57534E] mt-1 font-medium">
+                Head Owner & Clinical Director
+              </p>
+              <div className="mt-2.5 pt-2.5 border-t border-[#D4AF37]/25 flex items-center justify-center gap-1.5 text-[11px] text-[#44403C]">
+                <Award className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
+                <span className="font-medium">Board-Certified Psychiatric Nurse Practitioner</span>
+              </div>
             </div>
           </div>
 
@@ -105,7 +101,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
 
             <div className="space-y-3 text-sm text-[#57534E] leading-relaxed font-normal">
               <p>
-                Brenda Hobyani, PMHNP-BC founded Golden Mind Psychiatry PLLC to create a warm, dignified, and evidence-based environment where patients across Texas are truly heard and supported from the comfort of their homes.
+                Brenda Hobyani, PMHNP-BC founded Golden Mind Psychiatry PLLC to create a warm, dignified, and compassionate clinical environment where patients across Texas are truly heard and supported from the comfort of their homes.
               </p>
               <p>
                 Brenda provides comprehensive psychiatric evaluations, personalized medication management, and specialized treatment for ADHD, anxiety, depression, mood disorders, PTSD, and bipolar disorder.

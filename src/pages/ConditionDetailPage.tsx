@@ -184,7 +184,7 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
             <div className="flex items-center gap-2 text-[#9E7206]">
               <Pill className="w-5 h-5" />
               <h4 className="font-semibold text-sm uppercase tracking-wider text-[#1C1917]">
-                Evidence-Based Medication Management Details
+                Habit-Forming Medication Management
               </h4>
             </div>
             <p className="text-xs sm:text-sm text-[#44403C] leading-relaxed font-light">

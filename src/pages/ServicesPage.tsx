@@ -23,7 +23,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
             Comprehensive Psychiatric Medicine
           </h1>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
-            Evidence-based evaluations, precision psychopharmacology, and integrative mental healthcare delivered with warmth and dignity.
+            Comprehensive psychiatric evaluations, precision psychopharmacology, and integrative mental healthcare delivered with warmth and dignity.
           </p>
         </div>
       </section>

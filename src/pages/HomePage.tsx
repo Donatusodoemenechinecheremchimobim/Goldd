@@ -112,15 +112,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                 alt="Golden Mind Psychiatric Hero Clinic Interior - A Peaceful Sanctuary"
                 className="w-full h-[320px] sm:h-[460px] md:h-[500px] object-cover object-center transition-transform duration-700 group-hover:scale-102"
               />
-              {/* Subtle gentle bottom gradient */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
-
-              <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 flex items-center justify-between text-left">
-                <div className="bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-[#D4AF37]/40 text-xs shadow-md">
-                  <span className="text-[#9E7206] font-semibold block text-[10px] uppercase tracking-wider">A Peaceful Sanctuary</span>
-                  <span className="text-[#1C1917] text-xs sm:text-sm font-semibold">Designed for Calm, Supportive Healing Across Texas</span>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -188,27 +179,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                   alt="Brenda Hobyani, PMHNP-BC - Board-Certified Psychiatric Mental Health Nurse Practitioner and Head Owner of Golden Mind Psychiatry"
                   className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-102"
                 />
-                
-                {/* Overlay framing */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-85"></div>
-
-                {/* Name Badge Overlay */}
-                <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-[#D4AF37]/40 text-center shadow-md">
-                  <h3 className="font-serif text-lg font-bold text-[#1C1917]">
-                    Brenda Hobyani
-                  </h3>
-                  <p className="text-xs font-bold text-[#9E7206] tracking-wider">
-                    PMHNP-BC
-                  </p>
-                  <p className="text-[11px] text-[#57534E] mt-0.5 font-medium">
-                    Head Owner & Lead Psychiatric Clinician
-                  </p>
-                </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 text-xs text-[#78716C]">
-                <Award className="w-4 h-4 text-[#B8860B]" />
-                <span className="font-medium text-[#44403C]">Board-Certified Psychiatric Nurse Practitioner (PMHNP-BC)</span>
+              {/* Clean Name & Title Placement Below Portrait (Not hovering over the photo) */}
+              <div className="mt-5 w-full max-w-[360px] p-4 rounded-2xl bg-[#FAF8F2] border border-[#D4AF37]/40 text-center shadow-xs">
+                <h3 className="font-serif text-xl font-bold text-[#1C1917]">
+                  Brenda Hobyani, <span className="text-[#9E7206]">PMHNP-BC</span>
+                </h3>
+                <p className="text-xs text-[#57534E] mt-1 font-medium">
+                  Head Owner & Lead Psychiatric Clinician
+                </p>
+                <div className="mt-2.5 pt-2.5 border-t border-[#D4AF37]/25 flex items-center justify-center gap-1.5 text-[11px] text-[#44403C]">
+                  <Award className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
+                  <span className="font-medium">Board-Certified Psychiatric Nurse Practitioner</span>
+                </div>
               </div>
             </div>
 
@@ -402,7 +386,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                 03. Integrative Nervous System Support
               </h3>
               <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed">
-                Incorporating evidence-informed lifestyle adjustments—circadian sleep alignment, gut-brain nutrition, and stress resilience—for durable, lifelong well-being.
+                Incorporating holistic lifestyle adjustments—circadian sleep alignment, gut-brain nutrition, and stress resilience—for durable, lifelong well-being.
               </p>
             </div>
           </div>
@@ -499,7 +483,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                 rating: 5,
               },
               {
-                quote: "Postpartum depression made me feel like I was failing my newborn. Brenda's gentle, evidence-based approach and telehealth check-ins saved me. She is an angel for mothers who are struggling silently.",
+                quote: "Postpartum depression made me feel like I was failing my newborn. Brenda's gentle, personalized approach and telehealth check-ins saved me. She is an angel for mothers who are struggling silently.",
                 author: "Elena R.",
                 detail: "Treated for Perinatal & Postpartum Mood Disorder",
                 rating: 5,

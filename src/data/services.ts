@@ -23,7 +23,7 @@ export const servicesData: Service[] = [
     iconName: 'Pill',
     details: 'Ongoing follow-up visits to monitor your therapeutic response, optimize dosing, evaluate tolerability, and fine-tune your regimen. We believe in prescribing with precision and avoiding unnecessary polypharmacy.',
     benefits: [
-      'Careful titration of evidence-based psychiatric medications',
+      'Careful titration of psychiatric and habit-forming medications with close monitoring',
       'Close monitoring of emotional vitality, sleep, appetite, and energy',
       'E-prescribing sent instantly to your preferred local or mail-order pharmacy',
       'GeneSight pharmacogenomic testing integration when appropriate'
@@ -49,7 +49,7 @@ export const servicesData: Service[] = [
     shortDesc: 'Mind-body interventions addressing sleep architecture, functional nutrition, and nervous system regulation.',
     serviceCategory: 'Whole-Person Protocol',
     iconName: 'Sparkles',
-    details: 'Evidence-informed lifestyle prescriptions that work synergistically with medical treatment. We address gut-brain health, circadian light entrainment, targeted nutraceuticals, and stress reduction.',
+    details: 'Personalized lifestyle prescriptions that work synergistically with medical treatment. We address gut-brain health, circadian light entrainment, targeted nutraceuticals, and stress reduction.',
     benefits: [
       'Guidance on clinical-grade psychiatric supplements (Omega-3s, L-Methylfolate, Magnesium)',
       'Circadian rhythm stabilization protocols for deeper, restorative sleep',
@@ -92,10 +92,10 @@ export const servicesData: Service[] = [
     shortDesc: 'Compassionate, non-judgmental psychiatric care and dual-diagnosis support for substance use recovery.',
     serviceCategory: 'Addiction & Recovery Care',
     iconName: 'Shield',
-    details: 'Comprehensive outpatient psychiatric evaluations and evidence-based treatment for individuals navigating substance abuse, alcohol use, and co-occurring mental health conditions. We address both the neurobiological drivers of addiction and underlying mood, trauma, or anxiety disorders in a dignified, confidential telehealth setting.',
+    details: 'Comprehensive outpatient psychiatric evaluations and personalized clinical treatment for individuals navigating substance abuse, alcohol use, and co-occurring mental health conditions. We address both the neurobiological drivers of addiction and underlying mood, trauma, or anxiety disorders in a dignified, confidential telehealth setting.',
     benefits: [
       'Dual-diagnosis evaluation addressing co-occurring depression, anxiety, PTSD, or bipolar disorder',
-      'Evidence-based pharmacotherapy to help reduce cravings and support relapse prevention',
+      'Targeted pharmacotherapy—including habit-forming medications when clinically indicated—to help reduce cravings and support relapse prevention',
       'Stigma-free, confidential 100% telehealth follow-ups across Texas',
       'Integrated recovery planning supporting long-term emotional and neurological stability'
     ]
