@@ -19,6 +19,9 @@ export const providerBrenda: ProviderProfile = {
   specialties: [
     'Adult & Adolescent Psychiatric Evaluations',
     'Precision Medication Management & Optimization',
+    'Pharmacogenomic DNA Testing',
+    'Substance Abuse and Addiction',
+    'Neurodevelopmental Disorders (ASD & IDD)',
     'ADHD Diagnostic Testing & Executive Support',
     'Depression, Anxiety & Panic Disorders',
     'Trauma-Informed PTSD Recovery',

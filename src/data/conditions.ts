@@ -518,5 +518,159 @@ export const conditionsData: Condition[] = [
         answer: 'Frequently, yes. When sleep, gut health, nutrient status, and stress resilience improve, many patients find they require lower medication dosages or experience fewer side effects.'
       }
     ]
+  },
+  {
+    id: 'substance-abuse-addiction',
+    name: 'Substance Abuse and Addiction',
+    tagline: 'Compassionate, judgment-free psychiatric care supporting lasting recovery and emotional stability.',
+    shortDescription: 'Evidence-based dual-diagnosis psychiatric evaluations and medication management for substance use disorders and co-occurring mental health conditions.',
+    overview: 'Substance abuse and addiction are complex neurobiological and emotional conditions—often deeply intertwined with underlying anxiety, depression, trauma, or untreated ADHD. At Golden Mind Psychiatry PLLC, Brenda Hobyani, PMHNP-BC provides a safe, stigma-free telehealth environment where patients receive comprehensive dual-diagnosis care that treats both the addiction and the root mental health drivers simultaneously.',
+    symptoms: [
+      'Difficulty cutting back or controlling substance or alcohol use despite wanting to stop',
+      'Using substances to self-medicate chronic anxiety, insomnia, trauma, or emotional pain',
+      'Experiencing cravings, tolerance shifts, or mood instability between uses',
+      'Disruptions in work, family relationships, or daily responsibilities',
+      'Co-occurring symptoms of depression, panic, irritability, or emotional exhaustion'
+    ],
+    causesAndTriggers: [
+      'Neurochemical changes in the brain’s dopamine reward and prefrontal impulse-control pathways',
+      'Unaddressed trauma, PTSD, or chronic emotional stress',
+      'Underlying mood, anxiety, or neurodevelopmental conditions leading to self-medication',
+      'Genetic and familial vulnerability to substance use disorders'
+    ],
+    treatmentApproach: [
+      {
+        title: 'Comprehensive Dual-Diagnosis Evaluation',
+        description: 'Thorough assessment of both substance use patterns and co-occurring psychiatric conditions such as depression, bipolar disorder, PTSD, or ADHD.'
+      },
+      {
+        title: 'Targeted Pharmacotherapy & Craving Support',
+        description: 'Evidence-based non-addictive medications to help reduce cravings, stabilize mood, restore sleep architecture, and support relapse prevention.'
+      },
+      {
+        title: 'Ongoing Compassionate Telehealth Follow-Up',
+        description: 'Consistent, confidential virtual check-ins across Texas to monitor recovery progress, adjust treatment, and celebrate milestones.'
+      }
+    ],
+    medicationInfo: 'We utilize safe, non-habit-forming psychiatric medications tailored to stabilize mood and anxiety while offering evidence-based pharmacotherapy options that reduce cravings and support sustained recovery.',
+    holisticSupport: [
+      'Relapse prevention planning and trigger identification strategies',
+      'Sleep and nutritional restoration protocols to support brain recovery',
+      'Collaborative coordination with addiction counselors, therapists, and recovery groups',
+      'Stress regulation and nervous system grounding practices'
+    ],
+    faqs: [
+      {
+        question: 'What is dual-diagnosis psychiatric care?',
+        answer: 'Dual-diagnosis care treats both a substance use disorder and a co-occurring mental health condition (like depression, anxiety, or PTSD) at the same time, which significantly improves long-term recovery outcomes.'
+      },
+      {
+        question: 'Are substance abuse consultations confidential?',
+        answer: 'Yes. All evaluations and follow-up visits are conducted via our encrypted, HIPAA-compliant telehealth platform from the privacy of your home.'
+      }
+    ]
+  },
+  {
+    id: 'neurodevelopmental-disorders',
+    name: 'Neurodevelopmental Disorders (ASD & Intellectual Developmental Disorder)',
+    tagline: 'Affirming, individualized psychiatric care for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
+    shortDescription: 'Specialized psychiatric evaluations and supportive symptom management for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
+    overview: 'Neurodevelopmental disorders—including Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder (IDD)—involve unique patterns of brain development that shape communication, sensory processing, social interaction, and adaptive functioning. Brenda Hobyani, PMHNP-BC delivers patient-centered, respectful care focused on enhancing quality of life, easing sensory or emotional overwhelm, and treating co-occurring anxiety, mood shifts, or sleep difficulties.',
+    symptoms: [
+      'Differences in social communication, non-verbal cues, and interpersonal connection',
+      'Heightened sensory sensitivities to sound, light, textures, or routine changes',
+      'Emotional dysregulation, meltdowns, or severe irritability when overwhelmed',
+      'Adaptive functioning or cognitive processing challenges requiring tailored support',
+      'Co-occurring anxiety, repetitive behaviors, ADHD symptoms, or chronic sleep disturbances'
+    ],
+    causesAndTriggers: [
+      'Complex genetic and neurobiological variations in early brain connectivity',
+      'Sensory overload and abrupt transitions in daily environments',
+      'Unrecognized medical, communication, or emotional frustrations',
+      'Co-occurring neurotransmitter imbalances affecting sleep and anxiety pathways'
+    ],
+    treatmentApproach: [
+      {
+        title: 'Neurodiversity-Affirming Psychiatric Assessment',
+        description: 'Comprehensive evaluation involving both the patient and their family or caregivers to understand strengths, sensory needs, and specific clinical challenges.'
+      },
+      {
+        title: 'Conservative, Targeted Symptom Management',
+        description: 'Careful, low-dose pharmacotherapy when indicated to help ease severe irritability, anxiety, hyperactivity, or sleep difficulties while respecting the individual’s baseline personality.'
+      },
+      {
+        title: 'Family & Caregiver Partnership',
+        description: 'Ongoing collaboration with parents, families, and support networks to create predictable, supportive routines at home and school.'
+      }
+    ],
+    medicationInfo: 'While medication does not treat the core identity of autism or intellectual developmental disorders, FDA-approved and evidence-based medications can safely relieve co-occurring symptoms such as severe irritability, anxiety, attentional difficulties, and insomnia.',
+    holisticSupport: [
+      'Sensory-friendly daily routine structuring and transition support',
+      'Sleep architecture and circadian rhythm stabilization strategies',
+      'Coordination with behavioral therapists, speech/occupational therapy, and school IEP teams',
+      'Nutritional and gut-brain support tailored to sensory food preferences'
+    ],
+    faqs: [
+      {
+        question: 'Why is telehealth beneficial for patients with ASD or neurodevelopmental disorders?',
+        answer: 'Telehealth allows patients to be evaluated in their own familiar, sensory-safe home environment without the stress of unfamiliar waiting rooms, bright lights, or travel.'
+      },
+      {
+        question: 'Do you work with both youth and adults with ASD and Intellectual Developmental Disorder?',
+        answer: 'Yes. We provide compassionate evaluations and ongoing medication management for children, adolescents, and adults across the neurodevelopmental spectrum.'
+      }
+    ]
+  },
+  {
+    id: 'pharmacogenomic-testing',
+    name: 'Pharmacogenomic Testing',
+    tagline: 'DNA-guided precision psychiatry to reduce trial and error and promote safer, more effective care.',
+    shortDescription: 'Pharmacogenomic testing analyzes a patient’s DNA to identify genetic variations that may influence responses to psychiatric medications.',
+    overview: 'Pharmacogenomic testing analyzes a patient’s DNA to identify genetic variations that may influence responses to psychiatric medications used to treat depression, anxiety, ADHD, bipolar disorder, schizophrenia, epilepsy, and other neurological conditions. By identifying how the body may metabolize certain medications, testing can help guide personalized treatment decisions, support medication selection, and reduce trial and error to promote safer, more effective care.',
+    symptoms: [
+      'History of experiencing unwanted side effects from standard psychiatric medication doses',
+      'Previous antidepressants, anxiety medications, or ADHD treatments feeling ineffective',
+      'Desire to avoid months of medication trial and error before finding relief',
+      'Complex treatment history across depression, anxiety, bipolar disorder, or neurological conditions',
+      'Sensitivity to medication dose changes or concerns about drug-gene interactions'
+    ],
+    causesAndTriggers: [
+      'Inherited variations in liver cytochrome P450 (CYP450) metabolic enzymes',
+      'Genetic differences in neurotransmitter receptor sensitivity and transporter proteins',
+      'Ultra-rapid, intermediate, or poor metabolizer genetic profiles affecting blood medication levels',
+      'Variations in folic acid conversion pathways (such as MTHFR gene variants)'
+    ],
+    treatmentApproach: [
+      {
+        title: 'Simple At-Home DNA Cheek Swab',
+        description: 'A painless, non-invasive buccal cheek swab kit can be shipped directly to your home anywhere in Texas and returned in a prepaid mailer.'
+      },
+      {
+        title: 'Comprehensive Genetic & Metabolic Analysis',
+        description: 'Analyzes key pharmacokinetic and pharmacodynamic genes that influence how your body processes medications for depression, anxiety, ADHD, bipolar disorder, schizophrenia, and epilepsy.'
+      },
+      {
+        title: 'Personalized Medication Roadmap Review',
+        description: 'Brenda Hobyani, PMHNP-BC reviews your detailed genetic report with you during a telehealth consultation to select medications aligned with your unique DNA profile.'
+      }
+    ],
+    medicationInfo: 'Your pharmacogenomic report categorizes psychiatric and neurological medications into clear green, yellow, and red tiers based on your gene-drug interactions, helping guide precise dosing and safer medication selection.',
+    holisticSupport: [
+      'Identification of MTHFR gene variations to guide targeted L-methylfolate supplementation',
+      'Long-term genetic reference report that remains valid for your lifetime',
+      'Reduced risk of adverse medication reactions and faster time to symptom stabilization',
+      'Empowered, transparent shared decision-making in your psychiatric care'
+    ],
+    faqs: [
+      {
+        question: 'How is pharmacogenomic testing performed via telehealth?',
+        answer: 'After your telehealth visit with Brenda Hobyani, PMHNP-BC, a sterile cheek-swab DNA collection kit is mailed directly to your home. You simply swab the inside of your cheek, place it in the prepaid return envelope, and we review the results together at your follow-up video visit.'
+      },
+      {
+        question: 'Which conditions can pharmacogenomic testing help with?',
+        answer: 'Pharmacogenomic testing helps guide medication decisions for depression, anxiety, ADHD, bipolar disorder, schizophrenia, epilepsy, and other psychiatric and neurological conditions.'
+      }
+    ]
   }
 ];
+

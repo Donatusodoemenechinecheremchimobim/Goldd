@@ -29,7 +29,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
   const quickConditionTags = [
     { label: 'Psychiatric Evaluations', page: 'services', id: 'psychiatric-evaluations' },
     { label: 'Medication Management', page: 'services', id: 'medication-management' },
+    { label: 'Pharmacogenomic Testing', page: 'condition-detail', id: 'pharmacogenomic-testing' },
     { label: 'ADHD', page: 'condition-detail', id: 'adhd' },
+    { label: 'Substance Abuse & Addiction', page: 'condition-detail', id: 'substance-abuse-addiction' },
+    { label: 'Neurodevelopmental (ASD & IDD)', page: 'condition-detail', id: 'neurodevelopmental-disorders' },
     { label: 'Women\'s Mental Health', page: 'condition-detail', id: 'womens-mental-health' },
     { label: 'Child & Adolescent', page: 'condition-detail', id: 'child-adolescent' },
     { label: 'Anxiety & Stress', page: 'condition-detail', id: 'anxiety-stress' },
@@ -242,9 +245,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                     'Major & Persistent Depression',
                     'Bipolar & Mood Spectrum Disorders',
                     'PTSD & Trauma Recovery',
+                    'Substance Abuse and Addiction',
+                    'Neurodevelopmental Disorders (ASD & IDD)',
+                    'Pharmacogenomic DNA Testing',
                     'Women\'s Reproductive Mental Health',
-                    'Comprehensive Psychiatric Evaluations',
-                    'Telehealth Video Appointments'
+                    'Comprehensive Psychiatric Evaluations'
                   ].map((spec, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-[#B8860B] shrink-0" />

@@ -85,5 +85,47 @@ export const servicesData: Service[] = [
       'Coordination with pediatricians and school accommodation teams (504/IEP)',
       'Practical parental co-regulation guidance'
     ]
+  },
+  {
+    id: 'substance-abuse-addiction',
+    name: 'Substance Abuse and Addiction',
+    shortDesc: 'Compassionate, non-judgmental psychiatric care and dual-diagnosis support for substance use recovery.',
+    serviceCategory: 'Addiction & Recovery Care',
+    iconName: 'Shield',
+    details: 'Comprehensive outpatient psychiatric evaluations and evidence-based treatment for individuals navigating substance abuse, alcohol use, and co-occurring mental health conditions. We address both the neurobiological drivers of addiction and underlying mood, trauma, or anxiety disorders in a dignified, confidential telehealth setting.',
+    benefits: [
+      'Dual-diagnosis evaluation addressing co-occurring depression, anxiety, PTSD, or bipolar disorder',
+      'Evidence-based pharmacotherapy to help reduce cravings and support relapse prevention',
+      'Stigma-free, confidential 100% telehealth follow-ups across Texas',
+      'Integrated recovery planning supporting long-term emotional and neurological stability'
+    ]
+  },
+  {
+    id: 'neurodevelopmental-disorders',
+    name: 'Neurodevelopmental Disorders (ASD & Intellectual Developmental Disorder)',
+    shortDesc: 'Specialized psychiatric evaluations and supportive care for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
+    serviceCategory: 'Neurodevelopmental Care',
+    iconName: 'Brain',
+    details: 'Individualized, neurodiversity-affirming psychiatric evaluations and symptom management for Neurodevelopmental Disorders such as Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder. We partner closely with patients, families, and caregivers to support emotional regulation, sensory distress, sleep, and co-occurring psychiatric symptoms.',
+    benefits: [
+      'Comprehensive evaluation for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder',
+      'Targeted, conservative medication management for irritability, anxiety, sleep challenges, and focus',
+      'Collaborative care planning with families, caregivers, and educational or support teams',
+      'Compassionate telehealth appointments from the familiar comfort of home'
+    ]
+  },
+  {
+    id: 'pharmacogenomic-testing',
+    name: 'Pharmacogenomic Testing',
+    shortDesc: 'DNA-guided genetic analysis to personalize psychiatric medication selection and reduce trial and error.',
+    serviceCategory: 'Precision DNA Testing',
+    iconName: 'Dna',
+    details: 'Pharmacogenomic testing analyzes a patient’s DNA to identify genetic variations that may influence responses to psychiatric medications used to treat depression, anxiety, ADHD, bipolar disorder, schizophrenia, epilepsy, and other neurological conditions.\n\nBy identifying how the body may metabolize certain medications, testing can help guide personalized treatment decisions, support medication selection, and reduce trial and error to promote safer, more effective care.',
+    benefits: [
+      'Analyzes DNA genetic variations influencing responses to psychiatric and neurological medications',
+      'Supports personalized treatment for depression, anxiety, ADHD, bipolar disorder, schizophrenia, and epilepsy',
+      'Identifies how your body metabolizes specific medications to minimize side effects',
+      'Reduces medication trial and error to promote safer, more effective care'
+    ]
   }
 ];

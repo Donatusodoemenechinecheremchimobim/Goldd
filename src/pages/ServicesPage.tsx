@@ -52,7 +52,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
                   {service.name}
                 </h2>
 
-                <p className="text-xs sm:text-sm text-[#44403C] leading-relaxed font-light">
+                <p className="text-xs sm:text-sm text-[#44403C] leading-relaxed font-light whitespace-pre-line">
                   {service.details}
                 </p>
 
