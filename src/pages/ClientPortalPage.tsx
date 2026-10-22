@@ -3,6 +3,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -34,7 +35,7 @@ import {
   Sparkles,
   Stethoscope,
   AlertCircle,
-  UserCheck,
+  MailCheck,
   Menu,
   X,
 } from 'lucide-react';
@@ -56,6 +57,9 @@ import {
 } from '../types';
 import {
   ensurePatientOnboarding,
+  isAuthorizedProviderEmail,
+  sanitizeClinicalInput,
+  CLINIC_OWNER_EMAIL,
   PHQ9_QUESTIONS,
   GAD7_QUESTIONS,
   SCALE_OPTIONS,
@@ -63,7 +67,6 @@ import {
   calculateGAD7Severity,
   submitClinicalAssessment,
   requestMedicationRefill,
-  enableProviderWorkspaceAccess,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
 import { ProviderDashboardView } from '../components/ProviderDashboardView';
@@ -84,12 +87,12 @@ type PortalTab =
 
 export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   onOpenBooking,
-  onNavigate,
 }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [portalUser, setPortalUser] = useState<PortalUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
   // Auth Form State
   const [isRegistering, setIsRegistering] = useState(false);
@@ -107,7 +110,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [activeTelehealthAppt, setActiveTelehealthAppt] =
     useState<AppointmentRecord | null>(null);
 
-  // Real-time Patient Data Collections
+  // Real-time Patient Data Collections (Strictly isolated to firebaseUser.uid)
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [intakes, setIntakes] = useState<IntakeRecord[]>([]);
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
@@ -124,14 +127,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     currentMedicationsAndAllergies: '',
     sleepAndAppetiteNotes: '',
     emergencyContactNamePhone: '',
-    telehealthTexasLocationConfirmed: 'Yes, I am physically located in Texas during my 100% Telehealth visits',
+    telehealthTexasLocationConfirmed:
+      'Yes, I am physically located in Texas during my 100% Telehealth visits',
     consentSignature: '',
   });
 
   // Reschedule Appointment State
   const [reschedulingApptId, setReschedulingApptId] = useState<string | null>(null);
   const [newApptDate, setNewApptDate] = useState('');
-  const [newApptTime, setNewApptTime] = useState('Morning (9:00 AM - 12:00 PM)');
+  const [newApptTime, setNewApptTime] = useState('Mon–Thu Morning (8:00 AM - 12:00 PM)');
 
   // PHQ-9 / GAD-7 / Daily Mood State
   const [activeScaleTab, setActiveScaleTab] = useState<'PHQ-9' | 'GAD-7' | 'DAILY-MOOD'>('PHQ-9');
@@ -179,11 +183,19 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setPrefPharmacy(
             profile.preferredPharmacy || 'H-E-B Pharmacy · Austin / Texas Statewide e-Rx'
           );
+
+          // Stealth Provider Routing: Automatically open Provider Dashboard ONLY when the specific authorized Gmail/email logs in
+          if (isAuthorizedProviderEmail(user.email)) {
+            setWorkspaceMode('provider');
+          } else {
+            setWorkspaceMode('patient');
+          }
         } catch (err) {
           console.error('Onboarding initialization error:', err);
         }
       } else {
         setPortalUser(null);
+        setWorkspaceMode('patient');
       }
       setAuthLoading(false);
     });
@@ -191,7 +203,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     return () => unsubAuth();
   }, []);
 
-  // Real-time Firestore listeners for the logged-in patient
+  // Real-time Firestore listeners strictly scoped to the authenticated user's UID
   useEffect(() => {
     if (!firebaseUser) return;
     const uid = firebaseUser.uid;
@@ -295,9 +307,23 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    setVerificationNotice(null);
     try {
       if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          emailInput.trim(),
+          passwordInput
+        );
+        // Dispatch real Firebase email verification link to the new user's inbox
+        try {
+          await sendEmailVerification(cred.user);
+          setVerificationNotice(
+            `A verification email has been sent to ${cred.user.email}, and a new-patient registration alert has been sent to ${CLINIC_OWNER_EMAIL}.`
+          );
+        } catch {
+          // Non-fatal if verification email throttled
+        }
       } else {
         await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
       }
@@ -310,36 +336,67 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
+  const handleResendVerification = async () => {
+    if (!auth.currentUser) return;
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setVerificationNotice(
+        `Verification link re-sent to ${auth.currentUser.email}. Please check your inbox and spam folder.`
+      );
+    } catch {
+      setVerificationNotice(
+        'Verification email was recently sent. Please check your inbox or wait a moment before retrying.'
+      );
+    }
+  };
+
+  const handleRefreshVerification = async () => {
+    if (!auth.currentUser) return;
+    await auth.currentUser.reload();
+    setFirebaseUser({ ...auth.currentUser });
+    if (auth.currentUser.emailVerified) {
+      setVerificationNotice('Your email address has been verified!');
+      setTimeout(() => setVerificationNotice(null), 4000);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut(auth);
     setWorkspaceMode('patient');
   };
 
-  // Switch to Provider Clinical Workspace
-  const handleSwitchToProviderMode = async () => {
-    if (!portalUser) return;
-    if (workspaceMode === 'provider') {
-      setWorkspaceMode('patient');
-      return;
-    }
-    if (portalUser.role !== 'provider') {
-      const updated = await enableProviderWorkspaceAccess(portalUser);
-      setPortalUser(updated);
-    }
-    setWorkspaceMode('provider');
-  };
-
-  // Complete Digital Intake Form
+  // Complete Digital Intake Form (with input sanitization)
   const handleCompleteIntake = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingIntake) return;
+    if (!editingIntake || !portalUser) return;
     const now = new Date().toISOString();
+    const sanitizedResponses: Record<string, string> = {};
+    Object.entries(intakeAnswers).forEach(([k, v]) => {
+      sanitizedResponses[k] = sanitizeClinicalInput(v, 1000);
+    });
+
     try {
       await updateDoc(doc(db, 'intakes', editingIntake.id), {
         status: 'completed',
-        responses: intakeAnswers,
+        responses: sanitizedResponses,
         completedAt: now,
       });
+
+      // Notify clinic office (info@goldenmindpsychiatry.org) that intake paperwork was signed
+      await addDoc(collection(db, 'messages'), {
+        patientId: portalUser.uid,
+        patientName: portalUser.fullName,
+        senderId: portalUser.uid,
+        senderName: portalUser.fullName,
+        senderRole: 'patient',
+        subject: `[Automated Alert -> ${CLINIC_OWNER_EMAIL}] Completed Intake: ${editingIntake.title}`,
+        body: `Patient ${portalUser.fullName} (${portalUser.email}) electronically signed and submitted "${editingIntake.title}" on ${
+          now.split('T')[0]
+        }.`,
+        read: false,
+        createdAt: now,
+      });
+
       setEditingIntake(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `intakes/${editingIntake.id}`);
@@ -351,8 +408,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (!newApptDate) return;
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
-        preferredDate: newApptDate,
-        preferredTime: newApptTime,
+        preferredDate: sanitizeClinicalInput(newApptDate, 30),
+        preferredTime: sanitizeClinicalInput(newApptTime, 80),
         status: 'confirmed',
         updatedAt: new Date().toISOString(),
       });
@@ -418,15 +475,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       await addDoc(collection(db, 'medications'), {
         patientId: portalUser.uid,
         patientName: portalUser.fullName,
-        medicationName: newMedName.trim(),
-        dosage: newMedDosage.trim(),
-        frequency: newMedFreq.trim(),
+        medicationName: sanitizeClinicalInput(newMedName, 160),
+        dosage: sanitizeClinicalInput(newMedDosage, 80),
+        frequency: sanitizeClinicalInput(newMedFreq, 120),
         instructions:
           'Take as directed. Please note: some psychiatric and anxiety medications can be habit forming; never adjust dosage without provider guidance.',
-        pharmacy:
+        pharmacy: sanitizeClinicalInput(
           prefPharmacy ||
-          portalUser.preferredPharmacy ||
-          'H-E-B Pharmacy · Austin / Texas Statewide e-Rx',
+            portalUser.preferredPharmacy ||
+            'H-E-B Pharmacy · Austin / Texas Statewide e-Rx',
+          200
+        ),
         refillsRemaining: 2,
         refillStatus: 'active',
         prescribedBy: 'Brenda Hobyani, PMHNP-BC',
@@ -439,7 +498,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Send secure message to Brenda Hobyani
+  // Send secure message to Brenda Hobyani & info@goldenmindpsychiatry.org
   const handleSendPatientMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!portalUser || !msgSubject.trim() || !msgBody.trim()) return;
@@ -451,8 +510,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         senderId: portalUser.uid,
         senderName: portalUser.fullName,
         senderRole: 'patient',
-        subject: msgSubject.trim(),
-        body: msgBody.trim(),
+        subject: sanitizeClinicalInput(msgSubject, 200),
+        body: sanitizeClinicalInput(msgBody, 4000),
         read: false,
         createdAt: now,
       });
@@ -468,20 +527,24 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     e.preventDefault();
     if (!portalUser) return;
     const now = new Date().toISOString();
+    const cleanCarrier = sanitizeClinicalInput(insCarrier, 120);
+    const cleanMember = sanitizeClinicalInput(insMemberId, 64);
+    const cleanGroup = sanitizeClinicalInput(insGroupId, 64);
+    const cleanPharm = sanitizeClinicalInput(prefPharmacy, 200);
     try {
       await updateDoc(doc(db, 'users', portalUser.uid), {
-        insuranceProvider: insCarrier,
-        insuranceMemberId: insMemberId,
-        insuranceGroupNumber: insGroupId,
-        preferredPharmacy: prefPharmacy,
+        insuranceProvider: cleanCarrier,
+        insuranceMemberId: cleanMember,
+        insuranceGroupNumber: cleanGroup,
+        preferredPharmacy: cleanPharm,
         updatedAt: now,
       });
       setPortalUser({
         ...portalUser,
-        insuranceProvider: insCarrier,
-        insuranceMemberId: insMemberId,
-        insuranceGroupNumber: insGroupId,
-        preferredPharmacy: prefPharmacy,
+        insuranceProvider: cleanCarrier,
+        insuranceMemberId: cleanMember,
+        insuranceGroupNumber: cleanGroup,
+        preferredPharmacy: cleanPharm,
         updatedAt: now,
       });
       setProfileSavedNotice(true);
@@ -517,7 +580,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   }
 
   // ============================================================================
-  // 1. AUTHENTICATION GATEWAY (Signed-Out View)
+  // 1. AUTHENTICATION GATEWAY (Signed-Out View — Zero Public Mention of Admin/Provider Portal)
   // ============================================================================
   if (!firebaseUser || !portalUser) {
     return (
@@ -528,7 +591,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#D4AF37]">
                 <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-                <span>HIPAA-Encrypted Telepsychiatry Portal</span>
+                <span>HIPAA-Encrypted Client Portal</span>
               </div>
 
               <h1 className="text-3xl font-serif font-bold text-white leading-tight">
@@ -546,30 +609,31 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    <strong>Automated Clinical Onboarding:</strong> Instant access to your New
-                    Patient Psychiatric Intake & Telehealth Consent forms.
+                    <strong>Automated Email Verification & Intake:</strong> Instant verification
+                    link sent to your email and automated notification to{' '}
+                    <span className="text-[#D4AF37]">{CLINIC_OWNER_EMAIL}</span>.
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    <strong>1-Click HIPAA Video Sessions:</strong> Launch your encrypted
-                    telepsychiatry video room directly from your dashboard.
+                    <strong>1-Click HIPAA Video Sessions:</strong> Join your encrypted
+                    telepsychiatry video room directly from your private portal.
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    <strong>PHQ-9 / GAD-7 & Prescription Refills:</strong> Track symptom progress,
-                    request refills to your Texas pharmacy, and message Brenda directly.
+                    <strong>Practice Hours:</strong> Monday – Thursday: 8:00 AM – 4:00 PM · Friday:
+                    9:00 AM – 1:00 PM.
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400">
-              Need immediate crisis support? Call or text <strong className="text-[#D4AF37]">988</strong>{' '}
-              for the Suicide & Crisis Lifeline.
+              Need immediate crisis support? Call or text{' '}
+              <strong className="text-[#D4AF37]">988</strong> for the Suicide & Crisis Lifeline.
             </div>
           </div>
 
@@ -578,12 +642,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
                 <h2 className="text-2xl font-serif font-bold text-stone-900">
-                  {isRegistering ? 'Create Your Patient Account' : 'Sign In to Your Portal'}
+                  {isRegistering ? 'Create Your Client Portal Account' : 'Sign In to Client Portal'}
                 </h2>
                 <p className="text-xs text-stone-500 mt-1">
                   {isRegistering
-                    ? 'Self-register to unlock automated intake paperwork and telehealth links'
-                    : 'Access your appointments, medications, and direct provider messages'}
+                    ? 'Self-register to receive your verification email and unlock your private chart'
+                    : 'Access your private appointments, intake forms, medications, and messages'}
                 </p>
               </div>
               <button
@@ -671,7 +735,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       onChange={(e) => setInsuranceInput(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                     >
-                      <option value="Blue Cross Blue Shield (BCBS)">Blue Cross Blue Shield (BCBS)</option>
+                      <option value="Blue Cross Blue Shield (BCBS)">
+                        Blue Cross Blue Shield (BCBS)
+                      </option>
                       <option value="Aetna">Aetna</option>
                       <option value="Cigna / Evernorth">Cigna / Evernorth</option>
                       <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
@@ -717,7 +783,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 className="w-full py-3 rounded-xl bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
               >
                 {isRegistering
-                  ? 'Create Account & Start Automated Onboarding'
+                  ? 'Create Account & Send Verification Email'
                   : 'Sign In to Client Portal'}
               </button>
             </form>
@@ -726,6 +792,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       </section>
     );
   }
+
+  // Only verified provider emails can ever see the Provider View toggle
+  const isVerifiedProviderAccount = isAuthorizedProviderEmail(firebaseUser.email);
 
   // Computed Metrics for Patient Portal Overview
   const pendingIntakes = intakes.filter((i) => i.status === 'pending');
@@ -780,7 +849,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           <div className="p-5 border-b border-stone-800 flex items-center justify-between">
             <div className="min-w-0">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37] block">
-                100% Telehealth Portal
+                100% Telehealth Client Portal
               </span>
               <p className="text-sm font-serif font-bold text-white truncate mt-0.5">
                 {portalUser.fullName}
@@ -834,27 +903,31 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           </nav>
         </div>
 
-        {/* Provider Switch & Sign Out */}
+        {/* Bottom Sidebar Bar — Provider Switch is ONLY rendered if the signed-in email is the authorized provider */}
         <div
           className={`${
             mobileSidebarOpen ? 'block' : 'hidden lg:block'
           } p-4 border-t border-stone-800 space-y-2.5 bg-[#080808]`}
         >
-          <button
-            onClick={handleSwitchToProviderMode}
-            className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-              workspaceMode === 'provider'
-                ? 'bg-gold-gradient text-[#1C1917] border-transparent font-bold'
-                : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/40 hover:bg-stone-800'
-            }`}
-          >
-            <Stethoscope className="w-4 h-4" />
-            <span>
-              {workspaceMode === 'provider'
-                ? 'Switch to Patient View'
-                : "Brenda's Provider Dashboard"}
-            </span>
-          </button>
+          {isVerifiedProviderAccount && (
+            <button
+              onClick={() =>
+                setWorkspaceMode(workspaceMode === 'provider' ? 'patient' : 'provider')
+              }
+              className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                workspaceMode === 'provider'
+                  ? 'bg-gold-gradient text-[#1C1917] border-transparent font-bold'
+                  : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/40 hover:bg-stone-800'
+              }`}
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>
+                {workspaceMode === 'provider'
+                  ? 'Switch to Patient View'
+                  : 'Provider Command View'}
+              </span>
+            </button>
+          )}
 
           <button
             onClick={handleSignOut}
@@ -874,9 +947,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <span className="font-semibold text-stone-800">Golden Mind Psychiatry PLLC</span>
             <span>/</span>
             <span className="text-[#9E7206] font-semibold">
-              {workspaceMode === 'provider'
+              {workspaceMode === 'provider' && isVerifiedProviderAccount
                 ? 'Provider Clinical Command Center'
                 : navItems.find((n) => n.id === activeTab)?.label}
+            </span>
+            <span className="hidden md:inline text-stone-400">
+              · Hours: Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM
             </span>
           </div>
 
@@ -893,7 +969,43 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
         {/* Workspace Canvas */}
         <div className="p-6 sm:p-8 max-w-6xl w-full mx-auto space-y-6">
-          {workspaceMode === 'provider' ? (
+          {/* Email Verification & Clinic Notification Status Bar */}
+          {(!firebaseUser.emailVerified || verificationNotice) && (
+            <div className="bg-[#FAF6EA] border border-[#D4AF37] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-stone-900">
+                    {firebaseUser.emailVerified
+                      ? 'Email Verified & Synced'
+                      : 'Verify Your Email Address'}
+                  </p>
+                  <p className="text-stone-600 mt-0.5">
+                    {verificationNotice ||
+                      `We sent an automated verification link to ${firebaseUser.email} and notified our clinic coordinator at ${CLINIC_OWNER_EMAIL}.`}
+                  </p>
+                </div>
+              </div>
+              {!firebaseUser.emailVerified && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleResendVerification}
+                    className="px-3 py-1.5 rounded-xl bg-white border border-stone-300 text-stone-800 font-semibold hover:bg-stone-50 cursor-pointer"
+                  >
+                    Resend Email
+                  </button>
+                  <button
+                    onClick={handleRefreshVerification}
+                    className="px-3 py-1.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-semibold cursor-pointer"
+                  >
+                    I've Verified — Refresh
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {workspaceMode === 'provider' && isVerifiedProviderAccount ? (
             <ProviderDashboardView
               currentUser={portalUser}
               onLaunchTelehealth={(appt) => setActiveTelehealthAppt(appt)}
@@ -915,9 +1027,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         Welcome back, {portalUser.fullName}
                       </h1>
                       <p className="text-xs text-stone-600">
-                        Provider: <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> · Coverage:{' '}
-                        {portalUser.insuranceProvider || 'On File'} · Pharmacy:{' '}
-                        {portalUser.preferredPharmacy || 'Texas e-Rx'}
+                        Provider: <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> · Hours:
+                        Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM
                       </p>
                     </div>
 
@@ -1129,8 +1240,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         100% Telehealth Appointments & Video Room Links
                       </h2>
                       <p className="text-xs text-stone-500 mt-0.5">
-                        All consultations with Brenda Hobyani, PMHNP-BC are conducted via encrypted
-                        video for children, teens, and adults across Texas
+                        Practice Hours: Monday – Thursday 8:00 AM – 4:00 PM · Friday 9:00 AM – 1:00 PM
                       </p>
                     </div>
                     <button
@@ -1235,21 +1345,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                               </div>
                               <div>
                                 <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                  New Time Window
+                                  New Time Window (Mon–Thu 8–4, Fri 9–1)
                                 </label>
                                 <select
                                   value={newApptTime}
                                   onChange={(e) => setNewApptTime(e.target.value)}
                                   className="px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
                                 >
-                                  <option value="Morning (9:00 AM - 12:00 PM)">
-                                    Morning (9:00 AM - 12:00 PM)
+                                  <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
+                                    Mon–Thu Morning (8:00 AM - 12:00 PM)
                                   </option>
-                                  <option value="Afternoon (1:00 PM - 4:00 PM)">
-                                    Afternoon (1:00 PM - 4:00 PM)
+                                  <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
+                                    Mon–Thu Afternoon (12:00 PM - 4:00 PM)
                                   </option>
-                                  <option value="Late Afternoon (4:00 PM - 6:30 PM)">
-                                    Late Afternoon (4:00 PM - 6:30 PM)
+                                  <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
+                                    Friday Morning / Midday (9:00 AM - 1:00 PM)
                                   </option>
                                 </select>
                               </div>
@@ -1961,8 +2071,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       Send a Non-Urgent Clinical Message
                     </h3>
                     <p className="text-xs text-stone-500">
-                      Directly reaches Brenda Hobyani, PMHNP-BC for medication questions,
-                      scheduling updates, or telehealth follow-ups.
+                      Directly reaches Brenda Hobyani, PMHNP-BC and notifies{' '}
+                      <span className="font-medium text-stone-700">{CLINIC_OWNER_EMAIL}</span>.
                     </p>
                     <div>
                       <label className="text-xs font-semibold text-stone-700 block mb-1">

@@ -334,7 +334,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => handleNavClick('portal')}
               className="w-full text-left py-3.5 text-lg font-semibold text-[#D4AF37] hover:text-[#FFF4BE] border-b border-stone-800/80 transition-colors"
             >
-              Client Portal & Provider Workspace
+              Client Portal
             </button>
           </div>
 

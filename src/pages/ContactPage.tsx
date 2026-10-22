@@ -80,9 +80,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                   <Clock className="w-5 h-5 text-[#B8860B] shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-[#1C1917] block font-semibold">Practice Hours:</strong>
-                    <p>Monday – Friday: 8:30 AM – 6:00 PM</p>
-                    <p>Saturday: By Appointment (Telehealth)</p>
-                    <p>Sunday: Closed</p>
+                    <p>Monday – Thursday: 8:00 AM – 4:00 PM</p>
+                    <p>Friday: 9:00 AM – 1:00 PM</p>
+                    <p>Saturday – Sunday: Closed</p>
                   </div>
                 </div>
               </div>

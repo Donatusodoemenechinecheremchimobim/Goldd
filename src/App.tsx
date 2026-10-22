@@ -24,13 +24,16 @@ export default function App() {
   const [bookingModalOpen, setBookingModalOpen] = useState<boolean>(false);
   const [prefillCondition, setPrefillCondition] = useState<string | undefined>();
 
-  // Parse URL hash on initial load for direct linking support
+  // Parse and strictly whitelist URL hash on load (blocks URL injection, query tampering, or foreign ID access)
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash) {
-        if (hash.startsWith('condition/')) {
-          const conditionId = hash.replace('condition/', '');
+      // Strip any query string or suspicious characters from hash
+      const rawHash = window.location.hash.replace('#', '').split('?')[0].split('&')[0];
+      const cleanHash = rawHash.replace(/[^a-zA-Z0-9/-]/g, '');
+
+      if (cleanHash) {
+        if (cleanHash.startsWith('condition/')) {
+          const conditionId = cleanHash.replace('condition/', '');
           setCurrentPage('condition-detail');
           setCurrentParam(conditionId);
         } else if (
@@ -44,9 +47,12 @@ export default function App() {
             'contact',
             'portal',
             'home',
-          ].includes(hash)
+          ].includes(cleanHash)
         ) {
-          setCurrentPage(hash);
+          setCurrentPage(cleanHash);
+        } else {
+          setCurrentPage('home');
+          window.location.hash = '';
         }
       }
     };

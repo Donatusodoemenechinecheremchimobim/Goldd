@@ -57,6 +57,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
                 <Mail className="w-4 h-4 text-[#B8860B] shrink-0" />
                 <a href="mailto:info@goldenmindpsychiatry.org" className="hover:text-[#B8860B] transition-colors font-medium">info@goldenmindpsychiatry.org</a>
               </div>
+              <div className="flex items-center gap-2 text-[#44403C] pt-1 font-medium">
+                <span className="text-[#9E7206] font-semibold">Hours:</span>
+                <span>Mon – Thu: 8:00 AM – 4:00 PM · Fri: 9:00 AM – 1:00 PM</span>
+              </div>
             </div>
 
             <div className="pt-3">

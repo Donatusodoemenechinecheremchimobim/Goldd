@@ -27,7 +27,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     conditionReason: prefillCondition || 'ADHD (Attention-Deficit / Hyperactivity Disorder)',
     visitPreference: 'telehealth',
     preferredDate: '',
-    preferredTime: 'Morning (9:00 AM - 12:00 PM)',
+    preferredTime: 'Mon–Thu Morning (8:00 AM - 12:00 PM)',
     insuranceProvider: 'Blue Cross Blue Shield (BCBS)',
     notes: '',
   });
@@ -317,19 +317,21 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
               <div>
                 <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
-                  Preferred Time Window
+                  Preferred Time Window (Mon–Thu 8–4, Fri 9–1)
                 </label>
                 <select
                   value={formData.preferredTime}
                   onChange={(e) => setFormData({ ...formData, preferredTime: e.target.value })}
                   className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none"
                 >
-                  <option value="Morning (9:00 AM - 12:00 PM)">Morning (9:00 AM - 12:00 PM)</option>
-                  <option value="Afternoon (1:00 PM - 4:00 PM)">
-                    Afternoon (1:00 PM - 4:00 PM)
+                  <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
+                    Mon–Thu Morning (8:00 AM - 12:00 PM)
                   </option>
-                  <option value="Late Afternoon (4:00 PM - 6:30 PM)">
-                    Late Afternoon (4:00 PM - 6:30 PM)
+                  <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
+                    Mon–Thu Afternoon (12:00 PM - 4:00 PM)
+                  </option>
+                  <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
+                    Friday Morning / Midday (9:00 AM - 1:00 PM)
                   </option>
                 </select>
               </div>

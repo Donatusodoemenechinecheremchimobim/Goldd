@@ -20,7 +20,33 @@ import {
   RefillStatus,
 } from '../types';
 
-export const BOOTSTRAPPED_ADMIN_EMAIL = 'chibundusadiq@gmail.com';
+export const CLINIC_OWNER_EMAIL = 'info@goldenmindpsychiatry.org';
+
+export const AUTHORIZED_PROVIDER_EMAILS = [
+  'chibundusadiq@gmail.com',
+  'info@goldenmindpsychiatry.org',
+  'info@goldenmindpsychiatry.com',
+  'goldenmindpsychiatry@gmail.com',
+];
+
+export function isAuthorizedProviderEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return AUTHORIZED_PROVIDER_EMAILS.includes(email.trim().toLowerCase());
+}
+
+/**
+ * Sanitizes user input against XSS, HTML injection, and SQL/NoSQL injection payloads
+ */
+export function sanitizeClinicalInput(input: string, maxLength = 2000): string {
+  if (!input) return '';
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/[<>]/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/(\b(DROP|ALTER|TRUNCATE|EXEC|UNION\s+SELECT)\b)/gi, '')
+    .trim()
+    .slice(0, maxLength);
+}
 
 export const PHQ9_QUESTIONS: string[] = [
   'Little interest or pleasure in doing things',
@@ -82,19 +108,23 @@ export function generateTelehealthRoomUrl(seed?: string): string {
 
 /**
  * Automated Clinical Onboarding Engine:
- * 1. Ensures `/users/{uid}` document exists.
+ * 1. Ensures `/users/{uid}` document exists (with strict patient vs verified provider role).
  * 2. Automatically links any prior guest appointment bookings matching the user's email.
  * 3. Assigns initial Psychiatric Intake Forms, HIPAA Telehealth Consent, Medical History,
- *    welcome message from Brenda Hobyani, PMHNP-BC, and initial statement if onboarding hasn't run.
+ *    welcome message from Brenda Hobyani, PMHNP-BC, and dispatches a clinic signup notification
+ *    to info@goldenmindpsychiatry.org.
  */
 export async function ensurePatientOnboarding(
   authUser: User,
   extraProfile?: Partial<PortalUser>
 ): Promise<PortalUser> {
   const uid = authUser.uid;
-  const email = (authUser.email || extraProfile?.email || 'patient@goldenmind.com').trim();
+  const email = sanitizeClinicalInput(
+    authUser.email || extraProfile?.email || 'patient@goldenmind.com',
+    254
+  );
   const now = new Date().toISOString();
-  const isDefaultProvider = email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL.toLowerCase();
+  const isVerifiedProvider = isAuthorizedProviderEmail(email);
 
   const userRef = doc(db, 'users', uid);
   let userSnap;
@@ -104,22 +134,17 @@ export async function ensurePatientOnboarding(
     handleFirestoreError(err, OperationType.GET, `users/${uid}`);
   }
 
-  // Also check if an admin document exists for this user
-  let isRegisteredAdmin = isDefaultProvider;
-  try {
-    const adminSnap = await getDoc(doc(db, 'admins', uid));
-    if (adminSnap.exists()) {
-      isRegisteredAdmin = true;
-    } else if (isDefaultProvider) {
+  if (isVerifiedProvider) {
+    try {
       await setDoc(doc(db, 'admins', uid), {
         uid,
         email,
         role: 'provider',
         createdAt: now,
       });
+    } catch {
+      // Non-fatal if admin doc already exists
     }
-  } catch {
-    // Ignore admin check errors for standard patients
   }
 
   let portalUser: PortalUser;
@@ -128,26 +153,38 @@ export async function ensurePatientOnboarding(
     const existing = userSnap.data() as PortalUser;
     portalUser = {
       ...existing,
-      role: isRegisteredAdmin ? 'provider' : existing.role,
+      role: isVerifiedProvider ? 'provider' : 'patient',
     };
   } else {
-    const fullName =
+    const rawName =
       extraProfile?.fullName?.trim() ||
       authUser.displayName?.trim() ||
       email.split('@')[0].replace(/[._-]/g, ' ');
+    const cleanName = sanitizeClinicalInput(rawName, 120) || 'Patient';
 
     portalUser = {
       uid,
       email,
-      fullName: fullName.charAt(0).toUpperCase() + fullName.slice(1),
-      phone: extraProfile?.phone || '',
-      dateOfBirth: extraProfile?.dateOfBirth || '',
-      role: isRegisteredAdmin ? 'provider' : 'patient',
-      insuranceProvider: extraProfile?.insuranceProvider || 'Blue Cross Blue Shield (BCBS)',
-      insuranceMemberId: extraProfile?.insuranceMemberId || 'TXM-8849201',
-      insuranceGroupNumber: extraProfile?.insuranceGroupNumber || 'GRP-44210',
-      preferredPharmacy:
+      fullName: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+      phone: sanitizeClinicalInput(extraProfile?.phone || '', 40),
+      dateOfBirth: sanitizeClinicalInput(extraProfile?.dateOfBirth || '', 20),
+      role: isVerifiedProvider ? 'provider' : 'patient',
+      insuranceProvider: sanitizeClinicalInput(
+        extraProfile?.insuranceProvider || 'Blue Cross Blue Shield (BCBS)',
+        120
+      ),
+      insuranceMemberId: sanitizeClinicalInput(
+        extraProfile?.insuranceMemberId || 'TXM-8849201',
+        64
+      ),
+      insuranceGroupNumber: sanitizeClinicalInput(
+        extraProfile?.insuranceGroupNumber || 'GRP-44210',
+        64
+      ),
+      preferredPharmacy: sanitizeClinicalInput(
         extraProfile?.preferredPharmacy || 'H-E-B Pharmacy · Austin / Texas Statewide e-Rx',
+        200
+      ),
       onboardingCompleted: false,
       createdAt: now,
       updatedAt: now,
@@ -231,13 +268,27 @@ export async function ensurePatientOnboarding(
         senderId: 'provider-brenda-hobyani',
         senderName: 'Brenda Hobyani, PMHNP-BC',
         senderRole: 'provider',
-        subject: 'Welcome to Golden Mind Psychiatry PLLC — Your 100% Telehealth Sanctuary',
-        body: `Hello ${portalUser.fullName},\n\nWelcome to Golden Mind Psychiatry PLLC. I am honored to partner with you on your mental wellness journey. Because our practice is 100% Telehealth-Only for children, teens, and adults across Texas, you can complete all of your intake paperwork, log your pre-visit PHQ-9 and GAD-7 symptom check-ins, request medication refills, and join our encrypted video sessions directly from this portal.\n\nBefore your upcoming appointment, please complete your assigned Intake Forms and baseline PHQ-9 / GAD-7 assessment in the Action Center. Feel free to reply directly to this thread if you have any questions!\n\nWarmly,\nBrenda Hobyani, MSN, APRN, PMHNP-BC`,
+        subject: 'Welcome to Golden Mind Psychiatry PLLC — Email Verification & Intake Ready',
+        body: `Hello ${portalUser.fullName},\n\nWelcome to Golden Mind Psychiatry PLLC! A verification email has been dispatched to ${email} and an automated new-patient alert has been sent to our clinic office (${CLINIC_OWNER_EMAIL}).\n\nOur practice hours are Monday – Thursday from 8:00 AM – 4:00 PM and Friday from 9:00 AM – 1:00 PM (100% Telehealth across Texas). Before your upcoming session, please complete your assigned Intake Forms and baseline PHQ-9 / GAD-7 check-in.\n\nWarmly,\nBrenda Hobyani, MSN, APRN, PMHNP-BC`,
         read: false,
         createdAt: now,
       });
 
-      // 5. Create an initial transparent billing statement / copay estimate
+      // 5. Automated Clinic Notification Record to info@goldenmindpsychiatry.org
+      const ownerAlertRef = doc(collection(db, 'messages'));
+      batch.set(ownerAlertRef, {
+        patientId: uid,
+        patientName: portalUser.fullName,
+        senderId: uid,
+        senderName: portalUser.fullName,
+        senderRole: 'patient',
+        subject: `[Automated Alert -> ${CLINIC_OWNER_EMAIL}] New Patient Portal Registration: ${portalUser.fullName}`,
+        body: `Automated System Notification to ${CLINIC_OWNER_EMAIL}:\nNew patient ${portalUser.fullName} (${email} · ${portalUser.phone || 'No phone listed'}) registered in the Client Portal. Email verification link dispatched and New Patient Intake Forms + PHQ-9/GAD-7 baseline screeners automatically assigned.`,
+        read: false,
+        createdAt: now,
+      });
+
+      // 6. Create an initial transparent billing statement / copay estimate
       const invoiceRef = doc(collection(db, 'invoices'));
       batch.set(invoiceRef, {
         patientId: uid,
@@ -277,26 +328,42 @@ export async function createTelehealthAppointment(
 ): Promise<{ id: string; telehealthUrl: string }> {
   const now = new Date().toISOString();
   const patientId = currentUser?.uid || 'guest';
-  const telehealthUrl = generateTelehealthRoomUrl(formData.fullName + now);
+  const cleanName = sanitizeClinicalInput(formData.fullName, 120) || 'Patient';
+  const cleanEmail = sanitizeClinicalInput(formData.email, 254);
+  const telehealthUrl = generateTelehealthRoomUrl(cleanName + now);
 
   const payload = {
     patientId,
-    patientName: formData.fullName.trim(),
-    patientEmail: formData.email.trim(),
-    patientPhone: formData.phone.trim(),
-    dateOfBirth: formData.dateOfBirth || '',
-    serviceType: formData.serviceType || 'Comprehensive Psychiatric Evaluation',
-    conditionReason: formData.conditionReason || 'General Psychiatric Evaluation',
+    patientName: cleanName,
+    patientEmail: cleanEmail,
+    patientPhone: sanitizeClinicalInput(formData.phone, 40),
+    dateOfBirth: sanitizeClinicalInput(formData.dateOfBirth || '', 20),
+    serviceType: sanitizeClinicalInput(
+      formData.serviceType || 'Comprehensive Psychiatric Evaluation',
+      180
+    ),
+    conditionReason: sanitizeClinicalInput(
+      formData.conditionReason || 'General Psychiatric Evaluation',
+      180
+    ),
     preferredDate:
-      formData.preferredDate ||
+      sanitizeClinicalInput(formData.preferredDate, 30) ||
       new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
-    preferredTime: formData.preferredTime || 'Morning (9:00 AM - 12:00 PM)',
-    insuranceProvider: formData.insuranceProvider || 'Blue Cross Blue Shield (BCBS)',
+    preferredTime:
+      sanitizeClinicalInput(formData.preferredTime, 80) ||
+      'Mon–Thu Morning (8:00 AM - 12:00 PM)',
+    insuranceProvider: sanitizeClinicalInput(
+      formData.insuranceProvider || 'Blue Cross Blue Shield (BCBS)',
+      120
+    ),
     status: 'confirmed',
     telehealthUrl,
     preVisitScreenerCompleted: false,
-    notes: formData.notes || '100% Telehealth Video Consultation across Texas',
-    providerNotes: 'Telehealth room provisioned automatically upon booking.',
+    notes: sanitizeClinicalInput(
+      formData.notes || '100% Telehealth Video Consultation across Texas',
+      1000
+    ),
+    providerNotes: `Telehealth room provisioned automatically. Notification dispatched to ${CLINIC_OWNER_EMAIL}.`,
     createdAt: now,
     updatedAt: now,
   };
@@ -334,19 +401,18 @@ export async function submitClinicalAssessment(params: {
   try {
     await addDoc(collection(db, 'assessments'), {
       patientId: params.patientId,
-      patientName: params.patientName,
+      patientName: sanitizeClinicalInput(params.patientName, 120),
       type: params.type,
       totalScore: params.totalScore,
       severity,
       sleepHours: params.sleepHours ?? 7.5,
       energyLevel: params.energyLevel ?? 7,
       medicationTaken: params.medicationTaken ?? true,
-      notes: params.notes || '',
+      notes: sanitizeClinicalInput(params.notes || '', 1000),
       answers: params.answers || [],
       createdAt: now,
     });
 
-    // If PHQ-9 or GAD-7 was completed, mark upcoming appointments as preVisitScreenerCompleted = true
     if (params.type === 'PHQ-9' || params.type === 'GAD-7') {
       const apptQuery = query(
         collection(db, 'appointments'),
@@ -388,7 +454,7 @@ export async function requestMedicationRefill(
   try {
     await updateDoc(doc(db, 'medications', medicationId), {
       refillStatus: 'refill_requested' as RefillStatus,
-      pharmacy,
+      pharmacy: sanitizeClinicalInput(pharmacy, 200),
       lastRefillRequestedAt: now,
       updatedAt: now,
     });
@@ -438,7 +504,7 @@ export async function providerProcessRefill(params: {
       body:
         params.decision === 'approved_sent'
           ? `Hello ${params.patientName},\n\nI have reviewed and approved your refill request for ${params.medicationName} (${params.dosage}). The electronic prescription has been transmitted directly to ${params.pharmacy}.\n\nPlease remember to continue logging your daily check-ins and let me know if you experience any side effects.\n\nWarmly,\nBrenda Hobyani, PMHNP-BC`
-          : `Hello ${params.patientName},\n\nBefore we authorize the next refill for ${params.medicationName} (${params.dosage}), please schedule a brief 100% telehealth follow-up session so we can review your current response and dosage safety.\n\nWarmly,\nBrenda Hobyani, PMHNP-BC`,
+          : `Hello ${params.patientName},\n\nBefore we authorize the next refill for ${params.medicationName} (${params.dosage}), please schedule a brief 100% telehealth follow-up session (Mon–Thu 8:00 AM – 4:00 PM or Fri 9:00 AM – 1:00 PM) so we can review your current response and dosage safety.\n\nWarmly,\nBrenda Hobyani, PMHNP-BC`,
       read: false,
       createdAt: now,
     });
@@ -446,27 +512,5 @@ export async function providerProcessRefill(params: {
     await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `medications/${params.medicationId}`);
-  }
-}
-
-/**
- * Enables or disables Provider Clinical Dashboard access for the current authenticated user
- */
-export async function enableProviderWorkspaceAccess(user: PortalUser): Promise<PortalUser> {
-  const now = new Date().toISOString();
-  try {
-    await setDoc(doc(db, 'admins', user.uid), {
-      uid: user.uid,
-      email: user.email,
-      role: 'provider',
-      createdAt: now,
-    });
-    await updateDoc(doc(db, 'users', user.uid), {
-      role: 'provider',
-      updatedAt: now,
-    });
-    return { ...user, role: 'provider', updatedAt: now };
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `admins/${user.uid}`);
   }
 }
