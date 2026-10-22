@@ -207,6 +207,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'trauma-ptsd',
     name: 'Trauma & PTSD (Post-Traumatic Stress Disorder)',
+    image: '/ptsd_care.jpg',
     tagline: 'A trauma-informed sanctuary for healing deep wounds and reclaiming safety.',
     shortDescription: 'Gentle, scientifically grounded care for acute trauma, developmental/complex PTSD, nightmares, hypervigilance, and emotional flashbacks.',
     overview: 'Trauma changes the biological wiring of the brain, causing the amygdala to perceive danger long after the traumatic event has ended. Whether arising from childhood adversity, medical trauma, sudden loss, or interpersonal violence, PTSD is a profound neurobiological injury. Brenda Hobyani, PMHNP-BC offers a deeply respectful, compassionate clinical environment where you set the pace.',
@@ -405,6 +406,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'insomnia-sleep',
     name: 'Insomnia & Sleep-Wake Disorders',
+    image: '/sleep_care.jpg',
     tagline: 'Rebuilding natural restorative sleep architecture for vibrant daytime vitality.',
     shortDescription: 'Targeted medical treatment for chronic sleep onset insomnia, sleep maintenance disruption, and circadian rhythm disorders.',
     overview: 'Quality sleep is the fundamental biological pillar of all psychiatric health. When sleep breaks down, emotional regulation, cognitive focus, memory consolidation, and immune defense rapidly deteriorate. Brenda Hobyani, PMHNP-BC addresses the biological and psychological engines of chronic insomnia using individualized sleep pharmacotherapy and circadian alignment protocols.',
@@ -472,6 +474,7 @@ export const conditionsData: Condition[] = [
     id: 'ocd',
     name: 'Obsessive-Compulsive Disorder (OCD)',
     tagline: 'Freedom from intrusive thoughts and exhausting mental or behavioral rituals.',
+    image: '/ocd_care.jpg',
     shortDescription: 'Targeted psychiatric pharmacotherapy and supportive strategies for OCD, intrusive thoughts, and related anxiety disorders.',
     overview: 'Obsessive-Compulsive Disorder (OCD) is characterized by distressing, unwanted, intrusive thoughts, images, or urges (obsessions) that provoke intense anxiety, leading to repetitive mental or physical actions (compulsions) performed to neutralize the distress. Brenda Hobyani, PMHNP-BC provides compassionate, shame-free psychiatric care to lower the neurological volume of intrusive thoughts.',
     symptoms: [
@@ -737,6 +740,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'neurodevelopmental-disorders',
     name: 'Neurodevelopmental Disorders (ASD & Intellectual Developmental Disorder)',
+    image: '/autism_care.jpg',
     tagline: 'Affirming, individualized psychiatric care for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
     shortDescription: 'Specialized psychiatric evaluations and supportive symptom management for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
     overview: 'Neurodevelopmental disorders—including Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder (IDD)—involve unique patterns of brain development that shape communication, sensory processing, social interaction, and adaptive functioning. Brenda Hobyani, PMHNP-BC delivers patient-centered, respectful care focused on enhancing quality of life, easing sensory or emotional overwhelm, and treating co-occurring anxiety, mood shifts, or sleep difficulties.',

@@ -137,6 +137,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'trauma-ptsd-spectrum',
     name: 'Trauma & Stressor-Related Disorders (PTSD)',
+    image: '/ptsd_care.jpg',
     tagline: 'Gentle, trauma-informed stabilization to soothe an overworked alarm system.',
     overview: 'Trauma leaves a lingering imprint on the amygdala, nervous system, and sleep architecture. We utilize targeted psychiatric medications to dampen hyperarousal and nightmares.',
     mainConditionId: 'trauma-ptsd',
@@ -238,6 +239,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
     id: 'ocd-spectrum',
     name: 'Obsessive-Compulsive & Related Disorders (OCD)',
     tagline: 'Targeted SSRI optimization and cognitive defusion to break the compulsive loop.',
+    image: '/ocd_care.jpg',
     overview: 'OCD involves intrusive, distressing thoughts (obsessions) that trigger repetitive mental or behavioral rituals (compulsions). We utilize targeted pharmacotherapy to quiet intrusive thought loops.',
     mainConditionId: 'ocd',
     subConditions: [
@@ -270,6 +272,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'sleep-insomnia-spectrum',
     name: 'Insomnia & Sleep Architecture Disorders',
+    image: '/sleep_care.jpg',
     tagline: 'Targeted medical support and circadian realignment for deep restorative rest.',
     overview: 'Sleep is the brain’s cleansing and restorative phase. Chronic insomnia fuels mood instability and cognitive decline. We address sleep onset, night awakenings, and circadian disruptions.',
     mainConditionId: 'insomnia-sleep',
@@ -398,6 +401,40 @@ export const generalConditionsList: GeneralConditionCategory[] = [
         name: 'Relapse Prevention & Emotional Stabilization',
         shortDesc: 'Addressing sleep disruption, rebound anxiety, and mood fluctuations during long-term recovery.',
         targetConditionId: 'substance-abuse-addiction',
+      },
+    ],
+  },
+  {
+    id: 'neurodevelopmental-spectrum',
+    name: 'Autism Spectrum Disorders (ASD) & Neurodevelopmental Care',
+    image: '/autism_care.jpg',
+    tagline: 'Affirming, individualized psychiatric care for Autism Spectrum Disorders (ASD) and Intellectual Developmental Disorder.',
+    overview: 'Neurodevelopmental disorders involve unique patterns of brain connectivity shaping sensory processing, social communication, and daily routines. We provide neurodiversity-affirming care focused on easing sensory overwhelm, anxiety, irritability, and sleep challenges.',
+    mainConditionId: 'neurodevelopmental-disorders',
+    subConditions: [
+      {
+        id: 'autism-spectrum-support',
+        name: 'Autism Spectrum Disorder (ASD) Symptom Support',
+        shortDesc: 'Individualized evaluations and gentle care for sensory overload, transitions, and emotional regulation.',
+        targetConditionId: 'neurodevelopmental-disorders',
+      },
+      {
+        id: 'asd-cooccurring-anxiety-sleep',
+        name: 'Co-Occurring Anxiety, Irritability & Sleep Support',
+        shortDesc: 'Conservative pharmacotherapy and circadian support for insomnia, severe irritability, and anxiety in ASD.',
+        targetConditionId: 'neurodevelopmental-disorders',
+      },
+      {
+        id: 'autistic-burnout-masking',
+        name: 'Autistic Burnout & Sensory Overwhelm',
+        shortDesc: 'Supportive psychiatric strategies for chronic exhaustion from social masking and environmental stress.',
+        targetConditionId: 'neurodevelopmental-disorders',
+      },
+      {
+        id: 'idd-adaptive-care',
+        name: 'Intellectual Developmental Disorder (IDD) Care',
+        shortDesc: 'Patient-centered, family-collaborative psychiatric management tailored to developmental needs.',
+        targetConditionId: 'neurodevelopmental-disorders',
       },
     ],
   },
