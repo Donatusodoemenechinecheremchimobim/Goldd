@@ -67,14 +67,22 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ onNavigate, onOpen
         <div className="p-6 md:p-8 rounded-3xl bg-rose-50 border border-rose-200 space-y-4 shadow-xs">
           <div className="flex items-center gap-2 text-rose-700 font-bold text-xs tracking-wider uppercase">
             <Heart className="w-4 h-4 fill-rose-600" />
-            <span>Emergency & 24/7 Crisis Support Numbers</span>
+            <span>Emergency &amp; 24/7 Crisis Support Numbers</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
             <div className="p-4 rounded-2xl bg-white border border-rose-200 shadow-2xs">
-              <span className="text-[10px] text-rose-600 font-semibold block uppercase">Suicide & Crisis Lifeline</span>
+              <span className="text-[10px] text-rose-600 font-semibold block uppercase">Suicide &amp; Crisis Lifeline</span>
               <strong className="text-[#1C1917] text-lg font-serif">Dial 988</strong>
               <p className="text-[#57534E] mt-1">Available 24/7 across the US. Free, confidential phone and text support.</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-rose-200 shadow-2xs">
+              <span className="text-[10px] text-rose-600 font-semibold block uppercase">Poison Control (24/7)</span>
+              <a href="tel:8002221222" className="text-[#1C1917] hover:text-rose-700 transition-colors text-lg font-serif font-bold block">
+                800-222-1222
+              </a>
+              <p className="text-[#57534E] mt-1">Available 24 hours, 7 days a week for medication overdose or poison emergencies.</p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white border border-rose-200 shadow-2xs">

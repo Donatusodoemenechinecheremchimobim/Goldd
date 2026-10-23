@@ -16,19 +16,23 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
 
   return (
     <footer className="bg-white border-t border-stone-200 text-[#57534E] text-sm relative overflow-hidden">
-      {/* 988 Emergency / Crisis Banner */}
+      {/* 988 Emergency & Poison Control Banner */}
       <div className="bg-[#FAF7F0] border-b border-[#D4AF37]/25 py-4 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left text-xs">
           <div className="flex items-center gap-2">
-            <span className="p-1 rounded bg-[#B8860B]/15 text-[#9E7206]">
+            <span className="p-1 rounded bg-[#B8860B]/15 text-[#9E7206] shrink-0">
               <Heart className="w-3.5 h-3.5 fill-[#B8860B]" />
             </span>
             <span className="text-[#292524]">
-              <strong className="text-[#1C1917]">In Immediate Crisis?</strong> If you or a loved one is in danger or experiencing severe suicidal thoughts, please call or text <strong className="text-[#9E7206]">988</strong> immediately.
+              <strong className="text-[#1C1917]">In Immediate Crisis?</strong> Call or text <strong className="text-[#9E7206]">988</strong> for the Suicide &amp; Crisis Lifeline, or call <strong className="text-[#1C1917]">Poison Control</strong> at{' '}
+              <a href="tel:8002221222" className="text-[#9E7206] font-bold hover:underline">
+                800-222-1222
+              </a>
+              .
             </span>
           </div>
-          <div className="text-[#78716C] text-[11px] font-medium">
-            Available 24 hours a day, 7 days a week. Free & Confidential.
+          <div className="text-[#78716C] text-[11px] font-medium shrink-0">
+            Available 24 hours a day, 7 days a week. Free &amp; Confidential.
           </div>
         </div>
       </div>
@@ -60,6 +64,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               <div className="flex items-center gap-2 text-[#44403C] pt-1 font-medium">
                 <span className="text-[#9E7206] font-semibold">Hours:</span>
                 <span>Mon – Thu: 8:00 AM – 4:00 PM · Fri: 9:00 AM – 1:00 PM</span>
+              </div>
+              <div className="flex items-center gap-2 text-[#44403C] font-medium">
+                <span className="text-[#9E7206] font-semibold">Poison Control (24/7):</span>
+                <a href="tel:8002221222" className="hover:text-[#B8860B] transition-colors font-semibold">800-222-1222</a>
               </div>
             </div>
 
@@ -168,7 +176,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
         </div>
 
         <div className="mt-4 text-[10px] text-[#888] leading-relaxed text-center md:text-left">
-          Notice: Information provided on this website is for informational and educational purposes only and does not constitute a formal doctor-patient relationship until an initial clinical evaluation is conducted. For medical or psychiatric emergencies, call 911 or visit the nearest emergency room.
+          Notice: Information provided on this website is for informational and educational purposes only and does not constitute a formal doctor-patient relationship until an initial clinical evaluation is conducted. For medical or psychiatric emergencies, call 911, dial 988, call Poison Control at 800-222-1222 (24/7), or visit the nearest emergency room.
         </div>
       </div>
     </footer>

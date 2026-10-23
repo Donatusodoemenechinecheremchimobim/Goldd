@@ -631,9 +631,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             </div>
 
-            <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400">
-              Need immediate crisis support? Call or text{' '}
-              <strong className="text-[#D4AF37]">988</strong> for the Suicide & Crisis Lifeline.
+            <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400 space-y-1">
+              <p>
+                Need immediate crisis support? Call or text{' '}
+                <strong className="text-[#D4AF37]">988</strong> for the Suicide &amp; Crisis Lifeline.
+              </p>
+              <p>
+                Poison Control (24/7): Call{' '}
+                <a href="tel:8002221222" className="text-[#D4AF37] font-bold hover:underline">
+                  800-222-1222
+                </a>
+              </p>
             </div>
           </div>
 
@@ -1606,7 +1614,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
                         <strong>Important Clinical Safety Notice:</strong> Some psychiatric and
                         anxiety medications are <strong>habit forming</strong>. Brenda Hobyani,
-                        PMHNP-BC monitors all refills closely to ensure safe, responsible dosing.
+                        PMHNP-BC monitors all refills closely to ensure safe, responsible dosing. For any suspected medication overdose or poison emergency, call <strong>Poison Control (24/7)</strong> at{' '}
+                        <a href="tel:8002221222" className="font-bold underline hover:text-amber-950">
+                          800-222-1222
+                        </a>
+                        .
                       </div>
                     </div>
 

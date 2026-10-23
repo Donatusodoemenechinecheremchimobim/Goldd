@@ -34,13 +34,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
             <span>Welcoming New Patients Across Texas · 100% Telehealth Visits</span>
           </div>
-          <div className="hidden md:flex items-center gap-6 shrink-0 text-[#E6C35C]">
+          <div className="hidden md:flex items-center gap-5 shrink-0 text-[#E6C35C]">
             <a href="tel:+14329343185" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
               <Phone className="w-3 h-3 text-[#D4AF37]" />
               <span>+1 (432) 934-3185</span>
             </a>
             <span className="text-stone-700">|</span>
             <span className="text-stone-400">Crisis Support: Dial <strong className="text-[#FFF4BE]">988</strong></span>
+            <span className="text-stone-700">|</span>
+            <a href="tel:8002221222" className="text-stone-400 hover:text-[#FFF4BE] transition-colors">
+              Poison Control (24/7): <strong className="text-[#FFF4BE]">800-222-1222</strong>
+            </a>
           </div>
         </div>
       </div>
@@ -350,11 +354,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               Book Now
             </button>
 
-            <div className="mt-4 text-center">
+            <div className="mt-4 text-center space-y-1.5">
               <a href="tel:+14329343185" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#D4AF37]" />
                 <span>Call Us: +1 (432) 934-3185</span>
               </a>
+              <p className="text-[11px] text-stone-400">
+                Crisis Line: <strong className="text-[#D4AF37]">988</strong> · Poison Control (24/7):{' '}
+                <a href="tel:8002221222" className="text-[#D4AF37] font-semibold hover:underline">
+                  800-222-1222
+                </a>
+              </p>
             </div>
           </div>
         </div>

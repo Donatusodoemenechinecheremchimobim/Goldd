@@ -100,12 +100,24 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
               </div>
             </div>
 
-            {/* Emergency note */}
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-[#57534E] space-y-1">
-              <strong className="text-rose-700 block font-semibold">Psychiatric Emergency:</strong>
-              <p>
-                If you are experiencing a life-threatening mental health crisis or thoughts of self-harm, please dial <strong className="text-rose-700">988</strong> or call 911 immediately.
-              </p>
+            {/* Emergency & Poison Control note */}
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-[#57534E] space-y-2.5">
+              <div>
+                <strong className="text-rose-700 block font-semibold">Psychiatric Emergency:</strong>
+                <p className="mt-0.5">
+                  If you are experiencing a life-threatening mental health crisis or thoughts of self-harm, please dial <strong className="text-rose-700">988</strong> or call <strong className="text-rose-700">911</strong> immediately.
+                </p>
+              </div>
+              <div className="pt-2 border-t border-rose-200/70">
+                <strong className="text-rose-700 block font-semibold">Poison Control (24 Hours, 7 Days a Week):</strong>
+                <p className="mt-0.5">
+                  For medication overdose or poison emergencies, call Poison Control immediately at{' '}
+                  <a href="tel:8002221222" className="text-rose-700 font-bold hover:underline">
+                    800-222-1222
+                  </a>
+                  .
+                </p>
+              </div>
             </div>
           </div>
 
