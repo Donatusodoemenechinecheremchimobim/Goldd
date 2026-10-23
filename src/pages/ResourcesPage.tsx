@@ -65,9 +65,21 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ onNavigate, onOpen
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16">
         {/* Immediate Crisis Hotlines Banner */}
         <div className="p-6 md:p-8 rounded-3xl bg-rose-50 border border-rose-200 space-y-4 shadow-xs">
-          <div className="flex items-center gap-2 text-rose-700 font-bold text-xs tracking-wider uppercase">
-            <Heart className="w-4 h-4 fill-rose-600" />
-            <span>Emergency &amp; 24/7 Crisis Support Numbers</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-rose-700 font-bold text-xs tracking-wider uppercase">
+              <Heart className="w-4 h-4 fill-rose-600" />
+              <span>Emergency &amp; 24/7 Crisis Support Numbers</span>
+            </div>
+            <button
+              onClick={() => {
+                onNavigate('suicide-prevention');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="text-xs font-bold text-rose-800 hover:text-[#1C1917] flex items-center gap-1.5 underline cursor-pointer self-start sm:self-auto"
+            >
+              <span>Open Full Suicide Prevention &amp; Safety Plan Page</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">

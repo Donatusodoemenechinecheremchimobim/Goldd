@@ -16,6 +16,7 @@ import { InsurancePage } from './pages/InsurancePage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { ContactPage } from './pages/ContactPage';
 import { ClientPortalPage } from './pages/ClientPortalPage';
+import { SuicidePreventionPage } from './pages/SuicidePreventionPage';
 import { AppointmentModal } from './components/AppointmentModal';
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
             'telehealth',
             'insurance',
             'resources',
+            'suicide-prevention',
             'contact',
             'portal',
             'home',
@@ -142,6 +144,13 @@ export default function App() {
 
         {currentPage === 'resources' && (
           <ResourcesPage
+            onNavigate={handleNavigate}
+            onOpenBooking={handleOpenBooking}
+          />
+        )}
+
+        {currentPage === 'suicide-prevention' && (
+          <SuicidePreventionPage
             onNavigate={handleNavigate}
             onOpenBooking={handleOpenBooking}
           />

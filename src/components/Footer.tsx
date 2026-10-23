@@ -31,8 +31,14 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               .
             </span>
           </div>
-          <div className="text-[#78716C] text-[11px] font-medium shrink-0">
-            Available 24 hours a day, 7 days a week. Free &amp; Confidential.
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 text-[#78716C] text-[11px] font-medium shrink-0">
+            <span>Available 24/7 · Free &amp; Confidential</span>
+            <button
+              onClick={() => handleLink('suicide-prevention')}
+              className="text-[#9E7206] hover:text-[#1C1917] font-bold underline cursor-pointer whitespace-nowrap"
+            >
+              Suicide Prevention &amp; Safety Plan →
+            </button>
           </div>
         </div>
       </div>
@@ -148,7 +154,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               </li>
               <li>
                 <button onClick={() => handleLink('resources')} className="text-[#57534E] hover:text-[#9E7206] transition-colors cursor-pointer">
-                  Mental Health Guides & FAQ
+                  Mental Health Guides &amp; FAQ
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleLink('suicide-prevention')} className="text-[#9E7206] hover:text-[#1C1917] font-semibold transition-colors cursor-pointer">
+                  Suicide Prevention &amp; Crisis Guide
                 </button>
               </li>
               <li>

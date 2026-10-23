@@ -40,7 +40,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>+1 (432) 934-3185</span>
             </a>
             <span className="text-stone-700">|</span>
-            <span className="text-stone-400">Crisis Support: Dial <strong className="text-[#FFF4BE]">988</strong></span>
+            <button
+              onClick={() => handleNavClick('suicide-prevention')}
+              className="text-stone-400 hover:text-[#FFF4BE] transition-colors cursor-pointer"
+            >
+              Suicide Prevention &amp; Crisis: Dial <strong className="text-[#FFF4BE]">988</strong>
+            </button>
             <span className="text-stone-700">|</span>
             <a href="tel:8002221222" className="text-stone-400 hover:text-[#FFF4BE] transition-colors">
               Poison Control (24/7): <strong className="text-[#FFF4BE]">800-222-1222</strong>
@@ -177,8 +182,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 currentPage === 'resources' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
               }`}
             >
-              Blog & Resources
+              Resources
               {currentPage === 'resources' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleNavClick('suicide-prevention')}
+              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
+                currentPage === 'suicide-prevention' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
+              }`}
+            >
+              Suicide Prevention
+              {currentPage === 'suicide-prevention' && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
@@ -324,7 +341,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => handleNavClick('resources')}
               className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
             >
-              Blog & Resources
+              Blog &amp; Resources
+            </button>
+
+            <button
+              onClick={() => handleNavClick('suicide-prevention')}
+              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
+            >
+              Suicide Prevention &amp; Crisis Guide
             </button>
 
             <button
