@@ -27,14 +27,11 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
 
         <div className="max-w-4xl mx-auto relative z-10 space-y-4">
           <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-            Get in Touch · “Where Every Mind Is Golden.”
+            Get in Touch
           </span>
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
             Contact Golden Mind Psychiatry PLLC
           </h1>
-          <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
-            “Where Every Mind Is Golden.”
-          </p>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
             We are here to answer your questions regarding evaluations, medication management, insurance coverage, and telehealth appointments.
           </p>
@@ -50,9 +47,6 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                 <h2 className="text-xl font-serif font-bold text-[#1C1917]">
                   Practice Contact Details
                 </h2>
-                <p className="text-xs font-serif italic font-semibold text-[#9E7206] mt-0.5">
-                  “Where Every Mind Is Golden.”
-                </p>
               </div>
 
               <div className="space-y-4 text-xs sm:text-sm">

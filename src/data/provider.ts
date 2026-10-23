@@ -1,8 +1,7 @@
 import { ProviderProfile } from '../types';
 
 export const aboutUsOfficial = {
-  slogan: "“Where Every Mind Is Golden.”",
-  paragraph1: "Golden Mind Psychiatry PLLC — “Where Every Mind Is Golden.” — is a compassionate mental health provider dedicated to supporting individuals on their journey to emotional well-being. We believe that quality psychiatric care should be accessible, personalized, and delivered with genuine compassion. Our mission is to help our patients achieve mental health stability and improved quality of life through personalized clinical treatment approaches and a commitment to understanding each individual’s unique needs.",
+  paragraph1: "Golden Mind Psychiatry PLLC is a compassionate mental health provider dedicated to supporting individuals on their journey to emotional well-being. We believe that quality psychiatric care should be accessible, personalized, and delivered with genuine compassion. Our mission is to help our patients achieve mental health stability and improved quality of life through personalized clinical treatment approaches and a commitment to understanding each individual’s unique needs.",
   paragraph2: "We offer comprehensive mental health services including psychiatric evaluations, medication management, and specialized treatments for a wide range of conditions. Whether you’re struggling with ADHD, anxiety, depression, mood disorders, PTSD, or bipolar disorder, our experienced team is here to provide expert care. With the convenience of telehealth options, we make it easier for you to access the mental health support you deserve, whenever and wherever you need it."
 };
 
@@ -38,6 +37,6 @@ export const providerBrenda: ProviderProfile = {
   education: [
     'Master of Science in Nursing (MSN), Psychiatric-Mental Health Nurse Practitioner'
   ],
-  philosophy: '“Where Every Mind Is Golden.” Quality psychiatric care should be accessible, personalized, and delivered with genuine compassion. We partner with you to achieve lasting stability, emotional resilience, and peace of mind.',
-  quote: '“Where Every Mind Is Golden.” Healing begins the moment you feel truly seen and understood. My commitment is to guide you back to clarity, balance, and the golden peace of your own mind.'
+  philosophy: 'Quality psychiatric care should be accessible, personalized, and delivered with genuine compassion. We partner with you to achieve lasting stability, emotional resilience, and peace of mind.',
+  quote: 'Healing begins the moment you feel truly seen and understood. My commitment is to guide you back to clarity, balance, and the golden peace of your own mind.'
 };

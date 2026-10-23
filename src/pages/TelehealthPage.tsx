@@ -15,17 +15,13 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
         <div className="max-w-5xl mx-auto relative z-10 space-y-5">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FAF7F0] border border-[#D4AF37]/45 text-xs font-semibold uppercase tracking-wider text-[#9E7206]">
             <Video className="w-3.5 h-3.5 text-[#B8860B]" />
-            <span>100% Telehealth-Only Practice · “Where Every Mind Is Golden.”</span>
+            <span>100% Telehealth-Only Practice</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
             Telehealth Psychiatric Care for Everyone — <br />
             <span className="text-gold-bright">Adults, Teens &amp; Children Across Texas.</span>
           </h1>
-
-          <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
-            “Where Every Mind Is Golden.”
-          </p>
 
           <p className="text-base sm:text-lg text-[#44403C] max-w-3xl mx-auto font-light leading-relaxed">
             Golden Mind Psychiatry PLLC currently operates exclusively as a <strong className="font-semibold text-[#1C1917]">100% virtual telehealth practice</strong> (no in-person visits at this time). Brenda Hobyani, PMHNP-BC provides comprehensive, confidential psychiatric evaluations and medication management for <strong className="font-semibold text-[#1C1917]">adults, adolescents, and children</strong> from the comfort of home.
@@ -51,7 +47,7 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
               <div className="p-6 sm:p-8 text-center bg-[#FAF7F0] border-t border-[#D4AF37]/30 space-y-5">
                 <div className="space-y-2">
                   <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#D4AF37]/40 text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
-                    Virtual Care Only · “Where Every Mind Is Golden.”
+                    Virtual Care Only
                   </span>
                   <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
                     Virtual Psychiatric Care for Every Stage of Life

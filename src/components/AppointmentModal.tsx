@@ -104,9 +104,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             <h3 className="text-2xl font-serif text-[#1C1917] font-bold">
               100% Telehealth Visit Confirmed & Provisioned
             </h3>
-            <p className="text-xs font-serif italic font-bold text-[#9E7206]">
-              Golden Mind Psychiatry PLLC — “Where Every Mind Is Golden.”
-            </p>
             <p className="text-sm text-[#57534E] max-w-md mx-auto leading-relaxed">
               Thank you, <span className="text-[#1C1917] font-semibold">{formData.fullName}</span>.
               Your <span className="text-[#1C1917] font-medium">100% Telehealth Video Visit</span>{' '}
@@ -176,7 +173,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             {/* Header */}
             <div className="text-center space-y-1.5 pb-2 border-b border-stone-100">
               <span className="text-[11px] font-semibold tracking-widest text-[#9E7206] uppercase">
-                Golden Mind Psychiatry PLLC · “Where Every Mind Is Golden.”
+                Golden Mind Psychiatry PLLC
               </span>
               <h2 className="text-2xl font-serif text-[#1C1917] font-bold">
                 Book a 100% Telehealth Consultation

@@ -51,14 +51,11 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ onNavigate, onOpen
 
         <div className="max-w-4xl mx-auto relative z-10 space-y-4">
           <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-            Mental Health Education & Support · “Where Every Mind Is Golden.”
+            Mental Health Education & Support
           </span>
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
             Resources, Guides & Crisis Support
           </h1>
-          <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
-            “Where Every Mind Is Golden.”
-          </p>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
             Empowering patients and families with clear, destigmatized psychiatric knowledge, clinical articles, and immediate support channels.
           </p>
@@ -98,7 +95,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ onNavigate, onOpen
         <div className="space-y-6">
           <div className="space-y-1 text-center sm:text-left">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#9E7206]">
-              From the Desk of Brenda Hobyani, PMHNP-BC · “Where Every Mind Is Golden.”
+              From the Desk of Brenda Hobyani, PMHNP-BC
             </span>
             <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
               Clinical Articles & Psychiatric Insights

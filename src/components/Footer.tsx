@@ -40,11 +40,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
             <button onClick={() => handleLink('home')} className="text-left cursor-pointer">
               <GoldenMindLogo variant="horizontal" size="md" textColor="dark" />
             </button>
-            <div className="inline-block px-3.5 py-1 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/45 text-xs font-serif italic font-bold text-[#9E7206]">
-              “Where Every Mind Is Golden.”
-            </div>
             <p className="text-xs md:text-sm text-[#57534E] leading-relaxed max-w-sm">
-              Compassionate, expert psychiatric evaluations and medication management led by <span className="text-[#1C1917] font-semibold">Brenda Hobyani, PMHNP-BC</span>. At Golden Mind Psychiatry PLLC — <span className="italic font-medium text-[#9E7206]">“Where Every Mind Is Golden.”</span> — we are dedicated to healing minds, restoring balance, and guiding you toward lasting mental wellness.
+              Compassionate, expert psychiatric evaluations and medication management led by <span className="text-[#1C1917] font-semibold">Brenda Hobyani, PMHNP-BC</span>. Dedicated to healing minds, restoring balance, and guiding you toward lasting mental wellness.
             </p>
 
             <div className="pt-2 space-y-2 text-xs">
@@ -157,7 +154,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
 
         {/* Bottom Bar: Copyright & Medical Disclaimer */}
         <div className="mt-14 pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-[#78716C]">
-          <p>© {new Date().getFullYear()} Golden Mind Psychiatry PLLC · <span className="font-serif italic text-[#9E7206] font-semibold">“Where Every Mind Is Golden.”</span> · All Rights Reserved.</p>
+          <p>© {new Date().getFullYear()} Golden Mind Psychiatry PLLC. All Rights Reserved.</p>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-[#B8860B]" />

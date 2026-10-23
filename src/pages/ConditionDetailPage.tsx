@@ -101,8 +101,8 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
             </div>
           )}
 
-          <div className="inline-block px-4 py-1 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/45 text-xs sm:text-sm font-serif italic font-bold text-[#9E7206]">
-            Golden Mind Psychiatry PLLC · “Where Every Mind Is Golden.”
+          <div className="inline-block px-4 py-1 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/45 text-xs sm:text-sm font-semibold text-[#9E7206]">
+            Golden Mind Psychiatry PLLC
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-[#1C1917] tracking-tight leading-tight">
@@ -258,7 +258,7 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
         <section className="p-8 md:p-10 rounded-3xl bg-white border border-[#D4AF37]/35 relative overflow-hidden space-y-8 shadow-xs">
           <div className="space-y-2 text-center sm:text-left">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#9E7206]">
-              Our Clinical Model · “Where Every Mind Is Golden.”
+              Our Clinical Model
             </span>
             <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
               How Brenda Hobyani, PMHNP-BC Treats {condition.name.split('(')[0]}
@@ -400,14 +400,11 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
         {/* Provider Commitment Banner */}
         <div className="p-8 rounded-3xl bg-[#FAF7F0] border border-[#D4AF37]/40 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left shadow-xs">
           <div className="space-y-2 max-w-xl">
-            <span className="text-xs font-serif italic font-bold text-[#9E7206]">
-              “Where Every Mind Is Golden.”
-            </span>
             <h3 className="text-xl font-serif font-bold text-[#1C1917]">
               Ready to Discuss a Personalized Plan with Brenda Hobyani, PMHNP-BC?
             </h3>
             <p className="text-xs sm:text-sm text-[#57534E]">
-              Schedule your comprehensive diagnostic intake at Golden Mind Psychiatry PLLC — <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> Available via secure Telehealth across Texas from the comfort of your home.
+              Schedule your comprehensive diagnostic intake at Golden Mind Psychiatry PLLC. Available via secure Telehealth across Texas from the comfort of your home.
             </p>
           </div>
 

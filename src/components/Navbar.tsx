@@ -32,9 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 text-[11px] md:text-xs font-medium">
           <div className="flex items-center gap-2 mx-auto md:mx-0">
             <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
-            <span className="font-serif italic text-[#ECC865] font-semibold">“Where Every Mind Is Golden.”</span>
-            <span className="hidden sm:inline text-stone-600">·</span>
-            <span className="hidden sm:inline">Welcoming New Patients Across Texas · 100% Telehealth Visits</span>
+            <span>Welcoming New Patients Across Texas · 100% Telehealth Visits</span>
           </div>
           <div className="hidden md:flex items-center gap-6 shrink-0 text-[#E6C35C]">
             <a href="tel:+14329343185" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
@@ -117,10 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {conditionsDropdownOpen && (
                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[460px] p-4 bg-[#121212] border border-[#D4AF37]/40 rounded-2xl shadow-2xl z-50">
                   <div className="flex items-center justify-between pb-2 mb-3 border-b border-stone-800">
-                    <div>
-                      <span className="text-[11px] font-semibold tracking-wider uppercase text-[#D4AF37] block">Individual Condition Pages</span>
-                      <span className="text-[10px] font-serif italic text-[#FFF4BE]/85">“Where Every Mind Is Golden.”</span>
-                    </div>
+                    <span className="text-[11px] font-semibold tracking-wider uppercase text-[#D4AF37]">Individual Condition Pages</span>
                     <button
                       onClick={() => handleNavClick('conditions-overview')}
                       className="text-xs text-stone-400 hover:text-[#D4AF37] transition-colors font-medium cursor-pointer"
@@ -355,10 +350,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               Book Now
             </button>
 
-            <div className="mt-4 text-center space-y-1.5">
-              <p className="text-xs font-serif italic text-[#ECC865]">
-                “Where Every Mind Is Golden.”
-              </p>
+            <div className="mt-4 text-center">
               <a href="tel:+14329343185" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#D4AF37]" />
                 <span>Call Us: +1 (432) 934-3185</span>

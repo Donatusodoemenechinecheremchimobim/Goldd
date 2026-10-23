@@ -23,14 +23,11 @@ export const InsurancePage: React.FC<InsurancePageProps> = ({ onOpenBooking }) =
 
         <div className="max-w-4xl mx-auto relative z-10 space-y-4">
           <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-            Coverage & Transparent Investment · “Where Every Mind Is Golden.”
+            Coverage & Transparent Investment
           </span>
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
             Insurance & Affordable Care
           </h1>
-          <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
-            “Where Every Mind Is Golden.”
-          </p>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
             We partner with major insurance carriers and provide clear, upfront self-pay pricing with zero surprise medical bills.
           </p>
@@ -120,9 +117,6 @@ export const InsurancePage: React.FC<InsurancePageProps> = ({ onOpenBooking }) =
 
         {/* Booking CTA */}
         <div className="text-center space-y-4 max-w-xl mx-auto pt-4">
-          <span className="inline-block px-3.5 py-1 rounded-full bg-[#FAF6EA] border border-[#D4AF37]/45 text-xs font-serif italic font-bold text-[#9E7206]">
-            “Where Every Mind Is Golden.”
-          </span>
           <h3 className="text-2xl font-serif font-bold text-[#1C1917]">
             Have Questions About Your Coverage?
           </h3>

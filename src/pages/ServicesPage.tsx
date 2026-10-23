@@ -18,14 +18,11 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
         <div className="max-w-4xl mx-auto relative z-10 space-y-6">
           <div className="space-y-4">
             <span className="text-xs font-semibold tracking-widest text-[#9E7206] uppercase">
-              Clinical Services & Programs · “Where Every Mind Is Golden.”
+              Clinical Services & Programs
             </span>
             <h1 className="text-3xl sm:text-5xl font-serif font-bold text-[#1C1917] tracking-tight">
               Comprehensive Psychiatric Medicine
             </h1>
-            <p className="text-sm sm:text-base font-serif italic font-semibold text-[#9E7206]">
-              “Where Every Mind Is Golden.”
-            </p>
             <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
               Comprehensive psychiatric evaluations, precision psychopharmacology, and integrative mental healthcare delivered with warmth and dignity.
             </p>
@@ -130,13 +127,13 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onNavigate, onOpenBo
         {/* Banner Linking to Individual Condition Pages */}
         <div className="p-8 md:p-10 rounded-3xl bg-[#FAF7F0] border border-[#D4AF37]/35 text-center space-y-4 shadow-xs">
           <span className="text-xs font-semibold uppercase tracking-widest text-[#9E7206]">
-            Looking for a Specific Condition? · “Where Every Mind Is Golden.”
+            Looking for a Specific Condition?
           </span>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">
             We Feature Dedicated Guides for Every Condition
           </h2>
           <p className="text-xs sm:text-sm text-[#57534E] max-w-2xl mx-auto">
-            At Golden Mind Psychiatry PLLC — <span className="font-serif italic font-semibold text-[#9E7206]">“Where Every Mind Is Golden.”</span> — from ADHD and Women's Mental Health to PTSD, Panic Disorders, and Sleep Architecture, explore individual diagnosis and treatment pages.
+            From ADHD and Women's Mental Health to PTSD, Panic Disorders, and Sleep Architecture, explore individual diagnosis and treatment pages.
           </p>
 
           <div className="pt-3 flex flex-wrap justify-center gap-2">
