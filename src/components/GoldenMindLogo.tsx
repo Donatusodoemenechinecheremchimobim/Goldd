@@ -1307,7 +1307,7 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
     return (
       <div className={`flex flex-col items-center justify-center text-center ${className}`}>
         {/* Luxury Rounded Black Card with Golden Mind Artwork from user's upload */}
-        <div className="w-full max-w-[340px] sm:max-w-[400px] md:max-w-[440px] rounded-3xl overflow-hidden shadow-[0_14px_45px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black transition-all duration-300 hover:shadow-[0_18px_55px_rgba(212,175,55,0.25)]">
+        <div className="w-full max-w-[240px] sm:max-w-[280px] md:max-w-[310px] rounded-3xl overflow-hidden shadow-[0_14px_45px_rgba(0,0,0,0.35)] border border-stone-800/80 bg-black transition-all duration-300 hover:shadow-[0_18px_55px_rgba(212,175,55,0.25)]">
           <img
             src="/golden_mind_card.webp"
             alt="Golden Mind Psychiatry PLLC — Where Every Mind Is Golden."
@@ -1316,11 +1316,11 @@ export const GoldenMindLogo: React.FC<GoldenMindLogoProps> = ({
         </div>
 
         {showText && (
-          <div className="mt-5 flex flex-col items-center space-y-2">
+          <div className="mt-4 flex flex-col items-center space-y-1.5">
             <p className="font-serif italic text-lg sm:text-xl md:text-2xl font-bold text-[#9E7206] tracking-wide">
               “Where Every Mind Is Golden.”
             </p>
-            <p className="text-xs sm:text-sm text-[#78716C] tracking-[0.22em] uppercase font-medium">
+            <p className="text-[11px] sm:text-xs text-[#78716C] tracking-[0.2em] uppercase font-medium">
               COMPASSIONATE PSYCHIATRIC CARE · TEXAS · TELEHEALTH SERVICES FROM THE COMFORT OF YOUR HOME
             </p>
           </div>

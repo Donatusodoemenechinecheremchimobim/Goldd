@@ -38,6 +38,9 @@ import {
   MailCheck,
   Menu,
   X,
+  Search,
+  Bell,
+  TrendingUp,
 } from 'lucide-react';
 import {
   auth,
@@ -103,10 +106,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [dobInput, setDobInput] = useState('');
   const [insuranceInput, setInsuranceInput] = useState('Blue Cross Blue Shield (BCBS)');
 
-  // Navigation & Mode State
+  // Navigation, Search & Mode State
   const [activeTab, setActiveTab] = useState<PortalTab>('overview');
   const [workspaceMode, setWorkspaceMode] = useState<'patient' | 'provider'>('patient');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [portalSearchQuery, setPortalSearchQuery] = useState('');
   const [activeTelehealthAppt, setActiveTelehealthAppt] =
     useState<AppointmentRecord | null>(null);
 
@@ -315,7 +319,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           emailInput.trim(),
           passwordInput
         );
-        // Dispatch real Firebase email verification link to the new user's inbox
         try {
           await sendEmailVerification(cred.user);
           setVerificationNotice(
@@ -382,7 +385,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         completedAt: now,
       });
 
-      // Notify clinic office (info@goldenmindpsychiatry.org) that intake paperwork was signed
       await addDoc(collection(db, 'messages'), {
         patientId: portalUser.uid,
         patientName: portalUser.fullName,
@@ -569,11 +571,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   if (authLoading) {
     return (
-      <div className="min-h-[75vh] bg-[#FAF9F5] flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border border-stone-200 rounded-2xl p-8 space-y-4">
-          <div className="h-6 w-48 bg-stone-200 rounded animate-pulse" />
-          <div className="h-4 w-full bg-stone-100 rounded animate-pulse" />
-          <div className="h-10 w-full bg-stone-200 rounded-xl animate-pulse" />
+      <div className="min-h-[75vh] bg-[#FAF9F5] flex items-center justify-center p-6 font-portal-body">
+        <div className="w-full max-w-md bg-white portal-card p-8 space-y-4">
+          <div className="h-6 w-48 bg-stone-200 rounded-[12px] animate-pulse" />
+          <div className="h-4 w-full bg-stone-100 rounded-[12px] animate-pulse" />
+          <div className="h-10 w-full bg-stone-200 rounded-[12px] animate-pulse" />
         </div>
       </div>
     );
@@ -584,17 +586,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   // ============================================================================
   if (!firebaseUser || !portalUser) {
     return (
-      <section className="min-h-[84vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xl">
+      <section className="min-h-[84vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center font-portal-body">
+        <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 bg-white border border-stone-200 rounded-[32px] overflow-hidden shadow-xl">
           {/* Left Sanctuary Branding Column */}
-          <div className="lg:col-span-5 bg-[#0A0A0A] text-white p-8 sm:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-[#D4AF37]/30">
-            <div className="space-y-6">
+          <div className="lg:col-span-5 bg-[#0A0A0A] text-white p-8 sm:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-[#D4AF37]/30 relative overflow-hidden">
+            <div className="w-32 h-32 bg-white/5 absolute -right-8 -bottom-8 rounded-full pointer-events-none" />
+            <div className="space-y-6 relative z-10">
               <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#D4AF37]">
                 <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
                 <span>HIPAA-Encrypted Client Portal</span>
               </div>
 
-              <h1 className="text-3xl font-serif font-bold text-white leading-tight">
+              <h1 className="text-3xl font-bold font-portal-heading text-white leading-tight">
                 Golden Mind Psychiatry Client Portal
               </h1>
 
@@ -631,7 +634,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             </div>
 
-            <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400 space-y-1">
+            <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400 space-y-1 relative z-10">
               <p>
                 Need immediate crisis support? Call or text{' '}
                 <strong className="text-[#D4AF37]">988</strong> for the Suicide &amp; Crisis Lifeline.
@@ -649,7 +652,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center space-y-6">
             <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
-                <h2 className="text-2xl font-serif font-bold text-stone-900">
+                <h2 className="text-2xl font-bold font-portal-heading text-stone-900">
                   {isRegistering ? 'Create Your Client Portal Account' : 'Sign In to Client Portal'}
                 </h2>
                 <p className="text-xs text-stone-500 mt-1">
@@ -671,7 +674,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </div>
 
             {authError && (
-              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+              <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{authError}</span>
               </div>
@@ -681,7 +684,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <button
               type="button"
               onClick={handleGoogleSignIn}
-              className="w-full py-3 px-4 rounded-xl bg-[#0A0A0A] hover:bg-stone-800 text-[#D4AF37] font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 border border-[#D4AF37]/50 transition-all cursor-pointer shadow-sm"
+              className="w-full py-3 px-4 rounded-[12px] bg-[#0A0A0A] hover:bg-stone-800 text-[#D4AF37] font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 border border-[#D4AF37]/50 transition-all cursor-pointer shadow-xs"
             >
               <Sparkles className="w-4 h-4 text-[#D4AF37]" />
               <span>Continue Instantly with Google Sign-In</span>
@@ -708,7 +711,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       placeholder="Jane Doe"
                       value={fullNameInput}
                       onChange={(e) => setFullNameInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
                   </div>
                   <div>
@@ -720,7 +723,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       placeholder="(432) 555-0199"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
                   </div>
                   <div>
@@ -731,7 +734,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       type="date"
                       value={dobInput}
                       onChange={(e) => setDobInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
                   </div>
                   <div>
@@ -741,7 +744,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     <select
                       value={insuranceInput}
                       onChange={(e) => setInsuranceInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                     >
                       <option value="Blue Cross Blue Shield (BCBS)">
                         Blue Cross Blue Shield (BCBS)
@@ -767,7 +770,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     placeholder="you@example.com"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                   />
                 </div>
                 <div>
@@ -781,14 +784,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     placeholder="••••••••"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
+                className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
               >
                 {isRegistering
                   ? 'Create Account & Send Verification Email'
@@ -812,9 +815,39 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const latestPHQ9 = assessments.find((a) => a.type === 'PHQ-9');
   const latestGAD7 = assessments.find((a) => a.type === 'GAD-7');
   const dueInvoices = invoices.filter((i) => i.status === 'due');
+  const unreadProviderMessages = messages.filter(
+    (m) => m.senderRole === 'provider' && !m.read
+  );
+  const totalNotificationsCount =
+    pendingIntakes.length + unreadProviderMessages.length + dueInvoices.length;
+
+  const userInitials = portalUser.fullName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Search filtering for appointments, messages, medications, invoices
+  const qLower = portalSearchQuery.trim().toLowerCase();
+  const filteredAppts = !qLower
+    ? appointments
+    : appointments.filter(
+        (a) =>
+          a.serviceType.toLowerCase().includes(qLower) ||
+          a.conditionReason.toLowerCase().includes(qLower) ||
+          a.preferredDate.toLowerCase().includes(qLower)
+      );
+  const filteredInvoices = !qLower
+    ? invoices
+    : invoices.filter(
+        (inv) =>
+          inv.description.toLowerCase().includes(qLower) ||
+          inv.serviceDate.toLowerCase().includes(qLower)
+      );
 
   const navItems: { id: PortalTab; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: 'overview', label: 'Action Center', icon: LayoutDashboard },
+    { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     {
       id: 'appointments',
       label: 'Telehealth & Visits',
@@ -838,42 +871,51 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       id: 'messages',
       label: 'Secure Messaging',
       icon: MessageSquare,
-      badge: messages.filter((m) => m.senderRole === 'provider' && !m.read).length || undefined,
+      badge: unreadProviderMessages.length || undefined,
     },
     {
       id: 'billing',
-      label: 'Insurance & Billing',
+      label: 'Payment & Insurance',
       icon: CreditCard,
       badge: dueInvoices.length || undefined,
     },
   ];
 
   return (
-    <div className="min-h-[86vh] bg-[#FAF9F5] flex flex-col lg:flex-row">
-      {/* Left Structural Obsidian Sidebar (260px Desktop) */}
-      <aside className="w-full lg:w-[268px] shrink-0 bg-[#0A0A0A] text-stone-200 border-b lg:border-b-0 lg:border-r border-[#D4AF37]/30 flex flex-col justify-between">
+    <div className="min-h-[88vh] bg-[#FAF9F5] flex flex-col lg:flex-row font-portal-body text-stone-800">
+      {/* ==========================================================================
+          SIDEBAR NAVIGATION (256px width, #FFFFFF surface, 1px border, 40px icon logo,
+          12px padding & radius links, 4px solid right-border active indicator,
+          'Practice Verified' bottom status card & red-500 logout button)
+         ========================================================================== */}
+      <aside className="w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-stone-200 flex flex-col justify-between">
         <div>
-          {/* Patient Identity Header */}
-          <div className="p-5 border-b border-stone-800 flex items-center justify-between">
-            <div className="min-w-0">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37] block">
-                100% Telehealth Client Portal
-              </span>
-              <p className="text-sm font-serif font-bold text-white truncate mt-0.5">
-                {portalUser.fullName}
-              </p>
-              <p className="text-[11px] text-stone-400 truncate">{portalUser.email}</p>
+          {/* Top Section with 40px Golden Mind Icon Logo */}
+          <div className="p-5 border-b border-stone-200 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-[12px] bg-[#0A0A0A] border border-[#D4AF37]/60 flex items-center justify-center text-[#D4AF37] shrink-0 shadow-xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold font-portal-heading text-stone-900 truncate">
+                  Golden Mind Portal
+                </p>
+                <p className="text-[11px] text-[#9E7206] font-semibold truncate">
+                  {portalUser.fullName}
+                </p>
+              </div>
             </div>
+
             <button
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-              className="lg:hidden p-2 rounded-lg border border-stone-700 text-[#D4AF37]"
+              className="lg:hidden p-2 rounded-[12px] border border-stone-200 text-stone-700"
               aria-label="Toggle portal navigation"
             >
               {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (stacked vertically with 4px spacing, 12px padding, 12px radius) */}
           <nav
             className={`${
               mobileSidebarOpen ? 'block' : 'hidden lg:block'
@@ -890,18 +932,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     setActiveTab(item.id);
                     setMobileSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#1C1917] text-[#D4AF37] border border-[#D4AF37]/50 font-semibold'
-                      : 'text-stone-300 hover:bg-stone-900 hover:text-white'
+                      ? 'bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]'
+                      : 'text-stone-600 font-medium hover:bg-stone-50 hover:text-stone-900'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 shrink-0" />
                     <span>{item.label}</span>
                   </div>
                   {item.badge !== undefined && (
-                    <span className="font-mono tabular-nums text-[11px] font-bold text-[#D4AF37]">
+                    <span className="font-portal-heading tabular-nums text-[11px] font-bold px-2 py-0.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37]">
                       {item.badge}
                     </span>
                   )}
@@ -911,21 +953,32 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           </nav>
         </div>
 
-        {/* Bottom Sidebar Bar — Provider Switch is ONLY rendered if the signed-in email is the authorized provider */}
+        {/* Bottom Section: 'Practice Verified' Card + Stealth Provider Switch + Red-500 Logout */}
         <div
           className={`${
             mobileSidebarOpen ? 'block' : 'hidden lg:block'
-          } p-4 border-t border-stone-800 space-y-2.5 bg-[#080808]`}
+          } p-4 border-t border-stone-200 space-y-3 bg-white`}
         >
+          {/* Practice Verified Status Card */}
+          <div className="p-3.5 rounded-[20px] bg-[#FAF6EA] border border-[#D4AF37]/40 space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#9E7206]">
+              <ShieldCheck className="w-4 h-4 text-[#9E7206] shrink-0" />
+              <span>Practice Verified</span>
+            </div>
+            <p className="text-[11px] text-stone-600 leading-snug">
+              Brenda Hobyani, PMHNP-BC · 100% Telehealth Across Texas
+            </p>
+          </div>
+
           {isVerifiedProviderAccount && (
             <button
               onClick={() =>
                 setWorkspaceMode(workspaceMode === 'provider' ? 'patient' : 'provider')
               }
-              className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+              className={`w-full p-3 rounded-[12px] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
                 workspaceMode === 'provider'
-                  ? 'bg-gold-gradient text-[#1C1917] border-transparent font-bold'
-                  : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/40 hover:bg-stone-800'
+                  ? 'bg-gold-gradient text-[#1C1917] border-transparent'
+                  : 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]/40 hover:bg-stone-800'
               }`}
             >
               <Stethoscope className="w-4 h-4" />
@@ -939,47 +992,79 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
           <button
             onClick={handleSignOut}
-            className="w-full py-2 px-3 rounded-xl text-xs font-medium text-stone-400 hover:text-white hover:bg-stone-900 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full p-3 rounded-[12px] text-xs font-bold text-red-500 hover:bg-red-50 flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out of Portal</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content Viewport */}
+      {/* ==========================================================================
+          FLUID MAIN CONTENT AREA (Sticky Glassmorphism Header + 1280px Max-Width Container)
+         ========================================================================== */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Workspace Contextual Header */}
-        <div className="bg-white border-b border-stone-200 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="text-xs text-stone-500 flex items-center gap-2">
-            <span className="font-semibold text-stone-800">Golden Mind Psychiatry PLLC</span>
-            <span>/</span>
-            <span className="text-[#9E7206] font-semibold">
+        {/* Sticky 72px Glassmorphism Header */}
+        <header className="sticky top-0 z-30 min-h-[72px] bg-white/90 backdrop-blur-md border-b border-stone-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+          {/* Left-Aligned Title (18px Bold) & Subtitle (12px Slate/Stone-500) Stack */}
+          <div>
+            <h1 className="text-[18px] font-bold font-portal-heading text-stone-900 leading-tight">
               {workspaceMode === 'provider' && isVerifiedProviderAccount
                 ? 'Provider Clinical Command Center'
-                : navItems.find((n) => n.id === activeTab)?.label}
-            </span>
-            <span className="hidden md:inline text-stone-400">
-              · Hours: Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM
-            </span>
+                : navItems.find((n) => n.id === activeTab)?.label || 'Client Portal Dashboard'}
+            </h1>
+            <p className="text-[12px] text-stone-500">
+              Golden Mind Psychiatry PLLC · Brenda Hobyani, PMHNP-BC · Mon–Thu 8–4, Fri 9–1
+            </p>
           </div>
 
+          {/* Right-Aligned Utility Bar: Pill Search, Notification Bell with Red Dot, Book CTA, 40px Avatar */}
           <div className="flex items-center gap-3">
+            <div className="relative hidden sm:block">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search visits, bills, meds..."
+                value={portalSearchQuery}
+                onChange={(e) => setPortalSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 rounded-full bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#D4AF37] w-48 lg:w-56"
+              />
+            </div>
+
+            <button
+              onClick={() => setActiveTab(pendingIntakes.length > 0 ? 'intakes' : 'messages')}
+              className="relative w-10 h-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 flex items-center justify-center text-stone-700 hover:border-[#D4AF37] transition-colors cursor-pointer"
+              title="Notifications & Action Items"
+            >
+              <Bell className="w-4 h-4" />
+              {totalNotificationsCount > 0 && (
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 absolute top-2 right-2 ring-2 ring-white" />
+              )}
+            </button>
+
             <button
               onClick={() => onOpenBooking()}
-              className="px-4 py-2 rounded-xl bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-xs"
+              className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>Book 100% Telehealth Visit</span>
+              <span className="hidden md:inline">Book Telehealth Visit</span>
+              <span className="md:hidden">Book</span>
             </button>
-          </div>
-        </div>
 
-        {/* Workspace Canvas */}
-        <div className="p-6 sm:p-8 max-w-6xl w-full mx-auto space-y-6">
-          {/* Email Verification & Clinic Notification Status Bar */}
+            <div
+              className="w-10 h-10 rounded-full bg-[#0A0A0A] border-2 border-[#D4AF37] text-[#D4AF37] font-portal-heading font-bold text-xs flex items-center justify-center shrink-0"
+              title={portalUser.fullName}
+            >
+              {userInitials}
+            </div>
+          </div>
+        </header>
+
+        {/* Main 1280px Max-Width Container */}
+        <div className="p-6 sm:p-8 max-w-[1280px] w-full mx-auto space-y-6">
+          {/* Email Verification Banner (if unverified) */}
           {(!firebaseUser.emailVerified || verificationNotice) && (
-            <div className="bg-[#FAF6EA] border border-[#D4AF37] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="bg-[#FAF6EA] border border-[#D4AF37] rounded-[24px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-start gap-2.5">
                 <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0 mt-0.5" />
                 <div>
@@ -998,13 +1083,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={handleResendVerification}
-                    className="px-3 py-1.5 rounded-xl bg-white border border-stone-300 text-stone-800 font-semibold hover:bg-stone-50 cursor-pointer"
+                    className="px-3.5 py-2 rounded-[12px] bg-white border border-stone-300 text-stone-800 font-semibold hover:bg-stone-50 cursor-pointer"
                   >
                     Resend Email
                   </button>
                   <button
                     onClick={handleRefreshVerification}
-                    className="px-3 py-1.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-semibold cursor-pointer"
+                    className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-semibold cursor-pointer"
                   >
                     I've Verified — Refresh
                   </button>
@@ -1021,1235 +1106,1525 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           ) : (
             <>
               {/* ================================================================
-                  MODULE 1: ACTION CENTER OVERVIEW
+                  TOP-ROW 4-COLUMN BENTO STATS GRID
+                  Primary card is dark (#0A0A0A) with white/gold text & circular pattern.
+                  Other three cards are white (#FFFFFF) with 32px radius & General Sans 24px values.
                  ================================================================ */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  {/* Welcome & Next Telehealth Session Hero Banner */}
-                  <div className="bg-white border border-stone-200 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-widest text-[#9E7206]">
-                        100% Telehealth Sanctuary · Adults, Teens & Children Across Texas
-                      </span>
-                      <h1 className="text-2xl font-serif font-bold text-stone-900">
-                        Welcome back, {portalUser.fullName}
-                      </h1>
-                      <p className="text-xs text-stone-600">
-                        Provider: <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> · Hours:
-                        Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM
-                      </p>
-                    </div>
-
-                    {nextAppointment ? (
-                      <div className="p-4 rounded-xl bg-[#FAF9F5] border border-[#D4AF37]/60 flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9E7206]">
-                            Next 100% Telehealth Session
-                          </p>
-                          <p className="text-sm font-bold text-stone-900 font-mono tabular-nums mt-0.5">
-                            {nextAppointment.preferredDate} · {nextAppointment.preferredTime}
-                          </p>
-                          <p className="text-xs text-stone-500">{nextAppointment.conditionReason}</p>
-                        </div>
-                        <button
-                          onClick={() => setActiveTelehealthAppt(nextAppointment)}
-                          className="px-4 py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 whitespace-nowrap"
-                        >
-                          <Video className="w-4 h-4" />
-                          <span>Join Telehealth Room</span>
-                        </button>
-                      </div>
-                    ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {/* Primary Dark Bento Card */}
+                <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 border border-[#D4AF37]/40 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+                  <div className="w-24 h-24 bg-white/5 absolute -right-4 -bottom-4 rounded-full pointer-events-none" />
+                  <div className="w-16 h-16 bg-[#D4AF37]/10 absolute right-8 -top-6 rounded-full pointer-events-none" />
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
+                    Next Telehealth Session
+                  </p>
+                  <p className="text-[24px] font-bold font-portal-heading tabular-nums text-white mt-2 truncate">
+                    {nextAppointment ? nextAppointment.preferredDate : 'Schedule Visit'}
+                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-3">
+                    <span className="text-[12px] text-stone-300 truncate">
+                      {nextAppointment
+                        ? nextAppointment.preferredTime
+                        : '100% Telehealth Across TX'}
+                    </span>
+                    {nextAppointment && (
                       <button
-                        onClick={() => onOpenBooking()}
-                        className="px-5 py-3 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-2 cursor-pointer self-start"
+                        onClick={() => setActiveTelehealthAppt(nextAppointment)}
+                        className="px-3 py-1 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-[11px] cursor-pointer shrink-0"
                       >
-                        <Calendar className="w-4 h-4" />
-                        <span>Schedule First Telehealth Consultation</span>
+                        Join Room
                       </button>
                     )}
                   </div>
+                </div>
 
-                  {/* Automated Pre-Visit Check-In & Onboarding Action Bar */}
-                  {(pendingIntakes.length > 0 ||
-                    (nextAppointment && !nextAppointment.preVisitScreenerCompleted)) && (
-                    <div className="bg-[#FAF6EA] border border-[#D4AF37] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs font-bold text-[#9E7206] uppercase tracking-wider">
-                          <Clock className="w-4 h-4" />
-                          <span>Automated Pre-Visit Action Items</span>
-                        </div>
-                        <p className="text-xs text-stone-700">
-                          You have{' '}
-                          <strong className="font-mono tabular-nums">{pendingIntakes.length}</strong>{' '}
-                          pending new-patient intake form(s) and your baseline{' '}
-                          <strong>PHQ-9 / GAD-7 symptom check-in</strong> queued for Brenda Hobyani,
-                          PMHNP-BC before your telehealth session.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                        {pendingIntakes.length > 0 && (
-                          <button
-                            onClick={() => setActiveTab('intakes')}
-                            className="px-4 py-2 rounded-xl bg-[#0A0A0A] text-[#D4AF37] text-xs font-semibold cursor-pointer"
-                          >
-                            Complete Intake Forms ({pendingIntakes.length})
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setActiveTab('tracker')}
-                          className="px-4 py-2 rounded-xl bg-white border border-stone-300 text-stone-800 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
-                        >
-                          Log PHQ-9 / GAD-7 Check-In
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 4-Metric Clinical Summary Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-5">
-                      <p className="text-xs text-stone-500">Latest PHQ-9 Score</p>
-                      <p className="text-2xl font-serif font-bold text-stone-900 font-mono tabular-nums mt-1">
-                        {latestPHQ9 ? `${latestPHQ9.totalScore} / 27` : 'Not Logged'}
-                      </p>
-                      <p className="text-xs text-[#9E7206] font-medium mt-1">
-                        {latestPHQ9 ? `Severity: ${latestPHQ9.severity}` : 'Complete baseline scale'}
-                      </p>
-                    </div>
-
-                    <div className="bg-white border border-stone-200 rounded-2xl p-5">
-                      <p className="text-xs text-stone-500">Latest GAD-7 Score</p>
-                      <p className="text-2xl font-serif font-bold text-stone-900 font-mono tabular-nums mt-1">
-                        {latestGAD7 ? `${latestGAD7.totalScore} / 21` : 'Not Logged'}
-                      </p>
-                      <p className="text-xs text-[#9E7206] font-medium mt-1">
-                        {latestGAD7 ? `Severity: ${latestGAD7.severity}` : 'Complete baseline scale'}
-                      </p>
-                    </div>
-
-                    <div className="bg-white border border-stone-200 rounded-2xl p-5">
-                      <p className="text-xs text-stone-500">Intake Paperwork</p>
-                      <p className="text-2xl font-serif font-bold text-stone-900 font-mono tabular-nums mt-1">
-                        {intakes.filter((i) => i.status === 'completed').length} / {intakes.length}
-                      </p>
-                      <p className="text-xs text-stone-500 mt-1">
-                        {pendingIntakes.length === 0
-                          ? 'All required forms complete'
-                          : `${pendingIntakes.length} awaiting signature`}
-                      </p>
-                    </div>
-
-                    <div className="bg-white border border-stone-200 rounded-2xl p-5">
-                      <p className="text-xs text-stone-500">Account Balance Due</p>
-                      <p className="text-2xl font-serif font-bold text-stone-900 font-mono tabular-nums mt-1">
-                        $
-                        {dueInvoices
-                          .reduce((sum, inv) => sum + inv.patientResponsibility, 0)
-                          .toFixed(2)}
-                      </p>
-                      <p className="text-xs text-stone-500 mt-1">
-                        {portalUser.insuranceProvider || 'Insurance on file'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Recent Messages & Active Medications Preview */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-base font-serif font-bold text-stone-900">
-                          Recent Messages from Brenda Hobyani, PMHNP-BC
-                        </h2>
-                        <button
-                          onClick={() => setActiveTab('messages')}
-                          className="text-xs font-semibold text-[#9E7206] hover:underline cursor-pointer"
-                        >
-                          Open Thread →
-                        </button>
-                      </div>
-                      <div className="divide-y divide-stone-200">
-                        {messages.slice(0, 2).map((m) => (
-                          <div key={m.id} className="py-3 space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-stone-900">{m.senderName}</span>
-                              <span className="font-mono tabular-nums text-stone-400">
-                                {m.createdAt.split('T')[0]}
-                              </span>
-                            </div>
-                            <p className="text-xs font-semibold text-[#9E7206]">{m.subject}</p>
-                            <p className="text-xs text-stone-600 line-clamp-2">{m.body}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-base font-serif font-bold text-stone-900">
-                          Active Medications & Refill Status
-                        </h2>
-                        <button
-                          onClick={() => setActiveTab('medications')}
-                          className="text-xs font-semibold text-[#9E7206] hover:underline cursor-pointer"
-                        >
-                          Manage Refills →
-                        </button>
-                      </div>
-                      {medications.length === 0 ? (
-                        <div className="py-4 text-xs text-stone-500 space-y-2">
-                          <p>
-                            No active prescriptions listed yet. You can add your current medications
-                            in the Medications tab to coordinate refills with Brenda Hobyani,
-                            PMHNP-BC.
-                          </p>
-                          <button
-                            onClick={() => setActiveTab('medications')}
-                            className="px-3.5 py-2 rounded-xl bg-stone-900 text-[#D4AF37] font-semibold text-xs cursor-pointer"
-                          >
-                            Add Current Medication
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-stone-200">
-                          {medications.slice(0, 3).map((med) => (
-                            <div
-                              key={med.id}
-                              className="py-3 flex items-center justify-between gap-4 text-xs"
-                            >
-                              <div>
-                                <p className="font-bold text-stone-900">
-                                  {med.medicationName} ({med.dosage})
-                                </p>
-                                <p className="text-stone-500">
-                                  {med.frequency} · {med.pharmacy}
-                                </p>
-                              </div>
-                              <span className="font-semibold text-[#9E7206] uppercase text-[11px]">
-                                {med.refillStatus.replace('_', ' ')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                {/* White Stat Card 2: Clinical Scales */}
+                <div
+                  onClick={() => setActiveTab('tracker')}
+                  className="bg-white portal-card p-6 cursor-pointer"
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                    PHQ-9 / GAD-7 Index
+                  </p>
+                  <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+                    {latestPHQ9 ? `${latestPHQ9.totalScore} / 27` : 'Check-In Due'}
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[12px] text-[#9E7206] font-semibold mt-3">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>
+                      {latestPHQ9
+                        ? `PHQ-9: ${latestPHQ9.severity}${
+                            latestGAD7 ? ` · GAD-7: ${latestGAD7.totalScore}/21` : ''
+                          }`
+                        : 'Log baseline symptom scale →'}
+                    </span>
                   </div>
                 </div>
-              )}
+
+                {/* White Stat Card 3: Intake Forms & Rx */}
+                <div
+                  onClick={() => setActiveTab('intakes')}
+                  className="bg-white portal-card p-6 cursor-pointer"
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                    Intake & Rx Status
+                  </p>
+                  <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+                    {intakes.filter((i) => i.status === 'completed').length} / {intakes.length}{' '}
+                    Signed
+                  </p>
+                  <p className="text-[12px] text-emerald-700 font-semibold mt-3">
+                    {pendingIntakes.length === 0
+                      ? `${medications.length} active Rx on file`
+                      : `${pendingIntakes.length} form(s) awaiting signature`}
+                  </p>
+                </div>
+
+                {/* White Stat Card 4: Balance & Insurance */}
+                <div
+                  onClick={() => setActiveTab('billing')}
+                  className="bg-white portal-card p-6 cursor-pointer"
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                    Patient Balance Due
+                  </p>
+                  <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+                    $
+                    {dueInvoices
+                      .reduce((sum, inv) => sum + inv.patientResponsibility, 0)
+                      .toFixed(2)}
+                  </p>
+                  <p className="text-[12px] text-stone-500 font-medium mt-3 truncate">
+                    {portalUser.insuranceProvider || 'Verified Insurance Coverage'}
+                  </p>
+                </div>
+              </div>
 
               {/* ================================================================
-                  MODULE 2: APPOINTMENTS & 100% TELEHEALTH VIDEO LINKS
+                  TWO-COLUMN MAIN SECTION (70/30 SPLIT)
                  ================================================================ */}
-              {activeTab === 'appointments' && (
-                <div className="space-y-6">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-serif font-bold text-stone-900">
-                        100% Telehealth Appointments & Video Room Links
-                      </h2>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        Practice Hours: Monday – Thursday 8:00 AM – 4:00 PM · Friday 9:00 AM – 1:00 PM
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => onOpenBooking()}
-                      className="px-4 py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Book New Telehealth Visit</span>
-                    </button>
-                  </div>
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                {/* LEFT 70% MAIN AREA (xl:col-span-8) */}
+                <div className="xl:col-span-8 space-y-6">
+                  {/* ============================================================
+                      MODULE 1: DASHBOARD OVERVIEW (Engagement Requests + Payment History)
+                     ============================================================ */}
+                  {activeTab === 'overview' && (
+                    <>
+                      {/* Engagement & Care Requests (Large 32px Rounded Cards with Avatars, Badges & Action Buttons) */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-1">
+                          <div>
+                            <h2 className="text-lg font-bold font-portal-heading text-stone-900">
+                              Engagement & Care Requests
+                            </h2>
+                            <p className="text-xs text-stone-500">
+                              Your active telepsychiatry sessions, pre-visit forms, and care tasks with
+                              Brenda Hobyani, PMHNP-BC
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => onOpenBooking()}
+                            className="px-3.5 py-2 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-xs cursor-pointer"
+                          >
+                            + New Request
+                          </button>
+                        </div>
 
-                  {appointments.length === 0 ? (
-                    <div className="bg-white border border-stone-200 rounded-2xl p-10 text-center space-y-3">
-                      <Video className="w-8 h-8 text-[#B8860B] mx-auto" />
-                      <h3 className="text-base font-serif font-bold text-stone-900">
-                        No Telehealth Visits Scheduled Yet
-                      </h3>
-                      <p className="text-xs text-stone-500 max-w-md mx-auto">
-                        Book your 100% telehealth psychiatric evaluation or medication follow-up
-                        to automatically receive your encrypted video link.
-                      </p>
-                      <button
-                        onClick={() => onOpenBooking()}
-                        className="px-5 py-2.5 rounded-xl bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                      >
-                        Schedule Consultation Now
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {appointments.map((appt) => (
-                        <div
-                          key={appt.id}
-                          className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4"
-                        >
+                        {/* Primary Care Engagement Card: Next Telehealth Session */}
+                        <div className="bg-white portal-card p-6">
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-xs">
-                                <span className="font-bold text-stone-900 text-sm">
-                                  {appt.serviceType}
-                                </span>
-                                <span>·</span>
-                                <span className="font-semibold text-[#9E7206]">
-                                  {appt.conditionReason}
-                                </span>
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-full bg-[#0A0A0A] border-2 border-[#D4AF37] text-[#D4AF37] font-portal-heading font-bold text-sm flex items-center justify-center shrink-0">
+                                BH
                               </div>
-                              <p className="text-xs text-stone-600 font-mono tabular-nums">
-                                Date: {appt.preferredDate} · Window: {appt.preferredTime} · Status:{' '}
-                                <strong className="uppercase">{appt.status}</strong>
-                              </p>
-                              <p className="text-[11px] text-stone-500 font-mono">
-                                HIPAA Room Link: {appt.telehealthUrl}
-                              </p>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-sm font-bold font-portal-heading text-stone-900">
+                                    Brenda Hobyani, MSN, APRN, PMHNP-BC
+                                  </h3>
+                                  <span className="px-2.5 py-0.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] text-[11px] font-bold">
+                                    {nextAppointment
+                                      ? nextAppointment.serviceType
+                                      : 'New Patient Telehealth'}
+                                  </span>
+                                  <span className="px-2.5 py-0.5 rounded-[12px] bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold uppercase">
+                                    {nextAppointment ? nextAppointment.status : 'Ready'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-stone-600">
+                                  {nextAppointment
+                                    ? `Focus: ${nextAppointment.conditionReason} · ${nextAppointment.preferredDate} (${nextAppointment.preferredTime})`
+                                    : '100% Telehealth Psychiatric Evaluation & Medication Management Across Texas'}
+                                </p>
+                              </div>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                              {appt.status !== 'cancelled' && (
-                                <button
-                                  onClick={() => setActiveTelehealthAppt(appt)}
-                                  className="px-4 py-2 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 cursor-pointer hover:bg-stone-800"
-                                >
-                                  <Video className="w-3.5 h-3.5" />
-                                  <span>Join Telehealth Room</span>
-                                </button>
-                              )}
-
-                              {appt.status !== 'cancelled' && appt.status !== 'completed' && (
+                              {nextAppointment ? (
                                 <>
                                   <button
-                                    onClick={() => {
-                                      setReschedulingApptId(appt.id);
-                                      setNewApptDate(appt.preferredDate);
-                                      setNewApptTime(appt.preferredTime);
-                                    }}
-                                    className="px-3.5 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-semibold cursor-pointer"
+                                    onClick={() => setActiveTelehealthAppt(nextAppointment)}
+                                    className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 cursor-pointer hover:bg-stone-800"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Join Video Room</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveTab('appointments')}
+                                    className="px-3.5 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold cursor-pointer"
                                   >
                                     Reschedule
                                   </button>
-                                  <button
-                                    onClick={() => handleCancelAppointment(appt.id)}
-                                    className="px-3.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
                                 </>
+                              ) : (
+                                <button
+                                  onClick={() => onOpenBooking()}
+                                  className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>Book Telehealth Session</span>
+                                </button>
                               )}
                             </div>
                           </div>
+                        </div>
 
-                          {reschedulingApptId === appt.id && (
-                            <div className="pt-4 border-t border-stone-200 flex flex-wrap items-end gap-3">
-                              <div>
-                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                  New Preferred Date
-                                </label>
-                                <input
-                                  type="date"
-                                  value={newApptDate}
-                                  onChange={(e) => setNewApptDate(e.target.value)}
-                                  className="px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono"
-                                />
+                        {/* Secondary Engagement Card: Pre-Visit Intake & PHQ-9 / GAD-7 Check-In */}
+                        <div className="bg-white portal-card p-6">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-full bg-[#FAF6EA] border border-[#D4AF37] text-[#9E7206] font-portal-heading font-bold text-sm flex items-center justify-center shrink-0">
+                                <Clock className="w-5 h-5" />
                               </div>
-                              <div>
-                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                  New Time Window (Mon–Thu 8–4, Fri 9–1)
-                                </label>
-                                <select
-                                  value={newApptTime}
-                                  onChange={(e) => setNewApptTime(e.target.value)}
-                                  className="px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-sm font-bold font-portal-heading text-stone-900">
+                                    Pre-Visit Intake & Standardized Symptom Screeners
+                                  </h3>
+                                  <span className="px-2.5 py-0.5 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] text-[11px] font-bold">
+                                    {pendingIntakes.length > 0
+                                      ? `${pendingIntakes.length} Pending Form(s)`
+                                      : 'Forms Complete'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-stone-600">
+                                  Complete your digital psychiatric intake consent and log your
+                                  PHQ-9 / GAD-7 check-in prior to your video consultation.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                              <button
+                                onClick={() => setActiveTab('intakes')}
+                                className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                              >
+                                {pendingIntakes.length > 0
+                                  ? `Complete Intake (${pendingIntakes.length})`
+                                  : 'Review Intake'}
+                              </button>
+                              <button
+                                onClick={() => setActiveTab('tracker')}
+                                className="px-3.5 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold cursor-pointer"
+                              >
+                                PHQ-9 / GAD-7
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment & Statement History Table (Light-Ivory Header, 16px Row Padding, Status Badges) */}
+                      <div className="bg-white portal-card overflow-hidden">
+                        <div className="px-6 py-5 border-b border-stone-200 flex items-center justify-between">
+                          <div>
+                            <h2 className="text-base font-bold font-portal-heading text-stone-900">
+                              Payment & Statement History
+                            </h2>
+                            <p className="text-xs text-stone-500">
+                              Insurance verification, covered benefits, and copay ledger
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setActiveTab('billing')}
+                            className="px-3.5 py-2 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-xs cursor-pointer"
+                          >
+                            Manage Insurance →
+                          </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-[#FAF9F5] border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                                <th className="py-3.5 px-5">Service Description</th>
+                                <th className="py-3.5 px-5">Date</th>
+                                <th className="py-3.5 px-5 text-right">Insurance Covered</th>
+                                <th className="py-3.5 px-5 text-right">Your Copay</th>
+                                <th className="py-3.5 px-5 text-right">Status / Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-stone-200 text-xs">
+                              {filteredInvoices.map((inv) => (
+                                <tr key={inv.id} className="hover:bg-stone-50/80">
+                                  <td className="py-4 px-5 font-bold text-stone-900">
+                                    {inv.description}
+                                  </td>
+                                  <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-500">
+                                    {inv.serviceDate}
+                                  </td>
+                                  <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
+                                    -${inv.insuranceCoveredAmount.toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
+                                    ${inv.patientResponsibility.toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-5 text-right">
+                                    {inv.status === 'paid' ? (
+                                      <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
+                                        Disbursed / Paid
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handlePayInvoice(inv.id)}
+                                        className="px-3.5 py-1.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                                      >
+                                        Pay ${inv.patientResponsibility.toFixed(2)}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Active Medications & Recent Messages Preview Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white portal-card p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                              Recent Clinical Messages
+                            </h3>
+                            <button
+                              onClick={() => setActiveTab('messages')}
+                              className="text-xs font-bold text-[#9E7206] hover:underline cursor-pointer"
+                            >
+                              Open Inbox →
+                            </button>
+                          </div>
+                          <div className="divide-y divide-stone-200">
+                            {messages.slice(0, 2).map((m) => (
+                              <div key={m.id} className="py-3 space-y-1">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-stone-900">{m.senderName}</span>
+                                  <span className="font-portal-heading tabular-nums text-stone-400">
+                                    {m.createdAt.split('T')[0]}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-semibold text-[#9E7206]">{m.subject}</p>
+                                <p className="text-xs text-stone-600 line-clamp-2">{m.body}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-white portal-card p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                              Active Medications & e-Rx
+                            </h3>
+                            <button
+                              onClick={() => setActiveTab('medications')}
+                              className="text-xs font-bold text-[#9E7206] hover:underline cursor-pointer"
+                            >
+                              Refills →
+                            </button>
+                          </div>
+                          {medications.length === 0 ? (
+                            <div className="py-3 text-xs text-stone-500 space-y-3">
+                              <p>
+                                Add your current prescriptions to coordinate 1-click refills with
+                                Brenda Hobyani, PMHNP-BC.
+                              </p>
+                              <button
+                                onClick={() => setActiveTab('medications')}
+                                className="px-4 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                              >
+                                Add Medication
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-stone-200">
+                              {medications.slice(0, 3).map((med) => (
+                                <div
+                                  key={med.id}
+                                  className="py-3 flex items-center justify-between gap-3 text-xs"
                                 >
-                                  <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
-                                    Mon–Thu Morning (8:00 AM - 12:00 PM)
-                                  </option>
-                                  <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
-                                    Mon–Thu Afternoon (12:00 PM - 4:00 PM)
-                                  </option>
-                                  <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
-                                    Friday Morning / Midday (9:00 AM - 1:00 PM)
-                                  </option>
-                                </select>
-                              </div>
-                              <button
-                                onClick={() => handleSaveReschedule(appt.id)}
-                                className="px-4 py-2 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                              >
-                                Confirm New Date
-                              </button>
-                              <button
-                                onClick={() => setReschedulingApptId(null)}
-                                className="px-3 py-2 rounded-xl text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
-                              >
-                                Cancel
-                              </button>
+                                  <div>
+                                    <p className="font-bold text-stone-900">
+                                      {med.medicationName} ({med.dosage})
+                                    </p>
+                                    <p className="text-stone-500">{med.frequency}</p>
+                                  </div>
+                                  <span className="px-2.5 py-1 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-[10px] uppercase">
+                                    {med.refillStatus.replace('_', ' ')}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    </>
                   )}
-                </div>
-              )}
 
-              {/* ================================================================
-                  MODULE 3: DIGITAL INTAKE FORMS & PSYCHIATRIC QUESTIONNAIRES
-                 ================================================================ */}
-              {activeTab === 'intakes' && (
-                <div className="space-y-6">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-6">
-                    <h2 className="text-xl font-serif font-bold text-stone-900">
-                      Digital Psychiatric Intake Forms & Telehealth Consent
-                    </h2>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Automatically assigned upon registration so Brenda Hobyani, PMHNP-BC can
-                      review your history prior to your 100% Telehealth session
-                    </p>
-                  </div>
-
-                  <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-2xl overflow-hidden">
-                    {intakes.map((intake) => (
-                      <div
-                        key={intake.id}
-                        className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-bold text-sm text-stone-900">{intake.title}</p>
-                          <p className="text-xs text-stone-500 font-mono tabular-nums">
-                            Assigned: {intake.assignedAt.split('T')[0]} · Status:{' '}
-                            <span
-                              className={
-                                intake.status === 'completed'
-                                  ? 'text-emerald-700 font-bold'
-                                  : 'text-amber-700 font-bold'
-                              }
-                            >
-                              {intake.status.toUpperCase()}
-                            </span>
+                  {/* ============================================================
+                      MODULE 2: APPOINTMENTS & 100% TELEHEALTH VIDEO LINKS
+                     ============================================================ */}
+                  {activeTab === 'appointments' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+                            100% Telehealth Appointments & Video Room Links
+                          </h2>
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            Practice Hours: Monday – Thursday 8:00 AM – 4:00 PM · Friday 9:00 AM –
+                            1:00 PM
                           </p>
                         </div>
-
                         <button
-                          onClick={() => {
-                            setEditingIntake(intake);
-                            if (intake.responses && Object.keys(intake.responses).length > 0) {
-                              setIntakeAnswers((prev) => ({ ...prev, ...intake.responses }));
-                            }
-                          }}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
-                            intake.status === 'completed'
-                              ? 'border border-stone-300 text-stone-700 hover:bg-stone-50'
-                              : 'bg-[#0A0A0A] text-[#D4AF37]'
-                          }`}
+                          onClick={() => onOpenBooking()}
+                          className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0"
                         >
-                          {intake.status === 'completed'
-                            ? 'View / Update Answers'
-                            : 'Complete Digital Form'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {editingIntake && (
-                    <form
-                      onSubmit={handleCompleteIntake}
-                      className="bg-white border-2 border-[#D4AF37] rounded-2xl p-6 space-y-4"
-                    >
-                      <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                        <h3 className="text-lg font-serif font-bold text-stone-900">
-                          {editingIntake.title}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setEditingIntake(null)}
-                          className="text-xs text-stone-500 hover:text-stone-900 cursor-pointer"
-                        >
-                          Close Form
+                          <Plus className="w-4 h-4" />
+                          <span>Book New Telehealth Visit</span>
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-semibold text-stone-700 block mb-1">
-                            Primary Reason for Seeking Telepsychiatry Care *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g., ADHD focus support, anxiety, mood stability, sleep"
-                            value={intakeAnswers.primaryConcern}
-                            onChange={(e) =>
-                              setIntakeAnswers({ ...intakeAnswers, primaryConcern: e.target.value })
-                            }
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-stone-700 block mb-1">
-                            How Long Have You Experienced These Symptoms?
-                          </label>
-                          <select
-                            value={intakeAnswers.symptomDuration}
-                            onChange={(e) =>
-                              setIntakeAnswers({
-                                ...intakeAnswers,
-                                symptomDuration: e.target.value,
-                              })
-                            }
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
+                      {filteredAppts.length === 0 ? (
+                        <div className="bg-white portal-card p-10 text-center space-y-3">
+                          <Video className="w-8 h-8 text-[#B8860B] mx-auto" />
+                          <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                            No Telehealth Visits Scheduled Yet
+                          </h3>
+                          <p className="text-xs text-stone-500 max-w-md mx-auto">
+                            Book your 100% telehealth psychiatric evaluation or medication follow-up
+                            to automatically receive your encrypted video link.
+                          </p>
+                          <button
+                            onClick={() => onOpenBooking()}
+                            className="px-5 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
                           >
-                            <option value="Less than 1 month">Less than 1 month</option>
-                            <option value="1 - 6 months">1 - 6 months</option>
-                            <option value="6 months - 2 years">6 months - 2 years</option>
-                            <option value="Over 2 years">Over 2 years</option>
-                          </select>
+                            Schedule Consultation Now
+                          </button>
                         </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {filteredAppts.map((appt) => (
+                            <div key={appt.id} className="bg-white portal-card p-6 space-y-4">
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="font-bold font-portal-heading text-stone-900 text-sm">
+                                      {appt.serviceType}
+                                    </span>
+                                    <span>·</span>
+                                    <span className="font-semibold text-[#9E7206]">
+                                      {appt.conditionReason}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-stone-600 font-portal-heading tabular-nums">
+                                    Date: {appt.preferredDate} · Window: {appt.preferredTime} ·
+                                    Status: <strong className="uppercase">{appt.status}</strong>
+                                  </p>
+                                  <p className="text-[11px] text-stone-500 font-mono">
+                                    HIPAA Room Link: {appt.telehealthUrl}
+                                  </p>
+                                </div>
 
-                        <div>
-                          <label className="text-xs font-semibold text-stone-700 block mb-1">
-                            Current Medications, Supplements & Drug Allergies *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="List current medications or 'None' / 'No Known Allergies'"
-                            value={intakeAnswers.currentMedicationsAndAllergies}
-                            onChange={(e) =>
-                              setIntakeAnswers({
-                                ...intakeAnswers,
-                                currentMedicationsAndAllergies: e.target.value,
-                              })
-                            }
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                          />
-                        </div>
+                                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                                  {appt.status !== 'cancelled' && (
+                                    <button
+                                      onClick={() => setActiveTelehealthAppt(appt)}
+                                      className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center gap-1.5 cursor-pointer hover:bg-stone-800"
+                                    >
+                                      <Video className="w-3.5 h-3.5" />
+                                      <span>Join Telehealth Room</span>
+                                    </button>
+                                  )}
 
-                        <div>
-                          <label className="text-xs font-semibold text-stone-700 block mb-1">
-                            Emergency Contact Name & Phone Number *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Name, Relationship & Phone"
-                            value={intakeAnswers.emergencyContactNamePhone}
-                            onChange={(e) =>
-                              setIntakeAnswers({
-                                ...intakeAnswers,
-                                emergencyContactNamePhone: e.target.value,
-                              })
-                            }
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                          />
-                        </div>
-                      </div>
+                                  {appt.status !== 'cancelled' && appt.status !== 'completed' && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setReschedulingApptId(appt.id);
+                                          setNewApptDate(appt.preferredDate);
+                                          setNewApptTime(appt.preferredTime);
+                                        }}
+                                        className="px-3.5 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-semibold cursor-pointer"
+                                      >
+                                        Reschedule
+                                      </button>
+                                      <button
+                                        onClick={() => handleCancelAppointment(appt.id)}
+                                        className="px-3.5 py-2.5 rounded-[12px] border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
 
-                      <div>
-                        <label className="text-xs font-semibold text-stone-700 block mb-1">
-                          Prior Psychiatric History, Family History & Treatment Goals
-                        </label>
-                        <textarea
-                          rows={3}
-                          placeholder="Share any helpful medical or family psychiatric history..."
-                          value={intakeAnswers.priorTreatment}
-                          onChange={(e) =>
-                            setIntakeAnswers({ ...intakeAnswers, priorTreatment: e.target.value })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                        />
-                      </div>
-
-                      <div className="p-3.5 rounded-xl bg-[#FAF6EA] border border-[#D4AF37]/60 text-xs text-stone-800 space-y-2">
-                        <p className="font-semibold text-[#9E7206]">
-                          100% Telehealth Informed Consent & Controlled / Habit-Forming Medication
-                          Acknowledgment:
-                        </p>
-                        <p className="text-[11px] leading-relaxed">
-                          I confirm that I am physically located in the State of Texas during all
-                          telehealth sessions with Brenda Hobyani, PMHNP-BC, and I understand that
-                          some psychiatric and anxiety medications can be habit forming and require
-                          careful monitoring and follow-up visits.
-                        </p>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Type your full legal name as electronic signature *"
-                          value={intakeAnswers.consentSignature}
-                          onChange={(e) =>
-                            setIntakeAnswers({
-                              ...intakeAnswers,
-                              consentSignature: e.target.value,
-                            })
-                          }
-                          className="w-full px-3.5 py-2 rounded-xl bg-white border border-stone-300 text-xs font-serif"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="px-6 py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                      >
-                        Sign & Submit Intake Form to Chart
-                      </button>
-                    </form>
-                  )}
-                </div>
-              )}
-
-              {/* ================================================================
-                  MODULE 4: ACTIVE MEDICATIONS & 1-CLICK REFILL REQUESTS
-                 ================================================================ */}
-              {activeTab === 'medications' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7 space-y-4">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-3">
-                      <h2 className="text-xl font-serif font-bold text-stone-900">
-                        Active Medication Regimen & 1-Click Refill Requests
-                      </h2>
-                      <p className="text-xs text-stone-600">
-                        Preferred Texas Pharmacy on File:{' '}
-                        <strong className="text-[#9E7206]">{prefPharmacy}</strong>
-                      </p>
-                      <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                        <strong>Important Clinical Safety Notice:</strong> Some psychiatric and
-                        anxiety medications are <strong>habit forming</strong>. Brenda Hobyani,
-                        PMHNP-BC monitors all refills closely to ensure safe, responsible dosing. For any suspected medication overdose or poison emergency, call <strong>Poison Control (24/7)</strong> at{' '}
-                        <a href="tel:8002221222" className="font-bold underline hover:text-amber-950">
-                          800-222-1222
-                        </a>
-                        .
-                      </div>
-                    </div>
-
-                    {medications.length === 0 ? (
-                      <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center text-xs text-stone-500">
-                        No medications listed yet. Add your current psychiatric medication on the
-                        right to request a refill from Brenda Hobyani, PMHNP-BC.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {medications.map((med) => (
-                          <div
-                            key={med.id}
-                            className="bg-white border border-stone-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                          >
-                            <div className="space-y-1">
-                              <p className="text-base font-serif font-bold text-stone-900">
-                                {med.medicationName}{' '}
-                                <span className="font-mono tabular-nums text-sm text-[#9E7206]">
-                                  ({med.dosage})
-                                </span>
-                              </p>
-                              <p className="text-xs text-stone-600">
-                                {med.frequency} · Prescribed by {med.prescribedBy}
-                              </p>
-                              <p className="text-xs text-stone-500">
-                                Pharmacy: {med.pharmacy} ·{' '}
-                                <span className="font-mono tabular-nums">
-                                  {med.refillsRemaining} refills remaining
-                                </span>
-                              </p>
-                              {med.instructions && (
-                                <p className="text-[11px] text-stone-500 italic">
-                                  {med.instructions}
-                                </p>
+                              {reschedulingApptId === appt.id && (
+                                <div className="pt-4 border-t border-stone-200 flex flex-wrap items-end gap-3">
+                                  <div>
+                                    <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                      New Preferred Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={newApptDate}
+                                      onChange={(e) => setNewApptDate(e.target.value)}
+                                      className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                      New Time Window (Mon–Thu 8–4, Fri 9–1)
+                                    </label>
+                                    <select
+                                      value={newApptTime}
+                                      onChange={(e) => setNewApptTime(e.target.value)}
+                                      className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                                    >
+                                      <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
+                                        Mon–Thu Morning (8:00 AM - 12:00 PM)
+                                      </option>
+                                      <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
+                                        Mon–Thu Afternoon (12:00 PM - 4:00 PM)
+                                      </option>
+                                      <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
+                                        Friday Morning / Midday (9:00 AM - 1:00 PM)
+                                      </option>
+                                    </select>
+                                  </div>
+                                  <button
+                                    onClick={() => handleSaveReschedule(appt.id)}
+                                    className="px-4 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                                  >
+                                    Confirm New Date
+                                  </button>
+                                  <button
+                                    onClick={() => setReschedulingApptId(null)}
+                                    className="px-3 py-2 rounded-[12px] text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               )}
                             </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                            <div className="flex flex-col items-end gap-2 shrink-0">
-                              <span
-                                className={`text-xs font-bold uppercase ${
-                                  med.refillStatus === 'approved_sent'
-                                    ? 'text-emerald-700'
-                                    : med.refillStatus === 'refill_requested'
-                                    ? 'text-amber-700'
-                                    : med.refillStatus === 'denied'
-                                    ? 'text-red-600'
-                                    : 'text-stone-700'
-                                }`}
-                              >
-                                {med.refillStatus === 'approved_sent'
-                                  ? 'Approved & Sent to Pharmacy'
-                                  : med.refillStatus === 'refill_requested'
-                                  ? 'Refill Under Provider Review'
-                                  : med.refillStatus === 'denied'
-                                  ? 'Follow-Up Visit Required'
-                                  : 'Active Regimen'}
-                              </span>
+                  {/* ============================================================
+                      MODULE 3: DIGITAL INTAKE FORMS & PSYCHIATRIC QUESTIONNAIRES
+                     ============================================================ */}
+                  {activeTab === 'intakes' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card p-6">
+                        <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+                          Digital Psychiatric Intake Forms & Telehealth Consent
+                        </h2>
+                        <p className="text-xs text-stone-500 mt-0.5">
+                          Automatically assigned upon registration so Brenda Hobyani, PMHNP-BC can
+                          review your history prior to your 100% Telehealth session
+                        </p>
+                      </div>
 
-                              <button
-                                disabled={med.refillStatus === 'refill_requested'}
-                                onClick={() => requestMedicationRefill(med.id, prefPharmacy)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer ${
-                                  med.refillStatus === 'refill_requested'
-                                    ? 'bg-stone-200 text-stone-500 cursor-not-allowed'
-                                    : 'bg-[#0A0A0A] text-[#D4AF37] hover:bg-stone-800'
-                                }`}
-                              >
-                                {med.refillStatus === 'refill_requested'
-                                  ? 'Refill Requested'
-                                  : 'Request 1-Click Refill'}
-                              </button>
+                      <div className="divide-y divide-stone-200 bg-white portal-card overflow-hidden">
+                        {intakes.map((intake) => (
+                          <div
+                            key={intake.id}
+                            className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1">
+                              <p className="font-bold font-portal-heading text-sm text-stone-900">
+                                {intake.title}
+                              </p>
+                              <p className="text-xs text-stone-500 font-portal-heading tabular-nums">
+                                Assigned: {intake.assignedAt.split('T')[0]} · Status:{' '}
+                                <span
+                                  className={
+                                    intake.status === 'completed'
+                                      ? 'text-emerald-700 font-bold'
+                                      : 'text-[#9E7206] font-bold'
+                                  }
+                                >
+                                  {intake.status.toUpperCase()}
+                                </span>
+                              </p>
                             </div>
+
+                            <button
+                              onClick={() => {
+                                setEditingIntake(intake);
+                                if (intake.responses && Object.keys(intake.responses).length > 0) {
+                                  setIntakeAnswers((prev) => ({ ...prev, ...intake.responses }));
+                                }
+                              }}
+                              className={`px-4 py-2.5 rounded-[12px] text-xs font-bold cursor-pointer shrink-0 ${
+                                intake.status === 'completed'
+                                  ? 'border border-stone-300 text-stone-700 hover:bg-stone-50'
+                                  : 'bg-[#0A0A0A] text-[#D4AF37]'
+                              }`}
+                            >
+                              {intake.status === 'completed'
+                                ? 'View / Update Answers'
+                                : 'Complete Digital Form'}
+                            </button>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Add Current Medication for Refill Coordination */}
-                  <form
-                    onSubmit={handleAddPatientMedication}
-                    className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4 self-start"
-                  >
-                    <h3 className="text-base font-serif font-bold text-stone-900">
-                      Add Medication for Refill Coordination
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Register a current prescription so you can request electronic refills to your
-                      preferred Texas pharmacy.
-                    </p>
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Medication Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g., Escitalopram, Bupropion, Atomoxetine"
-                        value={newMedName}
-                        onChange={(e) => setNewMedName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-stone-700 block mb-1">
-                          Dosage *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g., 10 mg"
-                          value={newMedDosage}
-                          onChange={(e) => setNewMedDosage(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-stone-700 block mb-1">
-                          Frequency
-                        </label>
-                        <input
-                          type="text"
-                          value={newMedFreq}
-                          onChange={(e) => setNewMedFreq(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                    >
-                      Save Medication & Enable 1-Click Refills
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {/* ================================================================
-                  MODULE 5: DAILY MOOD JOURNAL & PHQ-9 / GAD-7 SYMPTOM TRACKER
-                 ================================================================ */}
-              {activeTab === 'tracker' && (
-                <div className="space-y-6">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-serif font-bold text-stone-900">
-                        Standardized PHQ-9, GAD-7 & Daily Mood Tracker
-                      </h2>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        Auto-scored clinical scales shared in real time with Brenda Hobyani,
-                        PMHNP-BC
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {(['PHQ-9', 'GAD-7', 'DAILY-MOOD'] as const).map((scale) => (
-                        <button
-                          key={scale}
-                          onClick={() => setActiveScaleTab(scale)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${
-                            activeScaleTab === scale
-                              ? 'bg-[#0A0A0A] text-[#D4AF37]'
-                              : 'bg-[#FAF9F5] text-stone-700 border border-stone-200'
-                          }`}
+                      {editingIntake && (
+                        <form
+                          onSubmit={handleCompleteIntake}
+                          className="bg-white border-2 border-[#D4AF37] rounded-[32px] p-6 space-y-4"
                         >
-                          {scale}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                            <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                              {editingIntake.title}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => setEditingIntake(null)}
+                              className="text-xs text-stone-500 hover:text-stone-900 cursor-pointer"
+                            >
+                              Close Form
+                            </button>
+                          </div>
 
-                  {scaleSuccessBanner && (
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{scaleSuccessBanner}</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                                Primary Reason for Seeking Telepsychiatry Care *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g., ADHD focus support, anxiety, mood stability, sleep"
+                                value={intakeAnswers.primaryConcern}
+                                onChange={(e) =>
+                                  setIntakeAnswers({
+                                    ...intakeAnswers,
+                                    primaryConcern: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                                How Long Have You Experienced These Symptoms?
+                              </label>
+                              <select
+                                value={intakeAnswers.symptomDuration}
+                                onChange={(e) =>
+                                  setIntakeAnswers({
+                                    ...intakeAnswers,
+                                    symptomDuration: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                              >
+                                <option value="Less than 1 month">Less than 1 month</option>
+                                <option value="1 - 6 months">1 - 6 months</option>
+                                <option value="6 months - 2 years">6 months - 2 years</option>
+                                <option value="Over 2 years">Over 2 years</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                                Current Medications, Supplements & Drug Allergies *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="List current medications or 'None' / 'No Known Allergies'"
+                                value={intakeAnswers.currentMedicationsAndAllergies}
+                                onChange={(e) =>
+                                  setIntakeAnswers({
+                                    ...intakeAnswers,
+                                    currentMedicationsAndAllergies: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                                Emergency Contact Name & Phone Number *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Name, Relationship & Phone"
+                                value={intakeAnswers.emergencyContactNamePhone}
+                                onChange={(e) =>
+                                  setIntakeAnswers({
+                                    ...intakeAnswers,
+                                    emergencyContactNamePhone: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Prior Psychiatric History, Family History & Treatment Goals
+                            </label>
+                            <textarea
+                              rows={3}
+                              placeholder="Share any helpful medical or family psychiatric history..."
+                              value={intakeAnswers.priorTreatment}
+                              onChange={(e) =>
+                                setIntakeAnswers({
+                                  ...intakeAnswers,
+                                  priorTreatment: e.target.value,
+                                })
+                              }
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                            />
+                          </div>
+
+                          <div className="p-4 rounded-[20px] bg-[#FAF6EA] border border-[#D4AF37]/60 text-xs text-stone-800 space-y-2">
+                            <p className="font-semibold text-[#9E7206]">
+                              100% Telehealth Informed Consent & Controlled / Habit-Forming
+                              Medication Acknowledgment:
+                            </p>
+                            <p className="text-[11px] leading-relaxed">
+                              I confirm that I am physically located in the State of Texas during all
+                              telehealth sessions with Brenda Hobyani, PMHNP-BC, and I understand
+                              that some psychiatric and anxiety medications can be habit forming and
+                              require careful monitoring and follow-up visits.
+                            </p>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Type your full legal name as electronic signature *"
+                              value={intakeAnswers.consentSignature}
+                              onChange={(e) =>
+                                setIntakeAnswers({
+                                  ...intakeAnswers,
+                                  consentSignature: e.target.value,
+                                })
+                              }
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-stone-300 text-xs font-serif"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="px-6 py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                          >
+                            Sign & Submit Intake Form to Chart
+                          </button>
+                        </form>
+                      )}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* Interactive Questionnaire Form */}
-                    <form
-                      onSubmit={handleSubmitAssessment}
-                      className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-5"
-                    >
-                      <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                        <div>
-                          <h3 className="text-base font-serif font-bold text-stone-900">
-                            {activeScaleTab === 'PHQ-9'
-                              ? 'PHQ-9 Patient Health Questionnaire (Depression Scale)'
-                              : activeScaleTab === 'GAD-7'
-                              ? 'GAD-7 Generalized Anxiety Disorder Scale'
-                              : 'Daily Mood, Sleep & Adherence Check-In'}
-                          </h3>
-                          <p className="text-xs text-stone-500">
-                            Over the last 2 weeks, how often have you been bothered by the
-                            following?
-                          </p>
-                        </div>
-                        <div className="text-right font-mono tabular-nums">
-                          <span className="text-xs text-stone-400 block">Live Score</span>
-                          <span className="text-lg font-bold text-[#9E7206]">
-                            {activeScaleTab === 'PHQ-9'
-                              ? `${phq9Scores.reduce((a, b) => a + b, 0)} / 27 (${calculatePHQ9Severity(
-                                  phq9Scores.reduce((a, b) => a + b, 0)
-                                )})`
-                              : activeScaleTab === 'GAD-7'
-                              ? `${gad7Scores.reduce((a, b) => a + b, 0)} / 21 (${calculateGAD7Severity(
-                                  gad7Scores.reduce((a, b) => a + b, 0)
-                                )})`
-                              : `${moodScore} / 10`}
-                          </span>
+                  {/* ============================================================
+                      MODULE 4: ACTIVE MEDICATIONS & 1-CLICK REFILL REQUESTS
+                     ============================================================ */}
+                  {activeTab === 'medications' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card p-6 space-y-3">
+                        <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+                          Active Medication Regimen & 1-Click Refill Requests
+                        </h2>
+                        <p className="text-xs text-stone-600">
+                          Preferred Texas Pharmacy on File:{' '}
+                          <strong className="text-[#9E7206]">{prefPharmacy}</strong>
+                        </p>
+                        <div className="p-4 rounded-[20px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-xs text-stone-800">
+                          <strong>Important Clinical Safety Notice:</strong> Some psychiatric and
+                          anxiety medications are <strong>habit forming</strong>. Brenda Hobyani,
+                          PMHNP-BC monitors all refills closely to ensure safe, responsible dosing.
+                          For any suspected medication overdose or poison emergency, call{' '}
+                          <strong>Poison Control (24/7)</strong> at{' '}
+                          <a
+                            href="tel:8002221222"
+                            className="font-bold text-[#9E7206] underline hover:text-stone-900"
+                          >
+                            800-222-1222
+                          </a>
+                          .
                         </div>
                       </div>
 
-                      {activeScaleTab === 'PHQ-9' && (
-                        <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
-                          {PHQ9_QUESTIONS.map((q, idx) => (
-                            <div
-                              key={idx}
-                              className="p-3.5 rounded-xl bg-[#FAF9F5] border border-stone-200 space-y-2"
-                            >
-                              <p className="text-xs font-semibold text-stone-800">
-                                <span className="font-mono tabular-nums text-[#9E7206] mr-1">
-                                  {idx + 1}.
-                                </span>
-                                {q}
-                              </p>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {SCALE_OPTIONS.map((opt) => (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => {
-                                      const next = [...phq9Scores];
-                                      next[idx] = opt.value;
-                                      setPhq9Scores(next);
-                                    }}
-                                    className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                                      phq9Scores[idx] === opt.value
-                                        ? 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]'
-                                        : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
-                                    }`}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                      {medications.length === 0 ? (
+                        <div className="bg-white portal-card p-8 text-center text-xs text-stone-500">
+                          No medications listed yet. Add your current psychiatric medication below
+                          to request a refill from Brenda Hobyani, PMHNP-BC.
                         </div>
-                      )}
-
-                      {activeScaleTab === 'GAD-7' && (
-                        <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
-                          {GAD7_QUESTIONS.map((q, idx) => (
-                            <div
-                              key={idx}
-                              className="p-3.5 rounded-xl bg-[#FAF9F5] border border-stone-200 space-y-2"
-                            >
-                              <p className="text-xs font-semibold text-stone-800">
-                                <span className="font-mono tabular-nums text-[#9E7206] mr-1">
-                                  {idx + 1}.
-                                </span>
-                                {q}
-                              </p>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {SCALE_OPTIONS.map((opt) => (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => {
-                                      const next = [...gad7Scores];
-                                      next[idx] = opt.value;
-                                      setGad7Scores(next);
-                                    }}
-                                    className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                                      gad7Scores[idx] === opt.value
-                                        ? 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]'
-                                        : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
-                                    }`}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {activeScaleTab === 'DAILY-MOOD' && (
+                      ) : (
                         <div className="space-y-4">
+                          {medications.map((med) => (
+                            <div
+                              key={med.id}
+                              className="bg-white portal-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1">
+                                <p className="text-base font-bold font-portal-heading text-stone-900">
+                                  {med.medicationName}{' '}
+                                  <span className="tabular-nums text-sm text-[#9E7206]">
+                                    ({med.dosage})
+                                  </span>
+                                </p>
+                                <p className="text-xs text-stone-600">
+                                  {med.frequency} · Prescribed by {med.prescribedBy}
+                                </p>
+                                <p className="text-xs text-stone-500">
+                                  Pharmacy: {med.pharmacy} ·{' '}
+                                  <span className="font-portal-heading tabular-nums font-semibold">
+                                    {med.refillsRemaining} refills remaining
+                                  </span>
+                                </p>
+                                {med.instructions && (
+                                  <p className="text-[11px] text-stone-500 italic">
+                                    {med.instructions}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col items-end gap-2 shrink-0">
+                                <span
+                                  className={`px-3 py-1 rounded-[12px] text-[11px] font-bold uppercase ${
+                                    med.refillStatus === 'approved_sent'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : med.refillStatus === 'refill_requested'
+                                      ? 'bg-[#FAF6EA] text-[#9E7206]'
+                                      : med.refillStatus === 'denied'
+                                      ? 'bg-red-50 text-red-600'
+                                      : 'bg-stone-100 text-stone-700'
+                                  }`}
+                                >
+                                  {med.refillStatus === 'approved_sent'
+                                    ? 'Approved & Sent to Pharmacy'
+                                    : med.refillStatus === 'refill_requested'
+                                    ? 'Refill Under Provider Review'
+                                    : med.refillStatus === 'denied'
+                                    ? 'Follow-Up Visit Required'
+                                    : 'Active Regimen'}
+                                </span>
+
+                                <button
+                                  disabled={med.refillStatus === 'refill_requested'}
+                                  onClick={() => requestMedicationRefill(med.id, prefPharmacy)}
+                                  className={`px-4 py-2.5 rounded-[12px] text-xs font-bold cursor-pointer ${
+                                    med.refillStatus === 'refill_requested'
+                                      ? 'bg-stone-200 text-stone-500 cursor-not-allowed'
+                                      : 'bg-[#0A0A0A] text-[#D4AF37] hover:bg-stone-800'
+                                  }`}
+                                >
+                                  {med.refillStatus === 'refill_requested'
+                                    ? 'Refill Requested'
+                                    : 'Request 1-Click Refill'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <form
+                        onSubmit={handleAddPatientMedication}
+                        className="bg-white portal-card p-6 space-y-4"
+                      >
+                        <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                          Add Medication for Refill Coordination
+                        </h3>
+                        <p className="text-xs text-stone-500">
+                          Register a current prescription so you can request electronic refills to
+                          your preferred Texas pharmacy.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <label className="text-xs font-semibold text-stone-700 block mb-1">
-                              Overall Mood Rating Today (1 = Lowest, 10 = Optimal):{' '}
-                              <span className="font-mono tabular-nums font-bold text-[#9E7206]">
-                                {moodScore} / 10
-                              </span>
+                              Medication Name *
                             </label>
                             <input
-                              type="range"
-                              min={1}
-                              max={10}
-                              value={moodScore}
-                              onChange={(e) => setMoodScore(Number(e.target.value))}
-                              className="w-full accent-[#D4AF37]"
+                              type="text"
+                              required
+                              placeholder="e.g., Escitalopram, Bupropion"
+                              value={newMedName}
+                              onChange={(e) => setNewMedName(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Dosage *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g., 10 mg"
+                              value={newMedDosage}
+                              onChange={(e) => setNewMedDosage(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Frequency
+                            </label>
+                            <input
+                              type="text"
+                              value={newMedFreq}
+                              onChange={(e) => setNewMedFreq(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
                             />
                           </div>
                         </div>
-                      )}
-
-                      {/* Sleep, Energy & Medication Adherence */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-stone-200">
-                        <div>
-                          <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                            Sleep Last Night (Hours)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min={0}
-                            max={18}
-                            value={sleepHours}
-                            onChange={(e) => setSleepHours(Number(e.target.value))}
-                            className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                            Energy Level (1 - 10)
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={10}
-                            value={energyLevel}
-                            onChange={(e) => setEnergyLevel(Number(e.target.value))}
-                            className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                            Medication Taken Today?
-                          </label>
-                          <select
-                            value={medTakenToday ? 'yes' : 'no'}
-                            onChange={(e) => setMedTakenToday(e.target.value === 'yes')}
-                            className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                          >
-                            <option value="yes">Yes, taken as prescribed</option>
-                            <option value="no">Not yet / N/A</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <input
-                          type="text"
-                          placeholder="Optional journal note (triggers, wins, side effects)..."
-                          value={assessmentNotes}
-                          onChange={(e) => setAssessmentNotes(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full py-3 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800"
-                      >
-                        Save {activeScaleTab} Check-In & Sync with Provider
-                      </button>
-                    </form>
-
-                    {/* Longitudinal Trend Visualization & History */}
-                    <div className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4 self-start">
-                      <h3 className="text-base font-serif font-bold text-stone-900">
-                        Longitudinal Symptom & Mood History
-                      </h3>
-                      {assessments.length === 0 ? (
-                        <p className="text-xs text-stone-500 py-6 text-center">
-                          Submit your first PHQ-9, GAD-7, or Daily Mood check-in on the left to
-                          visualize your progress over time.
-                        </p>
-                      ) : (
-                        <div className="divide-y divide-stone-200">
-                          {assessments.slice(0, 8).map((a) => {
-                            const maxScore =
-                              a.type === 'PHQ-9' ? 27 : a.type === 'GAD-7' ? 21 : 10;
-                            const pct = Math.min(100, Math.round((a.totalScore / maxScore) * 100));
-                            return (
-                              <div key={a.id} className="py-3 space-y-1.5">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-stone-900">
-                                    {a.type} ·{' '}
-                                    <span className="text-[#9E7206]">{a.severity}</span>
-                                  </span>
-                                  <span className="font-mono tabular-nums font-bold text-stone-800">
-                                    {a.totalScore} / {maxScore} ({a.createdAt.split('T')[0]})
-                                  </span>
-                                </div>
-                                <div className="w-full h-2 rounded-full bg-stone-100 overflow-hidden">
-                                  <div
-                                    className="h-full bg-[#D4AF37]"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                                {a.notes && (
-                                  <p className="text-[11px] text-stone-500">{a.notes}</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                        <button
+                          type="submit"
+                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                        >
+                          Save Medication & Enable 1-Click Refills
+                        </button>
+                      </form>
                     </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {/* ================================================================
-                  MODULE 6: SECURE DIRECT MESSAGING WITH BRENDA HOBYANI, PMHNP-BC
-                 ================================================================ */}
-              {activeTab === 'messages' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-                    <h2 className="text-xl font-serif font-bold text-stone-900">
-                      Direct Clinical Messaging with Brenda Hobyani, PMHNP-BC
-                    </h2>
-                    <div className="divide-y divide-stone-200 max-h-[500px] overflow-y-auto">
-                      {messages.map((msg) => (
-                        <div key={msg.id} className="py-4 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span
-                              className={`font-bold ${
-                                msg.senderRole === 'provider'
-                                  ? 'text-[#9E7206]'
-                                  : 'text-stone-900'
-                              }`}
-                            >
-                              {msg.senderName}
-                            </span>
-                            <span className="font-mono tabular-nums text-stone-400">
-                              {msg.createdAt.split('T')[0]}
-                            </span>
-                          </div>
-                          <p className="text-xs font-bold text-stone-900">{msg.subject}</p>
-                          <p className="text-xs text-stone-600 whitespace-pre-line leading-relaxed">
-                            {msg.body}
+                  {/* ============================================================
+                      MODULE 5: DAILY MOOD JOURNAL & PHQ-9 / GAD-7 SYMPTOM TRACKER
+                     ============================================================ */}
+                  {activeTab === 'tracker' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+                            Standardized PHQ-9, GAD-7 & Daily Mood Tracker
+                          </h2>
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            Auto-scored clinical scales shared in real time with Brenda Hobyani,
+                            PMHNP-BC
                           </p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  <form
-                    onSubmit={handleSendPatientMessage}
-                    className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4 self-start"
-                  >
-                    <h3 className="text-base font-serif font-bold text-stone-900">
-                      Send a Non-Urgent Clinical Message
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Directly reaches Brenda Hobyani, PMHNP-BC and notifies{' '}
-                      <span className="font-medium text-stone-700">{CLINIC_OWNER_EMAIL}</span>.
-                    </p>
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Subject *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g., Question about my dosage or upcoming telehealth session"
-                        value={msgSubject}
-                        onChange={(e) => setMsgSubject(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Message *
-                      </label>
-                      <textarea
-                        rows={4}
-                        required
-                        placeholder="Write your message to Brenda Hobyani, PMHNP-BC..."
-                        value={msgBody}
-                        onChange={(e) => setMsgBody(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Send Encrypted Message</span>
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {/* ================================================================
-                  MODULE 7: INSURANCE COVERAGE, PHARMACY & BILLING STATEMENTS
-                 ================================================================ */}
-              {activeTab === 'billing' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Insurance & Texas Pharmacy Card */}
-                  <form
-                    onSubmit={handleSaveInsuranceProfile}
-                    className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4 self-start"
-                  >
-                    <h2 className="text-lg font-serif font-bold text-stone-900">
-                      Insurance Coverage & Preferred Texas Pharmacy
-                    </h2>
-                    {profileSavedNotice && (
-                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-                        Insurance & Pharmacy profile updated!
+                        <div className="flex items-center gap-2">
+                          {(['PHQ-9', 'GAD-7', 'DAILY-MOOD'] as const).map((scale) => (
+                            <button
+                              key={scale}
+                              onClick={() => setActiveScaleTab(scale)}
+                              className={`px-3.5 py-2 rounded-[12px] text-xs font-bold cursor-pointer ${
+                                activeScaleTab === scale
+                                  ? 'bg-[#0A0A0A] text-[#D4AF37]'
+                                  : 'bg-[#FAF9F5] text-stone-700 border border-stone-200'
+                              }`}
+                            >
+                              {scale}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Primary Insurance Carrier
-                      </label>
-                      <select
-                        value={insCarrier}
-                        onChange={(e) => setInsCarrier(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
+
+                      {scaleSuccessBanner && (
+                        <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>{scaleSuccessBanner}</span>
+                        </div>
+                      )}
+
+                      <form
+                        onSubmit={handleSubmitAssessment}
+                        className="bg-white portal-card p-6 space-y-5"
                       >
-                        <option value="Blue Cross Blue Shield (BCBS)">
-                          Blue Cross Blue Shield (BCBS)
-                        </option>
-                        <option value="Aetna">Aetna</option>
-                        <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                        <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                        <option value="Medicare">Medicare</option>
-                        <option value="Self-Pay / Out-of-Network Superbill">
-                          Self-Pay / Out-of-Network Superbill
-                        </option>
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-stone-700 block mb-1">
-                          Member ID
-                        </label>
-                        <input
-                          type="text"
-                          value={insMemberId}
-                          onChange={(e) => setInsMemberId(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-stone-700 block mb-1">
-                          Group Number
-                        </label>
-                        <input
-                          type="text"
-                          value={insGroupId}
-                          onChange={(e) => setInsGroupId(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Preferred Texas Pharmacy (for e-Prescriptions)
-                      </label>
-                      <input
-                        type="text"
-                        value={prefPharmacy}
-                        onChange={(e) => setPrefPharmacy(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                    >
-                      Save Insurance & Pharmacy Details
-                    </button>
-                  </form>
-
-                  {/* Statements & Copays */}
-                  <div className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-                    <h2 className="text-lg font-serif font-bold text-stone-900">
-                      Billing Statements & Copay Ledger
-                    </h2>
-                    <div className="divide-y divide-stone-200">
-                      {invoices.map((inv) => (
-                        <div
-                          key={inv.id}
-                          className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                        >
-                          <div className="space-y-1">
-                            <p className="font-bold text-stone-900 text-sm">{inv.description}</p>
-                            <p className="text-stone-500 font-mono tabular-nums">
-                              Service Date: {inv.serviceDate} · Billed: ${inv.amount.toFixed(2)} ·
-                              Insurance Adjustment: -${inv.insuranceCoveredAmount.toFixed(2)}
+                        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                          <div>
+                            <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                              {activeScaleTab === 'PHQ-9'
+                                ? 'PHQ-9 Patient Health Questionnaire (Depression Scale)'
+                                : activeScaleTab === 'GAD-7'
+                                ? 'GAD-7 Generalized Anxiety Disorder Scale'
+                                : 'Daily Mood, Sleep & Adherence Check-In'}
+                            </h3>
+                            <p className="text-xs text-stone-500">
+                              Over the last 2 weeks, how often have you been bothered by the
+                              following?
                             </p>
                           </div>
-
-                          <div className="flex items-center gap-4 shrink-0">
-                            <div className="text-right font-mono tabular-nums">
-                              <p className="text-[11px] text-stone-500">Your Copay / Balance</p>
-                              <p className="text-base font-bold text-stone-900">
-                                ${inv.patientResponsibility.toFixed(2)}
-                              </p>
-                            </div>
-                            {inv.status === 'paid' ? (
-                              <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs">
-                                Paid
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handlePayInvoice(inv.id)}
-                                className="px-4 py-2 rounded-xl bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                              >
-                                Pay ${inv.patientResponsibility.toFixed(2)}
-                              </button>
-                            )}
+                          <div className="text-right font-portal-heading tabular-nums">
+                            <span className="text-xs text-stone-400 block">Live Score</span>
+                            <span className="text-lg font-bold text-[#9E7206]">
+                              {activeScaleTab === 'PHQ-9'
+                                ? `${phq9Scores.reduce((a, b) => a + b, 0)} / 27 (${calculatePHQ9Severity(
+                                    phq9Scores.reduce((a, b) => a + b, 0)
+                                  )})`
+                                : activeScaleTab === 'GAD-7'
+                                ? `${gad7Scores.reduce((a, b) => a + b, 0)} / 21 (${calculateGAD7Severity(
+                                    gad7Scores.reduce((a, b) => a + b, 0)
+                                  )})`
+                                : `${moodScore} / 10`}
+                            </span>
                           </div>
                         </div>
-                      ))}
+
+                        {activeScaleTab === 'PHQ-9' && (
+                          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                            {PHQ9_QUESTIONS.map((q, idx) => (
+                              <div
+                                key={idx}
+                                className="p-4 rounded-[20px] bg-[#FAF9F5] border border-stone-200 space-y-2"
+                              >
+                                <p className="text-xs font-semibold text-stone-800">
+                                  <span className="font-portal-heading tabular-nums text-[#9E7206] mr-1">
+                                    {idx + 1}.
+                                  </span>
+                                  {q}
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {SCALE_OPTIONS.map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => {
+                                        const next = [...phq9Scores];
+                                        next[idx] = opt.value;
+                                        setPhq9Scores(next);
+                                      }}
+                                      className={`py-2 px-2.5 rounded-[12px] text-[11px] font-medium border transition-colors cursor-pointer ${
+                                        phq9Scores[idx] === opt.value
+                                          ? 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]'
+                                          : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {activeScaleTab === 'GAD-7' && (
+                          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                            {GAD7_QUESTIONS.map((q, idx) => (
+                              <div
+                                key={idx}
+                                className="p-4 rounded-[20px] bg-[#FAF9F5] border border-stone-200 space-y-2"
+                              >
+                                <p className="text-xs font-semibold text-stone-800">
+                                  <span className="font-portal-heading tabular-nums text-[#9E7206] mr-1">
+                                    {idx + 1}.
+                                  </span>
+                                  {q}
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {SCALE_OPTIONS.map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => {
+                                        const next = [...gad7Scores];
+                                        next[idx] = opt.value;
+                                        setGad7Scores(next);
+                                      }}
+                                      className={`py-2 px-2.5 rounded-[12px] text-[11px] font-medium border transition-colors cursor-pointer ${
+                                        gad7Scores[idx] === opt.value
+                                          ? 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]'
+                                          : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {activeScaleTab === 'DAILY-MOOD' && (
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                                Overall Mood Rating Today (1 = Lowest, 10 = Optimal):{' '}
+                                <span className="font-portal-heading tabular-nums font-bold text-[#9E7206]">
+                                  {moodScore} / 10
+                                </span>
+                              </label>
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                value={moodScore}
+                                onChange={(e) => setMoodScore(Number(e.target.value))}
+                                className="w-full accent-[#D4AF37]"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-stone-200">
+                          <div>
+                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                              Sleep Last Night (Hours)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              max={18}
+                              value={sleepHours}
+                              onChange={(e) => setSleepHours(Number(e.target.value))}
+                              className="w-full px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                              Energy Level (1 - 10)
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              value={energyLevel}
+                              onChange={(e) => setEnergyLevel(Number(e.target.value))}
+                              className="w-full px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                              Medication Taken Today?
+                            </label>
+                            <select
+                              value={medTakenToday ? 'yes' : 'no'}
+                              onChange={(e) => setMedTakenToday(e.target.value === 'yes')}
+                              className="w-full px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                            >
+                              <option value="yes">Yes, taken as prescribed</option>
+                              <option value="no">Not yet / N/A</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <input
+                            type="text"
+                            placeholder="Optional journal note (triggers, wins, side effects)..."
+                            value={assessmentNotes}
+                            onChange={(e) => setAssessmentNotes(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800"
+                        >
+                          Save {activeScaleTab} Check-In & Sync with Provider
+                        </button>
+                      </form>
+
+                      <div className="bg-white portal-card p-6 space-y-4">
+                        <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                          Longitudinal Symptom & Mood History
+                        </h3>
+                        {assessments.length === 0 ? (
+                          <p className="text-xs text-stone-500 py-4 text-center">
+                            Submit your first PHQ-9, GAD-7, or Daily Mood check-in above to
+                            visualize your progress over time.
+                          </p>
+                        ) : (
+                          <div className="divide-y divide-stone-200">
+                            {assessments.slice(0, 8).map((a) => {
+                              const maxScore =
+                                a.type === 'PHQ-9' ? 27 : a.type === 'GAD-7' ? 21 : 10;
+                              const pct = Math.min(100, Math.round((a.totalScore / maxScore) * 100));
+                              return (
+                                <div key={a.id} className="py-3 space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="font-bold text-stone-900">
+                                      {a.type} ·{' '}
+                                      <span className="text-[#9E7206]">{a.severity}</span>
+                                    </span>
+                                    <span className="font-portal-heading tabular-nums font-bold text-stone-800">
+                                      {a.totalScore} / {maxScore} ({a.createdAt.split('T')[0]})
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-2 rounded-full bg-stone-100 overflow-hidden">
+                                    <div
+                                      className="h-full bg-[#D4AF37]"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  {a.notes && (
+                                    <p className="text-[11px] text-stone-500">{a.notes}</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ============================================================
+                      MODULE 6: SECURE DIRECT MESSAGING WITH BRENDA HOBYANI, PMHNP-BC
+                     ============================================================ */}
+                  {activeTab === 'messages' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card p-6 space-y-4">
+                        <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+                          Direct Clinical Messaging with Brenda Hobyani, PMHNP-BC
+                        </h2>
+                        <div className="divide-y divide-stone-200 max-h-[460px] overflow-y-auto">
+                          {messages.map((msg) => (
+                            <div key={msg.id} className="py-4 space-y-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span
+                                  className={`font-bold ${
+                                    msg.senderRole === 'provider'
+                                      ? 'text-[#9E7206]'
+                                      : 'text-stone-900'
+                                  }`}
+                                >
+                                  {msg.senderName}
+                                </span>
+                                <span className="font-portal-heading tabular-nums text-stone-400">
+                                  {msg.createdAt.split('T')[0]}
+                                </span>
+                              </div>
+                              <p className="text-xs font-bold text-stone-900">{msg.subject}</p>
+                              <p className="text-xs text-stone-600 whitespace-pre-line leading-relaxed">
+                                {msg.body}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <form
+                        onSubmit={handleSendPatientMessage}
+                        className="bg-white portal-card p-6 space-y-4"
+                      >
+                        <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                          Send a Non-Urgent Clinical Message
+                        </h3>
+                        <p className="text-xs text-stone-500">
+                          Directly reaches Brenda Hobyani, PMHNP-BC and notifies{' '}
+                          <span className="font-medium text-stone-700">{CLINIC_OWNER_EMAIL}</span>.
+                        </p>
+                        <div>
+                          <label className="text-xs font-semibold text-stone-700 block mb-1">
+                            Subject *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g., Question about my dosage or upcoming telehealth session"
+                            value={msgSubject}
+                            onChange={(e) => setMsgSubject(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-stone-700 block mb-1">
+                            Message *
+                          </label>
+                          <textarea
+                            rows={4}
+                            required
+                            placeholder="Write your message to Brenda Hobyani, PMHNP-BC..."
+                            value={msgBody}
+                            onChange={(e) => setMsgBody(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Send Encrypted Message</span>
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* ============================================================
+                      MODULE 7: INSURANCE COVERAGE, PHARMACY & BILLING STATEMENTS
+                     ============================================================ */}
+                  {activeTab === 'billing' && (
+                    <div className="space-y-6">
+                      <div className="bg-white portal-card overflow-hidden">
+                        <div className="px-6 py-5 border-b border-stone-200">
+                          <h2 className="text-lg font-bold font-portal-heading text-stone-900">
+                            Billing Statements & Copay Ledger
+                          </h2>
+                        </div>
+                        <div className="divide-y divide-stone-200 p-6">
+                          {invoices.map((inv) => (
+                            <div
+                              key={inv.id}
+                              className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                            >
+                              <div className="space-y-1">
+                                <p className="font-bold font-portal-heading text-stone-900 text-sm">
+                                  {inv.description}
+                                </p>
+                                <p className="text-stone-500 font-portal-heading tabular-nums">
+                                  Service Date: {inv.serviceDate} · Billed: $
+                                  {inv.amount.toFixed(2)} · Insurance Adjustment: -$
+                                  {inv.insuranceCoveredAmount.toFixed(2)}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-4 shrink-0">
+                                <div className="text-right font-portal-heading tabular-nums">
+                                  <p className="text-[11px] text-stone-500">Your Copay / Balance</p>
+                                  <p className="text-base font-bold text-stone-900">
+                                    ${inv.patientResponsibility.toFixed(2)}
+                                  </p>
+                                </div>
+                                {inv.status === 'paid' ? (
+                                  <span className="px-3.5 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-xs uppercase">
+                                    Disbursed / Paid
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handlePayInvoice(inv.id)}
+                                    className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                                  >
+                                    Pay ${inv.patientResponsibility.toFixed(2)}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <form
+                        onSubmit={handleSaveInsuranceProfile}
+                        className="bg-white portal-card p-6 space-y-4"
+                      >
+                        <h2 className="text-lg font-bold font-portal-heading text-stone-900">
+                          Insurance Coverage & Preferred Texas Pharmacy
+                        </h2>
+                        {profileSavedNotice && (
+                          <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                            Insurance & Pharmacy profile updated!
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Primary Insurance Carrier
+                            </label>
+                            <select
+                              value={insCarrier}
+                              onChange={(e) => setInsCarrier(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                            >
+                              <option value="Blue Cross Blue Shield (BCBS)">
+                                Blue Cross Blue Shield (BCBS)
+                              </option>
+                              <option value="Aetna">Aetna</option>
+                              <option value="Cigna / Evernorth">Cigna / Evernorth</option>
+                              <option value="UnitedHealthcare / Optum">
+                                UnitedHealthcare / Optum
+                              </option>
+                              <option value="Medicare">Medicare</option>
+                              <option value="Self-Pay / Out-of-Network Superbill">
+                                Self-Pay / Out-of-Network Superbill
+                              </option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Member ID
+                            </label>
+                            <input
+                              type="text"
+                              value={insMemberId}
+                              onChange={(e) => setInsMemberId(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-stone-700 block mb-1">
+                              Group Number
+                            </label>
+                            <input
+                              type="text"
+                              value={insGroupId}
+                              onChange={(e) => setInsGroupId(e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-stone-700 block mb-1">
+                            Preferred Texas Pharmacy (for e-Prescriptions)
+                          </label>
+                          <input
+                            type="text"
+                            value={prefPharmacy}
+                            onChange={(e) => setPrefPharmacy(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                        >
+                          Save Insurance & Pharmacy Details
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+
+                {/* ==============================================================
+                    RIGHT 30% SIDE WIDGETS COLUMN (xl:col-span-4)
+                    1. Schedule Widget with Status-Timeline Items (24px left padding, 2px left bar)
+                    2. Dark Support CTA Card with Corner Ghost Icon
+                   ============================================================== */}
+                <div className="xl:col-span-4 space-y-6">
+                  {/* Schedule Status-Timeline Widget */}
+                  <div className="bg-white portal-card p-6 space-y-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                          Schedule & Care Timeline
+                        </h3>
+                        <p className="text-xs text-stone-500">100% Telehealth · Texas</p>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('appointments')}
+                        className="text-xs font-bold text-[#9E7206] hover:underline cursor-pointer"
+                      >
+                        View All
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Status-Timeline Item 1: Upcoming Telehealth Appointment */}
+                      <div className="pl-6 relative py-1">
+                        <div className="w-[2px] absolute left-0 top-0 bottom-0 rounded-full bg-[#D4AF37]" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider font-portal-heading text-[#9E7206]">
+                          {nextAppointment
+                            ? `${nextAppointment.preferredDate} · ${nextAppointment.preferredTime}`
+                            : 'MON–THU 8:00 AM – 4:00 PM · FRI 9:00 AM – 1:00 PM'}
+                        </p>
+                        <p className="text-[14px] font-bold text-stone-900 mt-0.5">
+                          {nextAppointment
+                            ? nextAppointment.serviceType
+                            : '100% Telehealth Psychiatric Visit'}
+                        </p>
+                        <p className="text-[12px] text-stone-500">
+                          {nextAppointment
+                            ? `With Brenda Hobyani, PMHNP-BC (${nextAppointment.conditionReason})`
+                            : 'Schedule your telehealth session with Brenda Hobyani, PMHNP-BC'}
+                        </p>
+                      </div>
+
+                      {/* Status-Timeline Item 2: Pre-Visit PHQ-9 / GAD-7 Review */}
+                      <div className="pl-6 relative py-1">
+                        <div className="w-[2px] absolute left-0 top-0 bottom-0 rounded-full bg-[#9E7206]" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider font-portal-heading text-[#9E7206]">
+                          PRE-VISIT CLINICAL REVIEW
+                        </p>
+                        <p className="text-[14px] font-bold text-stone-900 mt-0.5">
+                          PHQ-9 & GAD-7 Symptom Check-In
+                        </p>
+                        <p className="text-[12px] text-stone-500">
+                          {latestPHQ9
+                            ? `Last logged: PHQ-9 (${latestPHQ9.totalScore}/27 · ${latestPHQ9.severity})`
+                            : 'Complete standardized rating scale before your visit'}
+                        </p>
+                      </div>
+
+                      {/* Status-Timeline Item 3: Digital Intake & Pharmacy Verification */}
+                      <div className="pl-6 relative py-1">
+                        <div className="w-[2px] absolute left-0 top-0 bottom-0 rounded-full bg-stone-300" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider font-portal-heading text-stone-400">
+                          ONBOARDING & E-RX SYNC
+                        </p>
+                        <p className="text-[14px] font-bold text-stone-900 mt-0.5">
+                          Intake Forms & Preferred Pharmacy
+                        </p>
+                        <p className="text-[12px] text-stone-500 truncate">
+                          {pendingIntakes.length === 0
+                            ? `Verified · ${prefPharmacy}`
+                            : `${pendingIntakes.length} intake form(s) awaiting signature`}
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Support CTA Card in Dark Obsidian-Gold Background with Corner Ghost Icon */}
+                  <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 border border-[#D4AF37]/40 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg space-y-4">
+                    <ShieldCheck className="w-24 h-24 text-white/5 absolute -right-3 -bottom-3 pointer-events-none" />
+                    <div className="space-y-1.5 relative z-10">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#D4AF37] block">
+                        24/7 Care & Crisis Support
+                      </span>
+                      <h3 className="text-base font-bold font-portal-heading text-white">
+                        Need Clinical Assistance?
+                      </h3>
+                      <p className="text-xs text-stone-300 leading-relaxed">
+                        Message <strong className="text-[#D4AF37]">Brenda Hobyani, PMHNP-BC</strong>{' '}
+                        for medication or appointment questions. For urgent crises:
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs text-stone-300 relative z-10">
+                      <p>
+                        • <strong>988 Suicide &amp; Crisis Lifeline:</strong> Call or text{' '}
+                        <a href="tel:988" className="text-[#D4AF37] font-bold hover:underline">
+                          988
+                        </a>
+                      </p>
+                      <p>
+                        • <strong>Poison Control (24/7):</strong> Call{' '}
+                        <a
+                          href="tel:8002221222"
+                          className="text-[#D4AF37] font-bold hover:underline"
+                        >
+                          800-222-1222
+                        </a>
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab('messages')}
+                      className="w-full py-2.5 px-4 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer relative z-10"
+                    >
+                      Message Provider Team
+                    </button>
+                  </div>
                 </div>
-              )}
+              </div>
             </>
           )}
         </div>

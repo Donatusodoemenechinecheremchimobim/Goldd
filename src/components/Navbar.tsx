@@ -56,18 +56,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Main Top Navigation Bar (Deep Pure Black Background with Radiant Gold Letters) */}
       <header className="sticky top-0 z-40 bg-black border-b border-[#D4AF37]/45 transition-all duration-300 shadow-xl">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-4 xl:gap-8">
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-20 flex items-center justify-between gap-2 xl:gap-4">
           {/* Zone 1: Brand Wordmark / Logo with Gold Letters */}
           <button
             onClick={() => handleNavClick('home')}
-            className="shrink-0 flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1 text-left cursor-pointer mr-2 xl:mr-6"
+            className="shrink-0 flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1 text-left cursor-pointer"
             aria-label="Golden Mind Psychiatric Home"
           >
-            <GoldenMindLogo variant="horizontal" size="md" textColor="gold" />
+            <GoldenMindLogo variant="horizontal" size="sm" textColor="gold" />
           </button>
 
           {/* Zone 2: Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-3.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium text-stone-200 shrink-0">
+          <nav className="hidden lg:flex items-center gap-2.5 xl:gap-4 2xl:gap-5 text-xs xl:text-[13px] font-medium text-stone-200 shrink-0">
             <button
               onClick={() => handleNavClick('home')}
               className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
@@ -211,25 +211,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
               )}
             </button>
-
-            <button
-              onClick={() => handleNavClick('portal')}
-              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'portal' ? 'text-[#D4AF37] font-semibold' : 'text-[#E6C35C]'
-              }`}
-            >
-              Client Portal
-              {currentPage === 'portal' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
-              )}
-            </button>
           </nav>
 
           {/* Zone 3: Client Portal + Book an Appointment + Mobile Hamburger */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 xl:gap-2.5 shrink-0">
             <button
               onClick={() => handleNavClick('portal')}
-              className={`hidden sm:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold border transition-all whitespace-nowrap cursor-pointer ${
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 rounded-full text-xs font-semibold border transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                 currentPage === 'portal'
                   ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]'
                   : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/50 hover:border-[#D4AF37]'
@@ -240,9 +228,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => onOpenBooking()}
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs md:text-sm font-semibold text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.45)] transition-all duration-300 transform active:scale-95 whitespace-nowrap cursor-pointer shadow-md"
+              className="hidden sm:inline-flex items-center gap-1.5 px-4 xl:px-5 py-2 rounded-full text-xs font-semibold text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.45)] transition-all duration-300 transform active:scale-95 whitespace-nowrap cursor-pointer shadow-md shrink-0"
             >
-              <Calendar className="w-3.5 h-3.5 text-[#1C1917]" />
+              <Calendar className="w-3.5 h-3.5 text-[#1C1917] shrink-0" />
               <span>Book an Appointment</span>
             </button>
 

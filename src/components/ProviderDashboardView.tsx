@@ -10,7 +10,6 @@ import {
 } from 'firebase/firestore';
 import {
   Calendar,
-  Users,
   Pill,
   FileText,
   Activity,
@@ -23,6 +22,8 @@ import {
   Plus,
   Search,
   AlertTriangle,
+  ShieldCheck,
+  TrendingUp,
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
@@ -195,6 +196,9 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const unreadPatientMsgsCount = messages.filter(
     (m) => m.senderRole === 'patient' && !m.read
   ).length;
+  const totalRevenueDisbursed = invoices
+    .filter((i) => i.status === 'paid')
+    .reduce((acc, i) => acc + i.amount, 0);
 
   const handleUpdateAppointmentStatus = async (
     id: string,
@@ -286,730 +290,828 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Clinical Summary Bar */}
-      <div className="bg-[#0A0A0A] text-white border border-[#D4AF37]/40 rounded-2xl p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-stone-800">
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D4AF37]">
-              Provider Clinical Command Workspace
+    <div className="space-y-6 font-portal-body">
+      {/* Top 4-Column Bento Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Primary Dark Bento Card with Decorative Circle */}
+        <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 border border-[#D4AF37]/40 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+          <div className="w-24 h-24 bg-white/5 absolute -right-4 -bottom-4 rounded-full pointer-events-none" />
+          <div className="w-16 h-16 bg-[#D4AF37]/10 absolute right-8 -top-6 rounded-full pointer-events-none" />
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
+            Telehealth Consultations
+          </p>
+          <p className="text-[24px] font-bold font-portal-heading tabular-nums text-white mt-2">
+            {appointments.length} Total Visits
+          </p>
+          <div className="flex items-center gap-1.5 text-[12px] text-[#D4AF37] mt-3 font-medium">
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>
+              {appointments.filter((a) => a.status === 'confirmed').length} Confirmed Upcoming
             </span>
-            <h2 className="text-2xl font-serif font-bold text-white mt-0.5">
-              Brenda Hobyani, MSN, APRN, PMHNP-BC
-            </h2>
-            <p className="text-xs text-stone-400 mt-0.5">
-              100% Telehealth Outpatient Practice · Adults, Teens & Children Across Texas
-            </p>
-          </div>
-
-          {/* Patient Filter & Search */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search patient name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-2 rounded-xl bg-stone-900 border border-stone-700 text-xs text-white placeholder-stone-500 focus:outline-none focus:border-[#D4AF37]"
-              />
-            </div>
-
-            <select
-              value={selectedPatientId}
-              onChange={(e) => setSelectedPatientId(e.target.value)}
-              className="px-3.5 py-2 rounded-xl bg-stone-900 border border-stone-700 text-xs text-white focus:outline-none focus:border-[#D4AF37]"
-            >
-              <option value="ALL">All Patients ({patients.length})</option>
-              {patients.map((p) => (
-                <option key={p.uid} value={p.uid}>
-                  {p.fullName} ({p.email})
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
-        {/* High-Density KPI Strip (Tabular Numerals) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5">
-          <div className="p-3.5 rounded-xl bg-stone-900/90 border border-stone-800">
-            <p className="text-[11px] text-stone-400 uppercase tracking-wider">
-              Telehealth Consultations
-            </p>
-            <p className="text-2xl font-serif font-bold text-[#D4AF37] font-mono tabular-nums mt-1">
-              {appointments.length}
-            </p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              {appointments.filter((a) => a.status === 'confirmed').length} confirmed upcoming
-            </p>
-          </div>
+        {/* Stat Card 2 */}
+        <div className="bg-white portal-card p-6">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            Rx & Refill Approvals
+          </p>
+          <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+            {pendingRefillsCount} Pending
+          </p>
+          <p className="text-[12px] text-[#9E7206] font-semibold mt-3">
+            {medications.length} active prescriptions on chart
+          </p>
+        </div>
 
-          <div className="p-3.5 rounded-xl bg-stone-900/90 border border-stone-800">
-            <p className="text-[11px] text-stone-400 uppercase tracking-wider">
-              Refill Requests Pending
-            </p>
-            <p className="text-2xl font-serif font-bold text-amber-400 font-mono tabular-nums mt-1">
-              {pendingRefillsCount}
-            </p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              {medications.length} active prescriptions
-            </p>
-          </div>
+        {/* Stat Card 3 */}
+        <div className="bg-white portal-card p-6">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            Completed Intakes & Scales
+          </p>
+          <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+            {completedIntakesCount} / {intakes.length}
+          </p>
+          <p className="text-[12px] text-emerald-700 font-semibold mt-3">
+            {assessments.length} PHQ-9 / GAD-7 logs synced
+          </p>
+        </div>
 
-          <div className="p-3.5 rounded-xl bg-stone-900/90 border border-stone-800">
-            <p className="text-[11px] text-stone-400 uppercase tracking-wider">
-              Completed Intakes & Scales
-            </p>
-            <p className="text-2xl font-serif font-bold text-emerald-400 font-mono tabular-nums mt-1">
-              {completedIntakesCount} / {intakes.length}
-            </p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              {assessments.length} PHQ-9 / GAD-7 logs
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-stone-900/90 border border-stone-800">
-            <p className="text-[11px] text-stone-400 uppercase tracking-wider">
-              Patient Messages
-            </p>
-            <p className="text-2xl font-serif font-bold text-white font-mono tabular-nums mt-1">
-              {unreadPatientMsgsCount} unread
-            </p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              {messages.length} total clinical messages
-            </p>
-          </div>
+        {/* Stat Card 4 */}
+        <div className="bg-white portal-card p-6">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            Disbursed & Statements
+          </p>
+          <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
+            ${totalRevenueDisbursed.toFixed(2)}
+          </p>
+          <p className="text-[12px] text-stone-500 font-medium mt-3">
+            {unreadPatientMsgsCount} unread patient message(s)
+          </p>
         </div>
       </div>
 
-      {/* Sub-Navigation Bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-3">
-        {[
-          { id: 'queue', label: '1. Telehealth Queue', icon: Calendar },
-          { id: 'refills', label: `2. Rx & Refill Approvals (${pendingRefillsCount})`, icon: Pill },
-          { id: 'charts', label: '3. PHQ-9 / GAD-7 Scores', icon: Activity },
-          { id: 'intakes', label: '4. Submitted Intake Forms', icon: FileText },
-          { id: 'messages', label: '5. Direct Patient Messaging', icon: MessageSquare },
-          { id: 'billing', label: '6. Statements & Copays', icon: CreditCard },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const active = activeSubTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as typeof activeSubTab)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
-                active
-                  ? 'bg-[#0A0A0A] text-[#D4AF37] border border-[#D4AF37]/50'
-                  : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Filter & Sub-Navigation Controls */}
+      <div className="bg-white portal-card p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'queue', label: 'Engagement Requests', icon: Calendar },
+            { id: 'refills', label: `Rx & Refills (${pendingRefillsCount})`, icon: Pill },
+            { id: 'charts', label: 'PHQ-9 / GAD-7 Scales', icon: Activity },
+            { id: 'intakes', label: 'Intake Forms', icon: FileText },
+            { id: 'messages', label: 'Patient Messages', icon: MessageSquare },
+            { id: 'billing', label: 'Payment History', icon: CreditCard },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as typeof activeSubTab)}
+                className={`px-4 py-2.5 rounded-[12px] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  active
+                    ? 'bg-[#0A0A0A] text-[#D4AF37] border border-[#D4AF37]/50 shadow-xs'
+                    : 'bg-[#FAF9F5] text-stone-700 border border-stone-200 hover:bg-stone-100'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Sub-Tab 1: Telehealth Queue */}
-      {activeSubTab === 'queue' && (
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-serif font-bold text-stone-900">
-                100% Telehealth Consultation Queue
-              </h3>
-              <p className="text-xs text-stone-500">
-                Launch HIPAA video rooms, verify pre-visit PHQ-9/GAD-7 screeners, or update visit status
-              </p>
-            </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Filter patient..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-4 py-2 rounded-full bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#D4AF37]"
+            />
           </div>
 
-          {filteredAppointments.length === 0 ? (
-            <div className="p-8 text-center text-xs text-stone-500">
-              No telehealth appointments match the current filter.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-stone-200 bg-[#FAF9F5] text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                    <th className="py-3 px-4">Patient</th>
-                    <th className="py-3 px-4">Service & Focus</th>
-                    <th className="py-3 px-4">Date & Window</th>
-                    <th className="py-3 px-4">Pre-Visit Screener</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Clinical Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-200 text-xs">
-                  {filteredAppointments.map((appt) => (
-                    <tr key={appt.id} className="hover:bg-stone-50/80">
-                      <td className="py-3.5 px-4">
-                        <p className="font-semibold text-stone-900">{appt.patientName}</p>
-                        <p className="text-[11px] text-stone-500">
-                          {appt.patientEmail} {appt.patientPhone ? `· ${appt.patientPhone}` : ''}
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <p className="font-medium text-stone-800">{appt.conditionReason}</p>
-                        <p className="text-[11px] text-stone-500">
-                          {appt.serviceType} · {appt.insuranceProvider || 'Insurance on file'}
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono tabular-nums text-stone-700">
-                        {appt.preferredDate} · {appt.preferredTime}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {appt.preVisitScreenerCompleted ? (
-                          <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Completed
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 font-medium">Awaiting PHQ-9/GAD-7</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 font-medium capitalize">
-                        <span
-                          className={
-                            appt.status === 'confirmed'
-                              ? 'text-emerald-700'
-                              : appt.status === 'completed'
-                              ? 'text-stone-600'
-                              : appt.status === 'cancelled'
-                              ? 'text-red-600'
-                              : 'text-amber-700'
-                          }
-                        >
-                          {appt.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => onLaunchTelehealth(appt)}
-                          className="px-3 py-1.5 rounded-lg bg-[#0A0A0A] text-[#D4AF37] font-semibold text-xs inline-flex items-center gap-1.5 hover:bg-stone-800 cursor-pointer"
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          <span>Launch Video</span>
-                        </button>
-                        {appt.status !== 'completed' && (
+          <select
+            value={selectedPatientId}
+            onChange={(e) => setSelectedPatientId(e.target.value)}
+            className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 focus:outline-none focus:border-[#D4AF37]"
+          >
+            <option value="ALL">All Patients ({patients.length})</option>
+            {patients.map((p) => (
+              <option key={p.uid} value={p.uid}>
+                {p.fullName} ({p.email})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Main 70/30 Two-Column Split */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Left 70% Column */}
+        <div className="xl:col-span-8 space-y-6">
+          {/* Sub-Tab 1: Engagement Requests & Payment History */}
+          {activeSubTab === 'queue' && (
+            <>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <div>
+                    <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                      Patient Engagement Requests & Telehealth Queue
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Review new patient evaluations, verify PHQ-9/GAD-7 screeners, or launch video rooms
+                    </p>
+                  </div>
+                </div>
+
+                {filteredAppointments.length === 0 ? (
+                  <div className="bg-white portal-card p-8 text-center text-xs text-stone-500">
+                    No telehealth appointments match the current filter.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredAppointments.map((appt) => {
+                      const initials = appt.patientName
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase();
+                      return (
+                        <div key={appt.id} className="bg-white portal-card p-6">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-full bg-[#0A0A0A] border-2 border-[#D4AF37] text-[#D4AF37] font-portal-heading font-bold text-sm flex items-center justify-center shrink-0">
+                                {initials}
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-sm font-bold font-portal-heading text-stone-900">
+                                    {appt.patientName}
+                                  </h4>
+                                  <span className="px-2.5 py-0.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] text-[11px] font-bold">
+                                    {appt.serviceType}
+                                  </span>
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-[12px] text-[11px] font-bold uppercase ${
+                                      appt.status === 'confirmed'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    }`}
+                                  >
+                                    {appt.status}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-semibold text-stone-800">
+                                  Focus: {appt.conditionReason} ·{' '}
+                                  <span className="text-stone-500 font-normal">
+                                    {appt.insuranceProvider || 'Insurance Verified'}
+                                  </span>
+                                </p>
+                                <p className="text-xs font-portal-heading tabular-nums text-stone-500">
+                                  {appt.preferredDate} · {appt.preferredTime} ·{' '}
+                                  {appt.preVisitScreenerCompleted
+                                    ? 'Pre-Visit PHQ-9/GAD-7 Completed'
+                                    : 'Awaiting Pre-Visit Screener'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                              <button
+                                onClick={() => onLaunchTelehealth(appt)}
+                                className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs inline-flex items-center gap-1.5 hover:bg-stone-800 cursor-pointer"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>Launch Video</span>
+                              </button>
+                              {appt.status !== 'completed' && (
+                                <button
+                                  onClick={() => handleUpdateAppointmentStatus(appt.id, 'completed')}
+                                  className="px-3.5 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-semibold cursor-pointer"
+                                >
+                                  Mark Completed
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment History Table */}
+              <div className="bg-white portal-card overflow-hidden">
+                <div className="px-6 py-5 border-b border-stone-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Payment & Statement History
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Insurance disbursements and patient copay ledger
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveSubTab('billing')}
+                    className="px-3.5 py-2 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-xs cursor-pointer"
+                  >
+                    Issue Statement
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#FAF9F5] border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                        <th className="py-3.5 px-5">Patient & Service</th>
+                        <th className="py-3.5 px-5">Date</th>
+                        <th className="py-3.5 px-5 text-right">Billed / Covered</th>
+                        <th className="py-3.5 px-5 text-right">Copay</th>
+                        <th className="py-3.5 px-5 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 text-xs">
+                      {filteredInvoices.slice(0, 6).map((inv) => (
+                        <tr key={inv.id} className="hover:bg-stone-50/80">
+                          <td className="py-4 px-5">
+                            <p className="font-bold text-stone-900">{inv.patientName}</p>
+                            <p className="text-[11px] text-stone-500">{inv.description}</p>
+                          </td>
+                          <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-600">
+                            {inv.serviceDate}
+                          </td>
+                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
+                            ${inv.amount.toFixed(2)} / -${inv.insuranceCoveredAmount.toFixed(2)}
+                          </td>
+                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
+                            ${inv.patientResponsibility.toFixed(2)}
+                          </td>
+                          <td className="py-4 px-5 text-right">
+                            <span
+                              className={`px-3 py-1 rounded-[12px] text-[11px] font-bold uppercase ${
+                                inv.status === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-[#FAF6EA] text-[#9E7206]'
+                              }`}
+                            >
+                              {inv.status === 'paid' ? 'Disbursed' : 'Due'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Sub-Tab 2: Medications & Refill Approvals */}
+          {activeSubTab === 'refills' && (
+            <div className="space-y-6">
+              <div className="bg-white portal-card p-6 space-y-4">
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Active Patient Prescriptions & Refill Queue
+                </h3>
+                {filteredMedications.length === 0 ? (
+                  <p className="text-xs text-stone-500 py-4">
+                    No prescriptions on file yet. Use the form below to prescribe a medication.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200">
+                    {filteredMedications.map((med) => (
+                      <div
+                        key={med.id}
+                        className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm font-portal-heading text-stone-900">
+                              {med.medicationName} ({med.dosage})
+                            </span>
+                            <span className="text-xs text-stone-500">
+                              · Patient: {med.patientName}
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-600">
+                            {med.frequency} · Pharmacy: {med.pharmacy} ·{' '}
+                            <span className="font-portal-heading tabular-nums font-semibold">
+                              {med.refillsRemaining} refills remaining
+                            </span>
+                          </p>
+                          <p className="text-[11px] font-medium">
+                            Status:{' '}
+                            <span
+                              className={
+                                med.refillStatus === 'refill_requested'
+                                  ? 'text-[#9E7206] font-bold'
+                                  : med.refillStatus === 'approved_sent'
+                                  ? 'text-emerald-700 font-bold'
+                                  : med.refillStatus === 'denied'
+                                  ? 'text-red-600 font-bold'
+                                  : 'text-stone-700'
+                              }
+                            >
+                              {med.refillStatus.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
-                            onClick={() => handleUpdateAppointmentStatus(appt.id, 'completed')}
-                            className="px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-medium cursor-pointer"
+                            onClick={() =>
+                              providerProcessRefill({
+                                medicationId: med.id,
+                                patientId: med.patientId,
+                                patientName: med.patientName,
+                                medicationName: med.medicationName,
+                                dosage: med.dosage,
+                                pharmacy: med.pharmacy,
+                                currentRefills: med.refillsRemaining,
+                                decision: 'approved_sent',
+                              })
+                            }
+                            className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                           >
-                            Mark Completed
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve & e-Rx</span>
                           </button>
-                        )}
-                      </td>
-                    </tr>
+                          <button
+                            onClick={() =>
+                              providerProcessRefill({
+                                medicationId: med.id,
+                                patientId: med.patientId,
+                                patientName: med.patientName,
+                                medicationName: med.medicationName,
+                                dosage: med.dosage,
+                                pharmacy: med.pharmacy,
+                                currentRefills: med.refillsRemaining,
+                                decision: 'denied',
+                              })
+                            }
+                            className="px-3.5 py-2 rounded-[12px] border border-red-300 text-red-700 hover:bg-red-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Require Follow-Up</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <form
+                onSubmit={handlePrescribeMedication}
+                className="bg-white portal-card p-6 space-y-4"
+              >
+                <div className="flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-[#B8860B]" />
+                  <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                    Prescribe / Add Patient Medication
+                  </h3>
+                </div>
+
+                <div className="p-3.5 rounded-[16px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[11px] text-stone-800 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-[#9E7206] shrink-0 mt-0.5" />
+                  <span>
+                    Clinical Reminder: Some psychiatric and anxiety medications can be habit forming.
+                    Include clear dosing and habit-forming precautions in the patient instructions.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Select Patient
+                  </label>
+                  <select
+                    value={rxPatientId}
+                    onChange={(e) => setRxPatientId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  >
+                    {patients.map((p) => (
+                      <option key={p.uid} value={p.uid}>
+                        {p.fullName} ({p.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Medication Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., Sertraline or Buspirone"
+                      value={rxName}
+                      onChange={(e) => setRxName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">Dosage</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., 50 mg"
+                      value={rxDosage}
+                      onChange={(e) => setRxDosage(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Frequency
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={rxFrequency}
+                      onChange={(e) => setRxFrequency(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Authorized Refills
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={12}
+                      value={rxRefills}
+                      onChange={(e) => setRxRefills(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Clinical & Habit-Forming Safety Instructions
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={rxInstructions}
+                    onChange={(e) => setRxInstructions(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800 transition-colors"
+                >
+                  Add Prescription to Patient Chart
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Sub-Tab 3: Longitudinal PHQ-9, GAD-7 & Daily Mood Scores */}
+          {activeSubTab === 'charts' && (
+            <div className="bg-white portal-card overflow-hidden">
+              <div className="px-6 py-5 border-b border-stone-200">
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Patient PHQ-9, GAD-7 & Mood Symptom Logs
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Standardized rating scales submitted by patients prior to their telehealth visits
+                </p>
+              </div>
+              {filteredAssessments.length === 0 ? (
+                <div className="p-8 text-center text-xs text-stone-500">
+                  No symptom assessments logged yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-stone-200 bg-[#FAF9F5] text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                        <th className="py-3.5 px-5">Patient</th>
+                        <th className="py-3.5 px-5">Scale</th>
+                        <th className="py-3.5 px-5 text-right">Score</th>
+                        <th className="py-3.5 px-5">Severity</th>
+                        <th className="py-3.5 px-5">Sleep & Meds</th>
+                        <th className="py-3.5 px-5 text-right">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 text-xs">
+                      {filteredAssessments.map((a) => (
+                        <tr key={a.id} className="hover:bg-stone-50">
+                          <td className="py-4 px-5 font-bold text-stone-900">{a.patientName}</td>
+                          <td className="py-4 px-5 font-portal-heading font-bold text-stone-800">
+                            {a.type}
+                          </td>
+                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
+                            {a.totalScore}
+                            {a.type === 'PHQ-9' ? ' / 27' : a.type === 'GAD-7' ? ' / 21' : ' / 10'}
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="px-2.5 py-1 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-[11px]">
+                              {a.severity}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-600">
+                            {a.sleepHours ?? 7.5}h · {a.medicationTaken ? 'Taken' : 'Skipped'}
+                          </td>
+                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-500">
+                            {a.createdAt.split('T')[0]}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub-Tab 4: Submitted Digital Intake Forms */}
+          {activeSubTab === 'intakes' && (
+            <div className="bg-white portal-card p-6 space-y-4">
+              <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                Patient Psychiatric Intake Forms & Telehealth Consents
+              </h3>
+              {filteredIntakes.length === 0 ? (
+                <p className="text-xs text-stone-500">No intake forms assigned yet.</p>
+              ) : (
+                <div className="divide-y divide-stone-200">
+                  {filteredIntakes.map((intake) => (
+                    <div key={intake.id} className="py-4 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold text-sm font-portal-heading text-stone-900">
+                            {intake.title}
+                          </span>
+                          <span className="text-xs text-stone-500 ml-2">
+                            · Patient: {intake.patientName}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-[12px] text-[11px] font-bold ${
+                            intake.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-[#FAF6EA] text-[#9E7206]'
+                          }`}
+                        >
+                          {intake.status === 'completed'
+                            ? `Completed (${intake.completedAt?.split('T')[0] || 'Saved'})`
+                            : 'Pending Completion'}
+                        </span>
+                      </div>
+                      {intake.responses && Object.keys(intake.responses).length > 0 && (
+                        <div className="p-4 rounded-[20px] bg-[#FAF9F5] border border-stone-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {Object.entries(intake.responses).map(([k, v]) => (
+                            <div key={k}>
+                              <span className="font-semibold text-stone-700 capitalize">
+                                {k.replace(/([A-Z])/g, ' $1')}:{' '}
+                              </span>
+                              <span className="text-stone-600">{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub-Tab 5: Direct Patient Messaging */}
+          {activeSubTab === 'messages' && (
+            <div className="space-y-6">
+              <div className="bg-white portal-card p-6 space-y-4">
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Clinical Message Log
+                </h3>
+                <div className="divide-y divide-stone-200 max-h-[420px] overflow-y-auto">
+                  {filteredMessages.map((msg) => (
+                    <div key={msg.id} className="py-3.5 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-stone-900">
+                          {msg.senderRole === 'provider'
+                            ? `To ${msg.patientName} (From Brenda Hobyani, PMHNP-BC)`
+                            : `From Patient: ${msg.patientName}`}
+                        </span>
+                        <span className="font-portal-heading tabular-nums text-stone-400">
+                          {msg.createdAt.split('T')[0]}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-[#9E7206]">{msg.subject}</p>
+                      <p className="text-xs text-stone-600 whitespace-pre-line">{msg.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <form
+                onSubmit={handleSendProviderMessage}
+                className="bg-white portal-card p-6 space-y-4"
+              >
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Send Direct Message to Patient
+                </h3>
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Recipient
+                  </label>
+                  <select
+                    value={replyPatientId}
+                    onChange={(e) => setReplyPatientId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  >
+                    {patients.map((p) => (
+                      <option key={p.uid} value={p.uid}>
+                        {p.fullName} ({p.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Subject</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Follow-Up on Your PHQ-9 Check-In"
+                    value={replySubject}
+                    onChange={(e) => setReplySubject(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Message</label>
+                  <textarea
+                    rows={4}
+                    required
+                    placeholder="Write a clinical update or care note..."
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Message as Brenda Hobyani, PMHNP-BC</span>
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Sub-Tab 6: Billing & Statements */}
+          {activeSubTab === 'billing' && (
+            <div className="space-y-6">
+              <form onSubmit={handleCreateInvoice} className="bg-white portal-card p-6 space-y-4">
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Issue New Patient Statement
+                </h3>
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Patient</label>
+                  <select
+                    value={invPatientId}
+                    onChange={(e) => setInvPatientId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  >
+                    {patients.map((p) => (
+                      <option key={p.uid} value={p.uid}>
+                        {p.fullName} ({p.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Service Description
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={invDesc}
+                    onChange={(e) => setInvDesc(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Total Charge ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={invTotal}
+                      onChange={(e) => setInvTotal(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Insurance Covered ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={invCovered}
+                      onChange={(e) => setInvCovered(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                >
+                  Post Statement to Patient Portal
+                </button>
+              </form>
             </div>
           )}
         </div>
-      )}
 
-      {/* Sub-Tab 2: Medications & Refill Approvals */}
-      {activeSubTab === 'refills' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Active Patient Prescriptions & Refill Queue
-            </h3>
-            {filteredMedications.length === 0 ? (
-              <p className="text-xs text-stone-500 py-4">
-                No prescriptions on file yet. Use the form on the right to prescribe a medication.
-              </p>
-            ) : (
-              <div className="divide-y divide-stone-200">
-                {filteredMedications.map((med) => (
-                  <div key={med.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-stone-900">
-                          {med.medicationName} ({med.dosage})
-                        </span>
-                        <span className="text-xs text-stone-500">· Patient: {med.patientName}</span>
-                      </div>
-                      <p className="text-xs text-stone-600">
-                        {med.frequency} · Pharmacy: {med.pharmacy} ·{' '}
-                        <span className="font-mono tabular-nums">
-                          {med.refillsRemaining} refills remaining
-                        </span>
-                      </p>
-                      <p className="text-[11px] font-medium">
-                        Status:{' '}
-                        <span
-                          className={
-                            med.refillStatus === 'refill_requested'
-                              ? 'text-amber-700 font-bold'
-                              : med.refillStatus === 'approved_sent'
-                              ? 'text-emerald-700 font-bold'
-                              : med.refillStatus === 'denied'
-                              ? 'text-red-600 font-bold'
-                              : 'text-stone-700'
-                          }
-                        >
-                          {med.refillStatus.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() =>
-                          providerProcessRefill({
-                            medicationId: med.id,
-                            patientId: med.patientId,
-                            patientName: med.patientName,
-                            medicationName: med.medicationName,
-                            dosage: med.dosage,
-                            pharmacy: med.pharmacy,
-                            currentRefills: med.refillsRemaining,
-                            decision: 'approved_sent',
-                          })
-                        }
-                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Approve & e-Rx</span>
-                      </button>
-                      <button
-                        onClick={() =>
-                          providerProcessRefill({
-                            medicationId: med.id,
-                            patientId: med.patientId,
-                            patientName: med.patientName,
-                            medicationName: med.medicationName,
-                            dosage: med.dosage,
-                            pharmacy: med.pharmacy,
-                            currentRefills: med.refillsRemaining,
-                            decision: 'denied',
-                          })
-                        }
-                        className="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Require Follow-Up</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+        {/* Right 30% Side Widgets Column */}
+        <div className="xl:col-span-4 space-y-6">
+          {/* Schedule Status-Timeline Widget */}
+          <div className="bg-white portal-card p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Provider Schedule
+                </h3>
+                <p className="text-xs text-stone-500">Status-Timeline · Texas Telehealth</p>
               </div>
-            )}
-          </div>
-
-          {/* Prescribe New Medication Card */}
-          <form
-            onSubmit={handlePrescribeMedication}
-            className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4"
-          >
-            <div className="flex items-center gap-2">
-              <Plus className="w-4 h-4 text-[#B8860B]" />
-              <h3 className="text-base font-serif font-bold text-stone-900">
-                Prescribe / Add Patient Medication
-              </h3>
-            </div>
-
-            <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <span>
-                Clinical Reminder: Some psychiatric and anxiety medications can be habit forming.
-                Include clear dosing and habit-forming precautions in the patient instructions.
+              <span className="px-2.5 py-1 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] text-[10px] font-bold uppercase">
+                Live Sync
               </span>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">Select Patient</label>
-              <select
-                value={rxPatientId}
-                onChange={(e) => setRxPatientId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              >
-                {patients.map((p) => (
-                  <option key={p.uid} value={p.uid}>
-                    {p.fullName} ({p.email})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div className="space-y-4">
+              {filteredAppointments.slice(0, 4).map((appt) => (
+                <div key={appt.id} className="pl-6 relative py-1">
+                  <div
+                    className={`w-[2px] absolute left-0 top-0 bottom-0 rounded-full ${
+                      appt.status === 'confirmed' ? 'bg-[#D4AF37]' : 'bg-[#9E7206]'
+                    }`}
+                  />
+                  <p className="text-[10px] font-bold uppercase tracking-wider font-portal-heading text-[#9E7206]">
+                    {appt.preferredDate} · {appt.preferredTime}
+                  </p>
+                  <p className="text-[14px] font-bold text-stone-900 mt-0.5">{appt.patientName}</p>
+                  <p className="text-[12px] text-stone-500">
+                    {appt.serviceType} · {appt.conditionReason}
+                  </p>
+                </div>
+              ))}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Medication Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Sertraline or Buspirone"
-                  value={rxName}
-                  onChange={(e) => setRxName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">Dosage</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., 50 mg"
-                  value={rxDosage}
-                  onChange={(e) => setRxDosage(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                />
+              <div className="pl-6 relative py-1">
+                <div className="w-[2px] absolute left-0 top-0 bottom-0 rounded-full bg-stone-300" />
+                <p className="text-[10px] font-bold uppercase tracking-wider font-portal-heading text-stone-400">
+                  MON–THU 8:00 AM – 4:00 PM · FRI 9:00 AM – 1:00 PM
+                </p>
+                <p className="text-[14px] font-bold text-stone-900 mt-0.5">
+                  Chart & e-Prescription Review Window
+                </p>
+                <p className="text-[12px] text-stone-500">
+                  {pendingRefillsCount} refill(s) & {unreadPatientMsgsCount} message(s) in queue
+                </p>
               </div>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">Frequency</label>
-                <input
-                  type="text"
-                  required
-                  value={rxFrequency}
-                  onChange={(e) => setRxFrequency(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Authorized Refills
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={12}
-                  value={rxRefills}
-                  onChange={(e) => setRxRefills(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">
-                Clinical & Habit-Forming Safety Instructions
-              </label>
-              <textarea
-                rows={2}
-                value={rxInstructions}
-                onChange={(e) => setRxInstructions(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800 transition-colors"
-            >
-              Add Prescription to Patient Chart
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* Sub-Tab 3: Longitudinal PHQ-9, GAD-7 & Daily Mood Scores */}
-      {activeSubTab === 'charts' && (
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-stone-200">
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Patient PHQ-9, GAD-7 & Mood Symptom Logs
-            </h3>
-            <p className="text-xs text-stone-500">
-              Standardized rating scales submitted by patients prior to their telehealth visits
+          {/* Dark Obsidian-Gold Support & Clinical Protocol CTA Card with Corner Ghost Icon */}
+          <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 border border-[#D4AF37]/40 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg space-y-3">
+            <ShieldCheck className="w-24 h-24 text-white/5 absolute -right-3 -bottom-3 pointer-events-none" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#D4AF37] block">
+              Practice Verified · HIPAA Telehealth
+            </span>
+            <h4 className="text-base font-bold font-portal-heading text-white">
+              Brenda Hobyani, PMHNP-BC Clinical Sanctuary
+            </h4>
+            <p className="text-xs text-stone-300 leading-relaxed">
+              100% Telehealth outpatient psychiatry across Texas. Emergency lines: Call/Text{' '}
+              <strong className="text-[#D4AF37]">988</strong> (Suicide &amp; Crisis Lifeline) or{' '}
+              <strong className="text-[#D4AF37]">800-222-1222</strong> (Poison Control 24/7).
             </p>
-          </div>
-          {filteredAssessments.length === 0 ? (
-            <div className="p-8 text-center text-xs text-stone-500">
-              No symptom assessments logged yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-stone-200 bg-[#FAF9F5] text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                    <th className="py-3 px-4">Patient</th>
-                    <th className="py-3 px-4">Assessment Scale</th>
-                    <th className="py-3 px-4 text-right">Score</th>
-                    <th className="py-3 px-4">Clinical Severity</th>
-                    <th className="py-3 px-4">Sleep & Adherence</th>
-                    <th className="py-3 px-4">Notes</th>
-                    <th className="py-3 px-4 text-right">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-200 text-xs">
-                  {filteredAssessments.map((a) => (
-                    <tr key={a.id} className="hover:bg-stone-50">
-                      <td className="py-3 px-4 font-semibold text-stone-900">{a.patientName}</td>
-                      <td className="py-3 px-4 font-mono font-semibold text-stone-800">{a.type}</td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-stone-900">
-                        {a.totalScore}
-                        {a.type === 'PHQ-9' ? ' / 27' : a.type === 'GAD-7' ? ' / 21' : ' / 10'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`font-semibold ${
-                            a.severity === 'Severe' || a.severity === 'Moderately Severe'
-                              ? 'text-red-600'
-                              : a.severity === 'Moderate'
-                              ? 'text-amber-700'
-                              : 'text-emerald-700'
-                          }`}
-                        >
-                          {a.severity}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono tabular-nums text-stone-600">
-                        {a.sleepHours ?? 7.5}h sleep · {a.medicationTaken ? 'Med Taken' : 'Skipped'}
-                      </td>
-                      <td className="py-3 px-4 text-stone-600 max-w-xs truncate">
-                        {a.notes || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums text-stone-500">
-                        {a.createdAt.split('T')[0]}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sub-Tab 4: Submitted Digital Intake Forms */}
-      {activeSubTab === 'intakes' && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-          <h3 className="text-base font-serif font-bold text-stone-900">
-            Patient Psychiatric Intake Forms & Telehealth Consents
-          </h3>
-          {filteredIntakes.length === 0 ? (
-            <p className="text-xs text-stone-500">No intake forms assigned yet.</p>
-          ) : (
-            <div className="divide-y divide-stone-200">
-              {filteredIntakes.map((intake) => (
-                <div key={intake.id} className="py-4 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="font-bold text-sm text-stone-900">{intake.title}</span>
-                      <span className="text-xs text-stone-500 ml-2">
-                        · Patient: {intake.patientName}
-                      </span>
-                    </div>
-                    <span
-                      className={`text-xs font-semibold ${
-                        intake.status === 'completed' ? 'text-emerald-700' : 'text-amber-700'
-                      }`}
-                    >
-                      {intake.status === 'completed'
-                        ? `Completed (${intake.completedAt?.split('T')[0] || 'Saved'})`
-                        : 'Pending Patient Completion'}
-                    </span>
-                  </div>
-                  {intake.responses && Object.keys(intake.responses).length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-[#FAF9F5] border border-stone-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      {Object.entries(intake.responses).map(([k, v]) => (
-                        <div key={k}>
-                          <span className="font-semibold text-stone-700 capitalize">
-                            {k.replace(/([A-Z])/g, ' $1')}:{' '}
-                          </span>
-                          <span className="text-stone-600">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sub-Tab 5: Direct Patient Messaging */}
-      {activeSubTab === 'messages' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Clinical Message Log
-            </h3>
-            <div className="divide-y divide-stone-200 max-h-[460px] overflow-y-auto">
-              {filteredMessages.map((msg) => (
-                <div key={msg.id} className="py-3.5 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-stone-900">
-                      {msg.senderRole === 'provider'
-                        ? `To ${msg.patientName} (From Brenda Hobyani, PMHNP-BC)`
-                        : `From Patient: ${msg.patientName}`}
-                    </span>
-                    <span className="font-mono tabular-nums text-stone-400">
-                      {msg.createdAt.split('T')[0]}
-                    </span>
-                  </div>
-                  <p className="text-xs font-semibold text-[#9E7206]">{msg.subject}</p>
-                  <p className="text-xs text-stone-600 whitespace-pre-line">{msg.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleSendProviderMessage}
-            className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4"
-          >
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Send Direct Message to Patient
-            </h3>
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">Recipient</label>
-              <select
-                value={replyPatientId}
-                onChange={(e) => setReplyPatientId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              >
-                {patients.map((p) => (
-                  <option key={p.uid} value={p.uid}>
-                    {p.fullName} ({p.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">Subject</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g., Follow-Up on Your PHQ-9 Check-In"
-                value={replySubject}
-                onChange={(e) => setReplySubject(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">Message</label>
-              <textarea
-                rows={4}
-                required
-                placeholder="Write a clinical update or care note..."
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              />
-            </div>
             <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => setActiveSubTab('messages')}
+              className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer relative z-10"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>Send Message as Brenda Hobyani, PMHNP-BC</span>
+              Open Patient Communications
             </button>
-          </form>
-        </div>
-      )}
-
-      {/* Sub-Tab 6: Billing & Statements */}
-      {activeSubTab === 'billing' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-6 space-y-4">
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Patient Statements & Copay Ledger
-            </h3>
-            <div className="divide-y divide-stone-200">
-              {filteredInvoices.map((inv) => (
-                <div key={inv.id} className="py-3.5 flex items-center justify-between gap-4 text-xs">
-                  <div>
-                    <p className="font-bold text-stone-900">
-                      {inv.patientName} · {inv.description}
-                    </p>
-                    <p className="text-stone-500 font-mono tabular-nums mt-0.5">
-                      Service Date: {inv.serviceDate} · Total: ${inv.amount.toFixed(2)} · Insurance
-                      Covered: ${inv.insuranceCoveredAmount.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-right font-mono tabular-nums">
-                    <p className="font-bold text-sm text-stone-900">
-                      ${inv.patientResponsibility.toFixed(2)}
-                    </p>
-                    <span
-                      className={`text-[11px] font-semibold uppercase ${
-                        inv.status === 'paid' ? 'text-emerald-700' : 'text-amber-700'
-                      }`}
-                    >
-                      {inv.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-
-          <form
-            onSubmit={handleCreateInvoice}
-            className="lg:col-span-5 bg-white border border-stone-200 rounded-2xl p-6 space-y-4"
-          >
-            <h3 className="text-base font-serif font-bold text-stone-900">
-              Issue New Patient Statement
-            </h3>
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">Patient</label>
-              <select
-                value={invPatientId}
-                onChange={(e) => setInvPatientId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              >
-                {patients.map((p) => (
-                  <option key={p.uid} value={p.uid}>
-                    {p.fullName} ({p.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-stone-700 block mb-1">
-                Service Description
-              </label>
-              <input
-                type="text"
-                required
-                value={invDesc}
-                onChange={(e) => setInvDesc(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Total Charge ($)
-                </label>
-                <input
-                  type="number"
-                  value={invTotal}
-                  onChange={(e) => setInvTotal(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Insurance Covered ($)
-                </label>
-                <input
-                  type="number"
-                  value={invCovered}
-                  onChange={(e) => setInvCovered(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF9F5] border border-stone-200 text-xs font-mono tabular-nums"
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-            >
-              Post Statement to Patient Portal
-            </button>
-          </form>
         </div>
-      )}
+      </div>
     </div>
   );
 };

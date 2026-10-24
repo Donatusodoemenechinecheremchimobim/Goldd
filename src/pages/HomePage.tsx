@@ -48,14 +48,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           HERO SECTION WITH PROMINENT HERO SANCTUARY IMAGE & CENTERED LAYOUT
           (Matching Radiant Souls structure on a clean, luminous white aesthetic)
       ========================================================================= */}
-      <section className="relative pt-12 pb-16 md:pt-20 md:pb-24 overflow-hidden text-center px-4 sm:px-6 lg:px-8 border-b border-stone-200 bg-white">
+      <section className="relative pt-8 pb-14 md:pt-10 md:pb-20 overflow-hidden text-center px-4 sm:px-6 lg:px-8 border-b border-stone-200 bg-white">
         {/* Subtle warm ambient glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[#D4AF37]/10 blur-[130px] pointer-events-none rounded-full"></div>
 
-        <div className="max-w-5xl mx-auto relative z-10 space-y-6">
+        <div className="max-w-5xl mx-auto relative z-10 space-y-5">
 
           {/* Prominent Large Golden Mind Logo in place of "Healing Minds..." */}
-          <div className="py-2">
+          <div className="py-1">
             <GoldenMindLogo variant="hero" size="hero" className="mx-auto" />
           </div>
 
