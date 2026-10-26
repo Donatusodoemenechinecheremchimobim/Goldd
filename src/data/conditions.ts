@@ -4,6 +4,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'adhd',
     name: 'ADHD (Attention-Deficit / Hyperactivity Disorder)',
+    image: '/adhd_care.jpg',
     tagline: 'Regain focus, mental clarity, and executive functioning through precision care.',
     shortDescription: 'Comprehensive diagnostic assessments and individualized medication management for adults and adolescents managing inattention, hyperactivity, and executive dysfunction.',
     overview: 'Attention-Deficit/Hyperactivity Disorder (ADHD) is a neurodevelopmental condition affecting the brain’s executive functioning networks—the systems responsible for attention regulation, impulse control, working memory, and organization. At Golden Mind Psychiatric, Brenda Hobyani, PMHNP-BC conducts thorough clinical evaluations to distinguish ADHD from anxiety, mood disorders, or sleep disruptions, crafting targeted care plans that restore daily capability without judgment.',

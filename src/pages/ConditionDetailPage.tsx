@@ -84,7 +84,7 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
                   className={`w-full ${
                     condition.id === 'depression' || condition.id === 'anxiety-stress'
                       ? 'max-h-[500px] object-cover object-top'
-                      : condition.id === 'substance-abuse-addiction' || condition.id === 'insomnia-sleep' || condition.id === 'ocd' || condition.id === 'neurodevelopmental-disorders' || condition.id === 'pharmacogenomic-testing'
+                      : condition.id === 'adhd' || condition.id === 'substance-abuse-addiction' || condition.id === 'insomnia-sleep' || condition.id === 'ocd' || condition.id === 'neurodevelopmental-disorders' || condition.id === 'pharmacogenomic-testing'
                       ? 'max-h-[460px] object-cover object-center'
                       : 'max-h-[460px] object-cover object-[center_20%]'
                   } block`}

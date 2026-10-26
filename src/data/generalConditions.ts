@@ -99,6 +99,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'adhd-spectrum',
     name: 'ADHD & Executive Functioning',
+    image: '/adhd_care.jpg',
     tagline: 'Precision testing and tailored neuro-stimulant or non-stimulant management for clear focus.',
     overview: 'Attention-Deficit / Hyperactivity Disorder reflects differences in frontal lobe dopamine and norepinephrine transmission. Proper care restores focus, organization, and emotional equilibrium.',
     mainConditionId: 'adhd',
