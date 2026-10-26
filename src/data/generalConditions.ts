@@ -59,6 +59,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'anxiety-panic-spectrum',
     name: 'Anxiety, Stress & Panic Disorders',
+    image: '/anxiety_care.jpg',
     tagline: 'Calming the sympathetic nervous system through precision medicine and somatic resilience.',
     overview: 'Chronic anxiety is characterized by an overactive fight-or-flight response, hypervigilance, and physical tension. Our personalized clinical protocols restore calm and cognitive flexibility.',
     mainConditionId: 'anxiety-stress',

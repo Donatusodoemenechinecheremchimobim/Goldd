@@ -141,6 +141,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'anxiety-stress',
     name: 'Anxiety, Panic & Stress Disorders',
+    image: '/anxiety_care.jpg',
     tagline: 'Quiet the racing thoughts, calm the nervous system, and restore inner peace.',
     shortDescription: 'Personalized clinical care for Generalized Anxiety Disorder (GAD), Panic Disorder, Social Anxiety, and chronic nervous system dysregulation.',
     overview: 'Anxiety disorders occur when the body’s innate sympathetic nervous system ("fight-or-flight") response becomes chronically activated in the absence of real physical danger. Physical sensations like chest tightness, racing pulse, and shallow breathing combine with intrusive worry loops. Brenda Hobyani, PMHNP-BC utilizes targeted psychiatric tools to downregulate your nervous system and re-establish emotional equilibrium.',

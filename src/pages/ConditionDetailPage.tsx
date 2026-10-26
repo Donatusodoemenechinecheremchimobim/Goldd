@@ -73,14 +73,16 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
             <div className="flex justify-center mb-6">
               <div
                 className={`w-full ${
-                  condition.id === 'depression' ? 'max-w-md' : 'max-w-2xl'
+                  condition.id === 'depression' || condition.id === 'anxiety-stress'
+                    ? 'max-w-md'
+                    : 'max-w-2xl'
                 } rounded-3xl overflow-hidden shadow-xl border-2 border-[#D4AF37]/50 bg-white`}
               >
                 <img
                   src={condition.image}
                   alt={condition.name}
                   className={`w-full ${
-                    condition.id === 'depression'
+                    condition.id === 'depression' || condition.id === 'anxiety-stress'
                       ? 'max-h-[500px] object-cover object-top'
                       : condition.id === 'substance-abuse-addiction' || condition.id === 'insomnia-sleep' || condition.id === 'ocd' || condition.id === 'neurodevelopmental-disorders' || condition.id === 'pharmacogenomic-testing'
                       ? 'max-h-[460px] object-cover object-center'
