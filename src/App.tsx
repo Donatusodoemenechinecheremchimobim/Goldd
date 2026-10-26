@@ -20,7 +20,7 @@ import { SuicidePreventionPage } from './pages/SuicidePreventionPage';
 import { AppointmentModal } from './components/AppointmentModal';
 import { conditionsData } from './data/conditions';
 
-const CANONICAL_BASE_URL = 'https://goldenmindpsychiatry.com';
+const CANONICAL_BASE_URL = 'https://goldenmindpsychiatry.org';
 
 const VALID_PAGES = [
   'about',

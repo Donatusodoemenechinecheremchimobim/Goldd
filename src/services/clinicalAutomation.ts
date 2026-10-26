@@ -103,7 +103,7 @@ export function generateTelehealthRoomUrl(seed?: string): string {
     .replace(/[^a-zA-Z0-9]/g, '')
     .toLowerCase()
     .slice(0, 8);
-  return `https://telehealth.goldenmindpsychiatry.com/tx-hipaa-room/gmp-${randomCode || 'tx2026'}`;
+  return `https://telehealth.goldenmindpsychiatry.org/tx-hipaa-room/gmp-${randomCode || 'tx2026'}`;
 }
 
 /**

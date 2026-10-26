@@ -3,12 +3,12 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <!-- Home Page -->
   <url>
-    <loc>https://goldenmindpsychiatry.com/</loc>
+    <loc>https://goldenmindpsychiatry.org/</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/golden_mind_card.webp</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/golden_mind_card.webp</image:loc>
       <image:title>Golden Mind Psychiatry PLLC — Where Every Mind Is Golden.</image:title>
       <image:caption>Compassionate Psychiatric Care Across Texas led by Brenda Hobyani, PMHNP-BC</image:caption>
     </image:image>
@@ -16,71 +16,71 @@
 
   <!-- Core Practice Pages -->
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=about</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=about</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/brenda_hobyani.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/brenda_hobyani.jpg</image:loc>
       <image:title>Brenda Hobyani, MSN, APRN, PMHNP-BC — Founder &amp; Lead Clinical Director</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=services</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=services</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=conditions-overview</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=conditions-overview</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=telehealth</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=telehealth</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/telehealth_all_ages.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/telehealth_all_ages.jpg</image:loc>
       <image:title>100% Telehealth Psychiatric Care Across Texas</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=insurance</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=insurance</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=resources</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=resources</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=suicide-prevention</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=suicide-prevention</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=contact</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=contact</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?page=portal</loc>
+    <loc>https://goldenmindpsychiatry.org/?page=portal</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -88,140 +88,140 @@
 
   <!-- Specialized Psychiatric Condition Pages -->
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=adhd</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=adhd</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/adhd_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/adhd_care.jpg</image:loc>
       <image:title>ADHD Evaluation &amp; Treatment | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=depression</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=depression</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/depression_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/depression_care.jpg</image:loc>
       <image:title>Depression &amp; Depressive Disorders Treatment | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=anxiety-stress</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=anxiety-stress</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/anxiety_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/anxiety_care.jpg</image:loc>
       <image:title>Anxiety, Panic &amp; Stress Disorders Care | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=trauma-ptsd</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=trauma-ptsd</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/ptsd_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/ptsd_care.jpg</image:loc>
       <image:title>Trauma &amp; PTSD Psychiatric Treatment | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=womens-mental-health</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=womens-mental-health</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/womens_mental_health.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/womens_mental_health.jpg</image:loc>
       <image:title>Women's Mental Health &amp; Perinatal Psychiatry | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=bipolar-disorder</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=bipolar-disorder</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/bipolar_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/bipolar_care.jpg</image:loc>
       <image:title>Bipolar &amp; Mood Spectrum Disorders | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=insomnia-sleep</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=insomnia-sleep</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/sleep_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/sleep_care.jpg</image:loc>
       <image:title>Insomnia &amp; Sleep-Wake Disorders | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=ocd</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=ocd</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/ocd_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/ocd_care.jpg</image:loc>
       <image:title>Obsessive-Compulsive Disorder (OCD) | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=child-adolescent</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=child-adolescent</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/child_adolescent.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/child_adolescent.jpg</image:loc>
       <image:title>Child &amp; Adolescent Psychiatric Care | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=holistic-integrative</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=holistic-integrative</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=substance-abuse-addiction</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=substance-abuse-addiction</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/substance_abuse.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/substance_abuse.jpg</image:loc>
       <image:title>Substance Abuse &amp; Dual-Diagnosis Addiction Care | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=neurodevelopmental-disorders</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=neurodevelopmental-disorders</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/autism_care.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/autism_care.jpg</image:loc>
       <image:title>Neurodevelopmental Disorders (ASD &amp; IDD) | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
 
   <url>
-    <loc>https://goldenmindpsychiatry.com/?condition=pharmacogenomic-testing</loc>
+    <loc>https://goldenmindpsychiatry.org/?condition=pharmacogenomic-testing</loc>
     <lastmod>2026-10-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
     <image:image>
-      <image:loc>https://goldenmindpsychiatry.com/pharmacogenetic_testing.jpg</image:loc>
+      <image:loc>https://goldenmindpsychiatry.org/pharmacogenetic_testing.jpg</image:loc>
       <image:title>Pharmacogenomic DNA Testing | Golden Mind Psychiatry PLLC</image:title>
     </image:image>
   </url>
