@@ -18,11 +18,15 @@
     <link rel="canonical" id="canonical-link" href="https://goldenmindpsychiatry.com/" />
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
 
-    <!-- Golden Mind Brand Card Icons & Manifest -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- Golden Mind Brand Card Icons & Manifest (Google Search 48px-multiple compliant) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64x64.png" />
-    <link rel="icon" type="image/webp" href="/golden_mind_card.webp" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
@@ -49,7 +53,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 
-    <!-- Schema.org MedicalClinic Structured Data (JSON-LD) -->
+    <!-- Schema.org WebSite & MedicalClinic Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://goldenmindpsychiatry.com/#website",
+        "name": "Golden Mind Psychiatry PLLC",
+        "alternateName": ["Golden Mind", "Golden Mind Psychiatric Care"],
+        "url": "https://goldenmindpsychiatry.com/"
+      }
+    </script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -59,8 +73,14 @@
         "alternateName": "Golden Mind Psychiatric Care",
         "slogan": "Where Every Mind Is Golden.",
         "url": "https://goldenmindpsychiatry.com/",
-        "logo": "https://goldenmindpsychiatry.com/golden_mind_card.webp",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://goldenmindpsychiatry.com/pwa-512x512.png",
+          "width": 512,
+          "height": 512
+        },
         "image": [
+          "https://goldenmindpsychiatry.com/pwa-512x512.png",
           "https://goldenmindpsychiatry.com/golden_mind_card.webp",
           "https://goldenmindpsychiatry.com/brenda_hobyani.jpg"
         ],
