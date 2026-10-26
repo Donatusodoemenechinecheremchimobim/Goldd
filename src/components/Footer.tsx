@@ -174,7 +174,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
         {/* Bottom Bar: Copyright & Medical Disclaimer */}
         <div className="mt-14 pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-[#78716C]">
           <p>© {new Date().getFullYear()} Golden Mind Psychiatry PLLC. All Rights Reserved.</p>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-6">
             <span className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-[#B8860B]" />
               <span>HIPAA Compliant Practice</span>
@@ -183,6 +183,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               <Award className="w-3.5 h-3.5 text-[#B8860B]" />
               <span>ANCC Board Certified</span>
             </span>
+            <a
+              href="/sitemap.xml"
+              className="text-[#78716C] hover:text-[#9E7206] transition-colors underline underline-offset-2"
+            >
+              XML Sitemap
+            </a>
           </div>
         </div>
 

@@ -1,0 +1,7 @@
+# Golden Mind Psychiatry PLLC — Search Crawler Directives
+# https://goldenmindpsychiatry.com
+
+User-agent: *
+Allow: /
+
+Sitemap: https://goldenmindpsychiatry.com/sitemap.xml
