@@ -342,6 +342,7 @@ export const conditionsData: Condition[] = [
   {
     id: 'bipolar-disorder',
     name: 'Bipolar & Mood Spectrum Disorders',
+    image: '/bipolar_care.jpg',
     tagline: 'Restoring steady ground, preventing relapses, and cultivating lifelong emotional stability.',
     shortDescription: 'Accurate differentiation and long-term stabilization for Bipolar I, Bipolar II, Cyclothymia, and mixed mood states.',
     overview: 'Bipolar spectrum disorders are often misdiagnosed as simple depression or ADHD, leading to ineffective or even destabilizing treatments. Experiencing cycling episodes of debilitating lows (depression) alongside highs or irritability (mania or hypomania) requires nuanced, specialized psychiatric oversight. Brenda Hobyani, PMHNP-BC brings deep clinical diagnostic acumen to anchor your mood without dampening your creativity or joy.',

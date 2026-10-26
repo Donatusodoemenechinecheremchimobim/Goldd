@@ -173,6 +173,7 @@ export const generalConditionsList: GeneralConditionCategory[] = [
   {
     id: 'bipolar-spectrum',
     name: 'Bipolar & Mood Spectrum Disorders',
+    image: '/bipolar_care.jpg',
     tagline: 'Stabilizing mood swings and safeguarding neurochemical balance for lifelong clarity.',
     overview: 'Bipolar spectrum conditions require specialized, conservative pharmacotherapy focused on mood stabilization, avoiding antidepressant-induced mania, and restoring regular circadian cycles.',
     mainConditionId: 'bipolar-disorder',
