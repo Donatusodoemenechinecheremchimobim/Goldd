@@ -4,6 +4,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
+  applyActionCode,
+  confirmPasswordReset,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -41,6 +44,7 @@ import {
   Search,
   Bell,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 import {
   auth,
@@ -68,6 +72,7 @@ import {
   SCALE_OPTIONS,
   calculatePHQ9Severity,
   calculateGAD7Severity,
+  calculateMoodSeverity,
   submitClinicalAssessment,
   requestMedicationRefill,
 } from '../services/clinicalAutomation';
@@ -106,6 +111,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [dobInput, setDobInput] = useState('');
   const [insuranceInput, setInsuranceInput] = useState('Blue Cross Blue Shield (BCBS)');
 
+  // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=verifyEmail&oobCode=...)
+  const [resetOobCode, setResetOobCode] = useState<string | null>(null);
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+
   // Navigation, Search & Mode State
   const [activeTab, setActiveTab] = useState<PortalTab>('overview');
   const [workspaceMode, setWorkspaceMode] = useState<'patient' | 'provider'>('patient');
@@ -114,7 +125,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [activeTelehealthAppt, setActiveTelehealthAppt] =
     useState<AppointmentRecord | null>(null);
 
-  // Real-time Patient Data Collections (Strictly isolated to firebaseUser.uid)
+  // Real-time Patient Data Collections (100% Cloud Firestore, strictly isolated to firebaseUser.uid)
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [intakes, setIntakes] = useState<IntakeRecord[]>([]);
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
@@ -161,14 +172,48 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [msgSubject, setMsgSubject] = useState('');
   const [msgBody, setMsgBody] = useState('');
 
-  // Insurance & Pharmacy Profile Editor
+  // Insurance & Pharmacy Profile Editor (Real-time synced with Firestore users/{uid})
   const [insCarrier, setInsCarrier] = useState('');
   const [insMemberId, setInsMemberId] = useState('');
   const [insGroupId, setInsGroupId] = useState('');
   const [prefPharmacy, setPrefPharmacy] = useState('');
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
 
-  // Listen to Firebase Auth state & trigger automated clinical onboarding
+  // Handle incoming Firebase Email Action Links (?mode=verifyEmail&oobCode=... or ?mode=resetPassword&oobCode=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = params.get('mode');
+    const oobParam = params.get('oobCode');
+    const emailParam = params.get('email');
+    if (emailParam) {
+      setEmailInput(emailParam);
+    }
+
+    if (modeParam === 'verifyEmail' && oobParam) {
+      applyActionCode(auth, oobParam)
+        .then(async () => {
+          if (auth.currentUser) {
+            await auth.currentUser.reload();
+            setFirebaseUser({ ...auth.currentUser });
+          }
+          setVerificationNotice(
+            'Your email address has been verified! You now have full access to your Client Portal.'
+          );
+          window.history.replaceState({}, document.title, '/?page=portal');
+        })
+        .catch((err) => {
+          setAuthError(
+            err instanceof Error
+              ? err.message
+              : 'This verification link has expired or was already used.'
+          );
+        });
+    } else if (modeParam === 'resetPassword' && oobParam) {
+      setResetOobCode(oobParam);
+    }
+  }, []);
+
+  // Listen to Firebase Auth state & trigger automated clinical onboarding in Firestore
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
@@ -181,24 +226,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             insuranceProvider: insuranceInput || undefined,
           });
           setPortalUser(profile);
-          setInsCarrier(profile.insuranceProvider || 'Blue Cross Blue Shield (BCBS)');
-          setInsMemberId(profile.insuranceMemberId || 'TXM-8849201');
-          setInsGroupId(profile.insuranceGroupNumber || 'GRP-44210');
-          setPrefPharmacy(
-            profile.preferredPharmacy || 'H-E-B Pharmacy · Austin / Texas Statewide e-Rx'
-          );
-
-          // Stealth Provider Routing: Automatically open Provider Dashboard ONLY when the specific authorized Gmail/email logs in
-          if (isAuthorizedProviderEmail(user.email)) {
-            setWorkspaceMode('provider');
-          } else {
-            setWorkspaceMode('patient');
-          }
+          setInsCarrier(profile.insuranceProvider || '');
+          setInsMemberId(profile.insuranceMemberId || '');
+          setInsGroupId(profile.insuranceGroupNumber || '');
+          setPrefPharmacy(profile.preferredPharmacy || '');
         } catch (err) {
           console.error('Onboarding initialization error:', err);
         }
       } else {
         setPortalUser(null);
+        setAppointments([]);
+        setIntakes([]);
+        setAssessments([]);
+        setMedications([]);
+        setMessages([]);
+        setInvoices([]);
         setWorkspaceMode('patient');
       }
       setAuthLoading(false);
@@ -211,6 +253,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   useEffect(() => {
     if (!firebaseUser) return;
     const uid = firebaseUser.uid;
+
+    const unsubUserDoc = onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as PortalUser;
+          setPortalUser(data);
+          setInsCarrier(data.insuranceProvider || '');
+          setInsMemberId(data.insuranceMemberId || '');
+          setInsGroupId(data.insuranceGroupNumber || '');
+          setPrefPharmacy(data.preferredPharmacy || '');
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, `users/${uid}`)
+    );
 
     const unsubAppts = onSnapshot(
       query(collection(db, 'appointments'), where('patientId', '==', uid)),
@@ -289,6 +346,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     );
 
     return () => {
+      unsubUserDoc();
       unsubAppts();
       unsubIntakes();
       unsubAssessments();
@@ -301,8 +359,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   // Authentication Handlers
   const handleGoogleSignIn = async () => {
     setAuthError(null);
+    setVerificationNotice(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const cred = await signInWithPopup(auth, googleProvider);
+      const profile = await ensurePatientOnboarding(cred.user);
+      setPortalUser(profile);
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : 'Google Sign-In failed.');
     }
@@ -312,66 +373,199 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     e.preventDefault();
     setAuthError(null);
     setVerificationNotice(null);
-    try {
-      if (isRegistering) {
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          emailInput.trim(),
-          passwordInput
-        );
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail || !passwordInput) return;
+
+    const completeAuthenticatedSession = async (user: FirebaseUser, isNewAccount: boolean) => {
+      if (isNewAccount || !user.emailVerified) {
         try {
-          await sendEmailVerification(cred.user);
+          await sendEmailVerification(user, {
+            url: 'https://goldenmindpsychiatry.org/?page=portal',
+          });
           setVerificationNotice(
-            `A verification email has been sent to ${cred.user.email}, and a new-patient registration alert has been sent to ${CLINIC_OWNER_EMAIL}.`
+            `A verification email has been sent to ${user.email}. Please open your inbox and click the verification link to unlock your Client Portal.`
           );
         } catch {
-          // Non-fatal if verification email throttled
+          // Non-fatal if verification email was recently sent
         }
-      } else {
-        await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
       }
+      const profile = await ensurePatientOnboarding(user, {
+        fullName: fullNameInput || undefined,
+        phone: phoneInput || undefined,
+        dateOfBirth: dobInput || undefined,
+        insuranceProvider: insuranceInput || undefined,
+      });
+      setPortalUser(profile);
+    };
+
+    try {
+      if (isRegistering) {
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, passwordInput);
+        await completeAuthenticatedSession(cred.user, true);
+        return;
+      } else {
+        const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, passwordInput);
+        await completeAuthenticatedSession(signInCred.user, false);
+        return;
+      }
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+
+      // If user clicked "New Client Registration" with an email that already has a password account, try signing them in
+      if (code === 'auth/email-already-in-use') {
+        try {
+          const existingCred = await signInWithEmailAndPassword(auth, cleanEmail, passwordInput);
+          setIsRegistering(false);
+          await completeAuthenticatedSession(existingCred.user, false);
+          return;
+        } catch {
+          setIsRegistering(false);
+          setAuthError(
+            `An account for ${cleanEmail} already exists. If you previously signed in with Google, click "Continue Instantly with Google Sign-In" above, or click "Forgot Password?" to receive a password reset link in your email inbox.`
+          );
+          return;
+        }
+      }
+
+      if (code === 'auth/operation-not-allowed') {
+        setAuthError(
+          'Email/Password sign-in is currently disabled in your Firebase Console. To enable it, open Firebase Console → Authentication → Sign-in method → Enable "Email/Password", or click "Continue Instantly with Google Sign-In" above.'
+        );
+        return;
+      }
+
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        setAuthError(
+          'Invalid email or password. If you are a new client, switch to the "New Client Registration" tab above, or click "Forgot Password?" to receive a reset link in your email.'
+        );
+        return;
+      }
+
+      setAuthError(
+        err instanceof Error ? err.message : 'Unable to authenticate. Please try again.'
+      );
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    setAuthError(null);
+    setVerificationNotice(null);
+    if (!cleanEmail) {
+      setAuthError('Please enter your email address first so we can send your password reset link.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail, {
+        url: 'https://goldenmindpsychiatry.org/?page=portal',
+      });
+      setVerificationNotice(
+        `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) to set your new password.`
+      );
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setAuthError(
+          'Email/Password authentication must be enabled in Firebase Console (Authentication → Sign-in method → Email/Password) before password reset emails can be dispatched.'
+        );
+      } else {
+        setAuthError(
+          err instanceof Error
+            ? err.message
+            : 'Could not send password reset email. Please verify your email address.'
+        );
+      }
+    }
+  };
+
+  const handleConfirmPasswordResetFromEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetOobCode) return;
+    if (newResetPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newResetPassword !== confirmResetPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+    setResetSubmitting(true);
+    setAuthError(null);
+    try {
+      await confirmPasswordReset(auth, resetOobCode, newResetPassword);
+      setResetOobCode(null);
+      setNewResetPassword('');
+      setConfirmResetPassword('');
+      window.history.replaceState({}, document.title, '/?page=portal');
+      setVerificationNotice(
+        'Your password has been updated! You can now sign in with your new password.'
+      );
     } catch (err: unknown) {
       setAuthError(
         err instanceof Error
-          ? err.message.replace('Firebase: ', '')
-          : 'Authentication failed. Please check your credentials.'
+          ? err.message
+          : 'This password reset link has expired or was already used. Please request a new reset link.'
       );
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
   const handleResendVerification = async () => {
-    if (!auth.currentUser) return;
-    try {
-      await sendEmailVerification(auth.currentUser);
-      setVerificationNotice(
-        `Verification link re-sent to ${auth.currentUser.email}. Please check your inbox and spam folder.`
-      );
-    } catch {
-      setVerificationNotice(
-        'Verification email was recently sent. Please check your inbox or wait a moment before retrying.'
-      );
+    setAuthError(null);
+    if (auth.currentUser) {
+      try {
+        await sendEmailVerification(auth.currentUser, {
+          url: 'https://goldenmindpsychiatry.org/?page=portal',
+        });
+        setVerificationNotice(
+          `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click the link to verify your account.`
+        );
+      } catch (err: unknown) {
+        setAuthError(
+          err instanceof Error
+            ? err.message
+            : 'Verification email was recently sent. Please wait a moment and check your inbox.'
+        );
+      }
     }
   };
 
   const handleRefreshVerification = async () => {
-    if (!auth.currentUser) return;
-    await auth.currentUser.reload();
-    setFirebaseUser({ ...auth.currentUser });
-    if (auth.currentUser.emailVerified) {
-      setVerificationNotice('Your email address has been verified!');
-      setTimeout(() => setVerificationNotice(null), 4000);
+    setAuthError(null);
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      setFirebaseUser({ ...auth.currentUser });
+      if (auth.currentUser.emailVerified) {
+        setVerificationNotice('Your email address is verified! Welcome to your Client Portal.');
+        setTimeout(() => setVerificationNotice(null), 4000);
+      } else {
+        setAuthError(
+          `Your email (${auth.currentUser.email}) is not marked as verified yet. Please click the verification link sent to your email inbox first, then click this button again.`
+        );
+      }
     }
   };
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    setPortalUser(null);
+    setFirebaseUser(null);
     setWorkspaceMode('patient');
   };
 
-  // Complete Digital Intake Form (with input sanitization)
+  // Complete Digital Intake Form (100% Real-Time Firestore)
   const handleCompleteIntake = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingIntake || !portalUser) return;
+    if (!editingIntake || !portalUser || !firebaseUser) return;
     const now = new Date().toISOString();
     const sanitizedResponses: Record<string, string> = {};
     Object.entries(intakeAnswers).forEach(([k, v]) => {
@@ -384,36 +578,35 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         responses: sanitizedResponses,
         completedAt: now,
       });
-
       await addDoc(collection(db, 'messages'), {
         patientId: portalUser.uid,
         patientName: portalUser.fullName,
         senderId: portalUser.uid,
         senderName: portalUser.fullName,
         senderRole: 'patient',
-        subject: `[Automated Alert -> ${CLINIC_OWNER_EMAIL}] Completed Intake: ${editingIntake.title}`,
+        subject: `Completed Intake: ${editingIntake.title}`,
         body: `Patient ${portalUser.fullName} (${portalUser.email}) electronically signed and submitted "${editingIntake.title}" on ${
           now.split('T')[0]
         }.`,
         read: false,
         createdAt: now,
       });
-
       setEditingIntake(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `intakes/${editingIntake.id}`);
     }
   };
 
-  // Reschedule or Cancel Appointment
+  // Reschedule or Cancel Appointment (100% Real-Time Firestore)
   const handleSaveReschedule = async (apptId: string) => {
-    if (!newApptDate) return;
+    if (!newApptDate || !portalUser || !firebaseUser) return;
+    const now = new Date().toISOString();
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
         preferredDate: sanitizeClinicalInput(newApptDate, 30),
         preferredTime: sanitizeClinicalInput(newApptTime, 80),
         status: 'confirmed',
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       });
       setReschedulingApptId(null);
     } catch (err) {
@@ -422,20 +615,22 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   };
 
   const handleCancelAppointment = async (apptId: string) => {
+    if (!portalUser || !firebaseUser) return;
+    const now = new Date().toISOString();
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
         status: 'cancelled',
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `appointments/${apptId}`);
     }
   };
 
-  // Submit PHQ-9, GAD-7, or Daily Mood
+  // Submit PHQ-9, GAD-7, or Daily Mood (100% Real-Time Firestore)
   const handleSubmitAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!portalUser) return;
+    if (!portalUser || !firebaseUser) return;
 
     const totalScore =
       activeScaleTab === 'PHQ-9'
@@ -444,17 +639,19 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         ? gad7Scores.reduce((acc, v) => acc + v, 0)
         : moodScore;
 
+    const answers =
+      activeScaleTab === 'PHQ-9'
+        ? phq9Scores
+        : activeScaleTab === 'GAD-7'
+        ? gad7Scores
+        : [moodScore];
+
     await submitClinicalAssessment({
       patientId: portalUser.uid,
       patientName: portalUser.fullName,
       type: activeScaleTab,
       totalScore,
-      answers:
-        activeScaleTab === 'PHQ-9'
-          ? phq9Scores
-          : activeScaleTab === 'GAD-7'
-          ? gad7Scores
-          : [moodScore],
+      answers,
       sleepHours,
       energyLevel,
       medicationTaken: medTakenToday,
@@ -463,15 +660,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
     setAssessmentNotes('');
     setScaleSuccessBanner(
-      `${activeScaleTab} Assessment logged (${totalScore} pts) and synced to Brenda Hobyani, PMHNP-BC's clinical chart.`
+      `${activeScaleTab} Assessment logged (${totalScore} pts) and synced in real time to Brenda Hobyani, PMHNP-BC's clinical chart.`
     );
     setTimeout(() => setScaleSuccessBanner(null), 5000);
   };
 
-  // Patient adds an active medication for refill coordination
+  // Patient adds an active medication for refill coordination (100% Real-Time Firestore)
   const handleAddPatientMedication = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!portalUser || !newMedName.trim() || !newMedDosage.trim()) return;
+    if (!portalUser || !firebaseUser || !newMedName.trim() || !newMedDosage.trim()) return;
     const now = new Date().toISOString();
     try {
       await addDoc(collection(db, 'medications'), {
@@ -483,9 +680,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         instructions:
           'Take as directed. Please note: some psychiatric and anxiety medications can be habit forming; never adjust dosage without provider guidance.',
         pharmacy: sanitizeClinicalInput(
-          prefPharmacy ||
-            portalUser.preferredPharmacy ||
-            'H-E-B Pharmacy · Austin / Texas Statewide e-Rx',
+          prefPharmacy || portalUser.preferredPharmacy || '',
           200
         ),
         refillsRemaining: 2,
@@ -500,10 +695,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Send secure message to Brenda Hobyani & info@goldenmindpsychiatry.org
+  // Send secure message to Brenda Hobyani & info@goldenmindpsychiatry.org (100% Real-Time Firestore)
   const handleSendPatientMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!portalUser || !msgSubject.trim() || !msgBody.trim()) return;
+    if (!portalUser || !firebaseUser || !msgSubject.trim() || !msgBody.trim()) return;
     const now = new Date().toISOString();
     try {
       await addDoc(collection(db, 'messages'), {
@@ -524,10 +719,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Save Insurance & Preferred Texas Pharmacy
+  // Save Insurance & Preferred Texas Pharmacy (100% Real-Time Firestore)
   const handleSaveInsuranceProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!portalUser) return;
+    if (!portalUser || !firebaseUser) return;
     const now = new Date().toISOString();
     const cleanCarrier = sanitizeClinicalInput(insCarrier, 120);
     const cleanMember = sanitizeClinicalInput(insMemberId, 64);
@@ -541,14 +736,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         preferredPharmacy: cleanPharm,
         updatedAt: now,
       });
-      setPortalUser({
-        ...portalUser,
-        insuranceProvider: cleanCarrier,
-        insuranceMemberId: cleanMember,
-        insuranceGroupNumber: cleanGroup,
-        preferredPharmacy: cleanPharm,
-        updatedAt: now,
-      });
       setProfileSavedNotice(true);
       setTimeout(() => setProfileSavedNotice(false), 4000);
     } catch (err) {
@@ -556,8 +743,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Pay Copay Statement in 1 click
+  // Pay Copay Statement in 1 click (100% Real-Time Firestore)
   const handlePayInvoice = async (invoiceId: string) => {
+    if (!portalUser || !firebaseUser) return;
     const now = new Date().toISOString();
     try {
       await updateDoc(doc(db, 'invoices', invoiceId), {
@@ -578,6 +766,78 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           <div className="h-10 w-full bg-stone-200 rounded-[12px] animate-pulse" />
         </div>
       </div>
+    );
+  }
+
+  // ============================================================================
+  // 0. PASSWORD RESET ACTION SCREEN (When User Clicks Reset Link From Their Email Inbox)
+  // ============================================================================
+  if (resetOobCode) {
+    return (
+      <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
+        <div className="max-w-md w-full bg-white border border-stone-200 rounded-[32px] p-8 shadow-xl space-y-5">
+          <div className="flex items-center gap-3">
+            <img
+              src="/golden_mind_card.webp"
+              alt="Golden Mind Psychiatry PLLC"
+              className="w-14 h-auto rounded-lg border border-[#D4AF37]/40"
+            />
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
+                Golden Mind Psychiatry PLLC
+              </span>
+              <h1 className="text-xl font-bold font-portal-heading text-stone-900">
+                Set Your New Portal Password
+              </h1>
+            </div>
+          </div>
+
+          {authError && (
+            <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleConfirmPasswordResetFromEmail} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                New Password *
+              </label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                placeholder="At least 6 characters"
+                value={newResetPassword}
+                onChange={(e) => setNewResetPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Confirm New Password *
+              </label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                placeholder="Re-enter your new password"
+                value={confirmResetPassword}
+                onChange={(e) => setConfirmResetPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={resetSubmitting}
+              className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer disabled:opacity-60"
+            >
+              {resetSubmitting ? 'Updating Password...' : 'Save New Password & Return to Sign In'}
+            </button>
+          </form>
+        </div>
+      </section>
     );
   }
 
@@ -612,9 +872,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    <strong>Automated Email Verification & Intake:</strong> Instant verification
-                    link sent to your email and automated notification to{' '}
-                    <span className="text-[#D4AF37]">{CLINIC_OWNER_EMAIL}</span>.
+                    <strong>Mandatory Email Verification:</strong> Account registration dispatches a
+                    verification link directly to your email inbox before portal access is unlocked.
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5">
@@ -649,34 +908,70 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           </div>
 
           {/* Right Authentication Form Column */}
-          <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center space-y-6">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-4">
-              <div>
-                <h2 className="text-2xl font-bold font-portal-heading text-stone-900">
-                  {isRegistering ? 'Create Your Client Portal Account' : 'Sign In to Client Portal'}
-                </h2>
-                <p className="text-xs text-stone-500 mt-1">
-                  {isRegistering
-                    ? 'Self-register to receive your verification email and unlock your private chart'
-                    : 'Access your private appointments, intake forms, medications, and messages'}
-                </p>
-              </div>
+          <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center space-y-5">
+            {/* Segmented Mode Tabs: Sign In vs New Client Registration */}
+            <div className="grid grid-cols-2 p-1 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
               <button
                 type="button"
                 onClick={() => {
-                  setIsRegistering(!isRegistering);
+                  setIsRegistering(false);
                   setAuthError(null);
                 }}
-                className="text-xs font-semibold text-[#9E7206] hover:underline cursor-pointer"
+                className={`py-2.5 px-3 rounded-[12px] text-xs font-bold transition-all cursor-pointer ${
+                  !isRegistering
+                    ? 'bg-[#0A0A0A] text-[#D4AF37] shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
               >
-                {isRegistering ? 'Already have an account? Sign In' : 'New Patient? Register'}
+                Sign In (Existing Client)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegistering(true);
+                  setAuthError(null);
+                }}
+                className={`py-2.5 px-3 rounded-[12px] text-xs font-bold transition-all cursor-pointer ${
+                  isRegistering
+                    ? 'bg-[#0A0A0A] text-[#D4AF37] shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                New Client Registration
               </button>
             </div>
 
+            <div className="border-b border-stone-200 pb-3">
+              <h2 className="text-2xl font-bold font-portal-heading text-stone-900">
+                {isRegistering ? 'Create Your Client Portal Account' : 'Sign In to Client Portal'}
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                {isRegistering
+                  ? 'Register with your email to receive a verification link in your inbox'
+                  : 'Sign in with Google or your verified email and password'}
+              </p>
+            </div>
+
             {authError && (
-              <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{authError}</span>
+              <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <p>{authError}</p>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="font-bold text-[#9E7206] underline cursor-pointer"
+                  >
+                    Send Password Reset Link to {emailInput.trim() || 'My Email Inbox'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {verificationNotice && (
+              <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
+                <MailCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                <span>{verificationNotice}</span>
               </div>
             )}
 
@@ -774,9 +1069,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Password *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-stone-700">
+                      Password *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-[11px] font-semibold text-[#9E7206] hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <input
                     type="password"
                     required
@@ -805,9 +1109,82 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   }
 
   // Only verified provider emails can ever see the Provider View toggle
-  const isVerifiedProviderAccount = isAuthorizedProviderEmail(firebaseUser.email);
+  const isVerifiedProviderAccount = isAuthorizedProviderEmail(
+    firebaseUser?.email || portalUser.email
+  );
 
-  // Computed Metrics for Patient Portal Overview
+  // ============================================================================
+  // 2. STRICT EMAIL VERIFICATION GATE (Blocks Portal Until User Verifies Their Email)
+  // ============================================================================
+  if (!firebaseUser.emailVerified && !isVerifiedProviderAccount) {
+    return (
+      <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
+        <div className="max-w-lg w-full bg-white border border-stone-200 rounded-[32px] p-8 sm:p-10 shadow-xl space-y-6 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-[#FAF6EA] border border-[#D4AF37] flex items-center justify-center text-[#9E7206]">
+            <MailCheck className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
+              Email Verification Required
+            </span>
+            <h1 className="text-2xl font-bold font-portal-heading text-stone-900">
+              Verify Your Email Address
+            </h1>
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              We have sent a verification email to{' '}
+              <strong className="text-stone-900">{firebaseUser.email}</strong>. For your HIPAA
+              privacy and security, please open your email inbox and click the verification link
+              before accessing your Client Portal chart.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 text-left flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          {verificationNotice && (
+            <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 text-left flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              <span>{verificationNotice}</span>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={handleRefreshVerification}
+              className="w-full py-3.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>I Have Clicked the Link in My Email — Enter Portal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              className="w-full py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs cursor-pointer hover:bg-[#f3ebd3] transition-colors"
+            >
+              Resend Verification Email to {firebaseUser.email}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full py-2.5 px-4 rounded-[12px] text-xs font-semibold text-stone-500 hover:text-red-600 cursor-pointer"
+            >
+              Sign Out / Use a Different Email Address
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Computed Real-Time Metrics for Patient Portal Overview
   const pendingIntakes = intakes.filter((i) => i.status === 'pending');
   const nextAppointment = appointments.find(
     (a) => a.status === 'confirmed' || a.status === 'requested'
@@ -884,9 +1261,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   return (
     <div className="min-h-[88vh] bg-[#FAF9F5] flex flex-col lg:flex-row font-portal-body text-stone-800">
       {/* ==========================================================================
-          SIDEBAR NAVIGATION (256px width, #FFFFFF surface, 1px border, 40px icon logo,
-          12px padding & radius links, 4px solid right-border active indicator,
-          'Practice Verified' bottom status card & red-500 logout button)
+          SIDEBAR NAVIGATION
          ========================================================================== */}
       <aside className="w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-stone-200 flex flex-col justify-between">
         <div>
@@ -915,7 +1290,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </button>
           </div>
 
-          {/* Navigation Links (stacked vertically with 4px spacing, 12px padding, 12px radius) */}
+          {/* Navigation Links */}
           <nav
             className={`${
               mobileSidebarOpen ? 'block' : 'hidden lg:block'
@@ -1001,12 +1376,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       </aside>
 
       {/* ==========================================================================
-          FLUID MAIN CONTENT AREA (Sticky Glassmorphism Header + 1280px Max-Width Container)
+          FLUID MAIN CONTENT AREA
          ========================================================================== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Sticky 72px Glassmorphism Header */}
         <header className="sticky top-0 z-30 min-h-[72px] bg-white/90 backdrop-blur-md border-b border-stone-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
-          {/* Left-Aligned Title (18px Bold) & Subtitle (12px Slate/Stone-500) Stack */}
           <div>
             <h1 className="text-[18px] font-bold font-portal-heading text-stone-900 leading-tight">
               {workspaceMode === 'provider' && isVerifiedProviderAccount
@@ -1018,7 +1392,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </p>
           </div>
 
-          {/* Right-Aligned Utility Bar: Pill Search, Notification Bell with Red Dot, Book CTA, 40px Avatar */}
           <div className="flex items-center gap-3">
             <div className="relative hidden sm:block">
               <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1062,39 +1435,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
         {/* Main 1280px Max-Width Container */}
         <div className="p-6 sm:p-8 max-w-[1280px] w-full mx-auto space-y-6">
-          {/* Email Verification Banner (if unverified) */}
-          {(!firebaseUser.emailVerified || verificationNotice) && (
-            <div className="bg-[#FAF6EA] border border-[#D4AF37] rounded-[24px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-start gap-2.5">
-                <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-stone-900">
-                    {firebaseUser.emailVerified
-                      ? 'Email Verified & Synced'
-                      : 'Verify Your Email Address'}
-                  </p>
-                  <p className="text-stone-600 mt-0.5">
-                    {verificationNotice ||
-                      `We sent an automated verification link to ${firebaseUser.email} and notified our clinic coordinator at ${CLINIC_OWNER_EMAIL}.`}
-                  </p>
-                </div>
+          {verificationNotice && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-[20px] p-4 flex items-center justify-between gap-3 text-xs text-emerald-800">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{verificationNotice}</span>
               </div>
-              {!firebaseUser.emailVerified && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={handleResendVerification}
-                    className="px-3.5 py-2 rounded-[12px] bg-white border border-stone-300 text-stone-800 font-semibold hover:bg-stone-50 cursor-pointer"
-                  >
-                    Resend Email
-                  </button>
-                  <button
-                    onClick={handleRefreshVerification}
-                    className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-semibold cursor-pointer"
-                  >
-                    I've Verified — Refresh
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={() => setVerificationNotice(null)}
+                className="text-emerald-700 font-bold hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
@@ -1366,36 +1718,44 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-stone-200 text-xs">
-                              {filteredInvoices.map((inv) => (
-                                <tr key={inv.id} className="hover:bg-stone-50/80">
-                                  <td className="py-4 px-5 font-bold text-stone-900">
-                                    {inv.description}
-                                  </td>
-                                  <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-500">
-                                    {inv.serviceDate}
-                                  </td>
-                                  <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
-                                    -${inv.insuranceCoveredAmount.toFixed(2)}
-                                  </td>
-                                  <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
-                                    ${inv.patientResponsibility.toFixed(2)}
-                                  </td>
-                                  <td className="py-4 px-5 text-right">
-                                    {inv.status === 'paid' ? (
-                                      <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
-                                        Disbursed / Paid
-                                      </span>
-                                    ) : (
-                                      <button
-                                        onClick={() => handlePayInvoice(inv.id)}
-                                        className="px-3.5 py-1.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                                      >
-                                        Pay ${inv.patientResponsibility.toFixed(2)}
-                                      </button>
-                                    )}
+                              {filteredInvoices.length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} className="py-6 px-5 text-center text-stone-500">
+                                    No billing statements or copays due at this time.
                                   </td>
                                 </tr>
-                              ))}
+                              ) : (
+                                filteredInvoices.map((inv) => (
+                                  <tr key={inv.id} className="hover:bg-stone-50/80">
+                                    <td className="py-4 px-5 font-bold text-stone-900">
+                                      {inv.description}
+                                    </td>
+                                    <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-500">
+                                      {inv.serviceDate}
+                                    </td>
+                                    <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
+                                      -${inv.insuranceCoveredAmount.toFixed(2)}
+                                    </td>
+                                    <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
+                                      ${inv.patientResponsibility.toFixed(2)}
+                                    </td>
+                                    <td className="py-4 px-5 text-right">
+                                      {inv.status === 'paid' ? (
+                                        <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
+                                          Disbursed / Paid
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => handlePayInvoice(inv.id)}
+                                          className="px-3.5 py-1.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                                        >
+                                          Pay ${inv.patientResponsibility.toFixed(2)}
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
                             </tbody>
                           </table>
                         </div>
@@ -1858,7 +2218,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </h2>
                         <p className="text-xs text-stone-600">
                           Preferred Texas Pharmacy on File:{' '}
-                          <strong className="text-[#9E7206]">{prefPharmacy}</strong>
+                          <strong className="text-[#9E7206]">
+                            {prefPharmacy || 'Update in Payment & Insurance tab'}
+                          </strong>
                         </p>
                         <div className="p-4 rounded-[20px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-xs text-stone-800">
                           <strong>Important Clinical Safety Notice:</strong> Some psychiatric and
@@ -1899,7 +2261,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                                   {med.frequency} · Prescribed by {med.prescribedBy}
                                 </p>
                                 <p className="text-xs text-stone-500">
-                                  Pharmacy: {med.pharmacy} ·{' '}
+                                  Pharmacy: {med.pharmacy || prefPharmacy || 'On File'} ·{' '}
                                   <span className="font-portal-heading tabular-nums font-semibold">
                                     {med.refillsRemaining} refills remaining
                                   </span>
@@ -1934,7 +2296,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
                                 <button
                                   disabled={med.refillStatus === 'refill_requested'}
-                                  onClick={() => requestMedicationRefill(med.id, prefPharmacy)}
+                                  onClick={async () => {
+                                    await requestMedicationRefill(
+                                      med.id,
+                                      prefPharmacy || med.pharmacy || ''
+                                    );
+                                  }}
                                   className={`px-4 py-2.5 rounded-[12px] text-xs font-bold cursor-pointer ${
                                     med.refillStatus === 'refill_requested'
                                       ? 'bg-stone-200 text-stone-500 cursor-not-allowed'
@@ -2382,44 +2749,51 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                           </h2>
                         </div>
                         <div className="divide-y divide-stone-200 p-6">
-                          {invoices.map((inv) => (
-                            <div
-                              key={inv.id}
-                              className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                            >
-                              <div className="space-y-1">
-                                <p className="font-bold font-portal-heading text-stone-900 text-sm">
-                                  {inv.description}
-                                </p>
-                                <p className="text-stone-500 font-portal-heading tabular-nums">
-                                  Service Date: {inv.serviceDate} · Billed: $
-                                  {inv.amount.toFixed(2)} · Insurance Adjustment: -$
-                                  {inv.insuranceCoveredAmount.toFixed(2)}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-4 shrink-0">
-                                <div className="text-right font-portal-heading tabular-nums">
-                                  <p className="text-[11px] text-stone-500">Your Copay / Balance</p>
-                                  <p className="text-base font-bold text-stone-900">
-                                    ${inv.patientResponsibility.toFixed(2)}
+                          {invoices.length === 0 ? (
+                            <p className="text-xs text-stone-500 text-center py-4">
+                              No billing statements have been issued yet. Statements appear here in
+                              real time once posted by your provider.
+                            </p>
+                          ) : (
+                            invoices.map((inv) => (
+                              <div
+                                key={inv.id}
+                                className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                              >
+                                <div className="space-y-1">
+                                  <p className="font-bold font-portal-heading text-stone-900 text-sm">
+                                    {inv.description}
+                                  </p>
+                                  <p className="text-stone-500 font-portal-heading tabular-nums">
+                                    Service Date: {inv.serviceDate} · Billed: $
+                                    {inv.amount.toFixed(2)} · Insurance Adjustment: -$
+                                    {inv.insuranceCoveredAmount.toFixed(2)}
                                   </p>
                                 </div>
-                                {inv.status === 'paid' ? (
-                                  <span className="px-3.5 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-xs uppercase">
-                                    Disbursed / Paid
-                                  </span>
-                                ) : (
-                                  <button
-                                    onClick={() => handlePayInvoice(inv.id)}
-                                    className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                                  >
-                                    Pay ${inv.patientResponsibility.toFixed(2)}
-                                  </button>
-                                )}
+
+                                <div className="flex items-center gap-4 shrink-0">
+                                  <div className="text-right font-portal-heading tabular-nums">
+                                    <p className="text-[11px] text-stone-500">Your Copay / Balance</p>
+                                    <p className="text-base font-bold text-stone-900">
+                                      ${inv.patientResponsibility.toFixed(2)}
+                                    </p>
+                                  </div>
+                                  {inv.status === 'paid' ? (
+                                    <span className="px-3.5 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-xs uppercase">
+                                      Disbursed / Paid
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handlePayInvoice(inv.id)}
+                                      className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                                    >
+                                      Pay ${inv.patientResponsibility.toFixed(2)}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))
+                          )}
                         </div>
                       </div>
 
@@ -2432,7 +2806,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </h2>
                         {profileSavedNotice && (
                           <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-                            Insurance & Pharmacy profile updated!
+                            Insurance & Pharmacy profile saved to database!
                           </div>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2445,6 +2819,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                               onChange={(e) => setInsCarrier(e.target.value)}
                               className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
                             >
+                              <option value="">Select Insurance Carrier...</option>
                               <option value="Blue Cross Blue Shield (BCBS)">
                                 Blue Cross Blue Shield (BCBS)
                               </option>
@@ -2465,6 +2840,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                             </label>
                             <input
                               type="text"
+                              placeholder="Enter your Insurance Member ID"
                               value={insMemberId}
                               onChange={(e) => setInsMemberId(e.target.value)}
                               className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
@@ -2476,6 +2852,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                             </label>
                             <input
                               type="text"
+                              placeholder="Enter your Group Number"
                               value={insGroupId}
                               onChange={(e) => setInsGroupId(e.target.value)}
                               className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
@@ -2488,6 +2865,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                           </label>
                           <input
                             type="text"
+                            placeholder="Enter your preferred Texas pharmacy name & city/address"
                             value={prefPharmacy}
                             onChange={(e) => setPrefPharmacy(e.target.value)}
                             className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
@@ -2575,7 +2953,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </p>
                         <p className="text-[12px] text-stone-500 truncate">
                           {pendingIntakes.length === 0
-                            ? `Verified · ${prefPharmacy}`
+                            ? `All intake forms signed${prefPharmacy ? ` · ${prefPharmacy}` : ''}`
                             : `${pendingIntakes.length} intake form(s) awaiting signature`}
                         </p>
                       </div>

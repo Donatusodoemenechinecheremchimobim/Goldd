@@ -64,8 +64,8 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [rxPatientId, setRxPatientId] = useState('');
   const [rxName, setRxName] = useState('');
   const [rxDosage, setRxDosage] = useState('');
-  const [rxFrequency, setRxFrequency] = useState('Once daily in the morning');
-  const [rxPharmacy, setRxPharmacy] = useState('H-E-B Pharmacy · Texas Statewide e-Rx');
+  const [rxFrequency, setRxFrequency] = useState('Once daily');
+  const [rxPharmacy, setRxPharmacy] = useState('');
   const [rxRefills, setRxRefills] = useState(3);
   const [rxInstructions, setRxInstructions] = useState(
     'Take as prescribed. Note: Some psychiatric medications can be habit forming; never adjust dosage without consulting Brenda Hobyani, PMHNP-BC.'
@@ -78,9 +78,9 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
 
   // New Invoice state
   const [invPatientId, setInvPatientId] = useState('');
-  const [invDesc, setInvDesc] = useState('Follow-Up Telepsychiatry Medication Visit (CPT 99214)');
-  const [invTotal, setInvTotal] = useState(165);
-  const [invCovered, setInvCovered] = useState(135);
+  const [invDesc, setInvDesc] = useState('');
+  const [invTotal, setInvTotal] = useState(0);
+  const [invCovered, setInvCovered] = useState(0);
 
   useEffect(() => {
     const unsubUsers = onSnapshot(

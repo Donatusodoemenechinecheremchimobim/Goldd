@@ -7,6 +7,7 @@ interface ContactPageProps {
 
 export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,9 +15,21 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
     message: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
+    setSending(true);
+    try {
+      await fetch('/api/email/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+    } catch {
+      // Non-fatal if SMTP is not yet configured in environment
+    } finally {
+      setSending(false);
+      setSent(true);
+    }
   };
 
   return (
