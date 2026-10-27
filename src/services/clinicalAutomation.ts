@@ -21,8 +21,10 @@ import {
 } from '../types';
 
 export const CLINIC_OWNER_EMAIL = 'info@goldenmindpsychiatry.org';
+export const ADMIN_PROVIDER_EMAIL = 'beehobs@yahoo.com';
 
 export const AUTHORIZED_PROVIDER_EMAILS = [
+  'beehobs@yahoo.com',
   'chibundusadiq@gmail.com',
   'info@goldenmindpsychiatry.org',
   'info@goldenmindpsychiatry.com',
@@ -32,6 +34,29 @@ export const AUTHORIZED_PROVIDER_EMAILS = [
 export function isAuthorizedProviderEmail(email?: string | null): boolean {
   if (!email) return false;
   return AUTHORIZED_PROVIDER_EMAILS.includes(email.trim().toLowerCase());
+}
+
+/**
+ * Dispatches an instant email alert when a client sends a portal message (to both beehobs@yahoo.com and info@goldenmindpsychiatry.org)
+ * or when the provider sends a portal message/link to a client.
+ */
+export async function dispatchPortalMessageEmailAlert(params: {
+  direction: 'patient_to_provider' | 'provider_to_patient';
+  patientName: string;
+  patientEmail?: string;
+  subject: string;
+  body: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch('/api/email/message-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -125,13 +150,20 @@ export async function ensurePatientOnboarding(
   );
   const now = new Date().toISOString();
   const isVerifiedProvider = isAuthorizedProviderEmail(email);
-  // Firestore rules require role == 'patient' unless email_verified is true for admin emails
-  const canWriteProviderRole = isVerifiedProvider && authUser.emailVerified;
+  const isDirectAdminEmail = [
+    'beehobs@yahoo.com',
+    'info@goldenmindpsychiatry.org',
+    'info@goldenmindpsychiatry.com',
+  ].includes(email.toLowerCase());
+  const canWriteProviderRole =
+    isVerifiedProvider && (authUser.emailVerified || isDirectAdminEmail);
 
   const rawName =
-    extraProfile?.fullName?.trim() ||
-    authUser.displayName?.trim() ||
-    email.split('@')[0].replace(/[._-]/g, ' ');
+    email.toLowerCase() === 'beehobs@yahoo.com'
+      ? 'Brenda Hobyani, PMHNP-BC'
+      : extraProfile?.fullName?.trim() ||
+        authUser.displayName?.trim() ||
+        email.split('@')[0].replace(/[._-]/g, ' ');
   const cleanName = sanitizeClinicalInput(rawName, 120) || 'Patient';
   const formattedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
 
@@ -159,7 +191,7 @@ export async function ensurePatientOnboarding(
       extraProfile?.preferredPharmacy || '',
       200
     ),
-    onboardingCompleted: false,
+    onboardingCompleted: isVerifiedProvider,
     createdAt: now,
     updatedAt: now,
   };
@@ -189,9 +221,12 @@ export async function ensurePatientOnboarding(
     const existing = userSnap.data() as PortalUser;
     portalUser = {
       ...existing,
-      fullName: extraProfile?.fullName?.trim()
-        ? formattedName
-        : existing.fullName || formattedName,
+      fullName:
+        email.toLowerCase() === 'beehobs@yahoo.com'
+          ? 'Brenda Hobyani, PMHNP-BC'
+          : extraProfile?.fullName?.trim()
+          ? formattedName
+          : existing.fullName || formattedName,
       phone: extraProfile?.phone?.trim()
         ? sanitizeClinicalInput(extraProfile.phone, 40)
         : existing.phone || '',
@@ -242,8 +277,8 @@ export async function ensurePatientOnboarding(
     // Non-fatal if no guest appointments match
   }
 
-  // Step 3: Run first-time automated clinical onboarding batch if not yet completed
-  if (!portalUser.onboardingCompleted) {
+  // Step 3: Run first-time automated clinical onboarding batch if not yet completed (only for patients)
+  if (!portalUser.onboardingCompleted && !isVerifiedProvider) {
     try {
       const batch = writeBatch(db);
 

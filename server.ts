@@ -11,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CLINIC_EMAIL = process.env.DOCTOR_NOTIFICATION_EMAIL || 'info@goldenmindpsychiatry.org';
+const ADMIN_YAHOO_EMAIL = 'beehobs@yahoo.com';
+const DOCTOR_ALERT_RECIPIENTS = `${CLINIC_EMAIL}, ${ADMIN_YAHOO_EMAIL}`;
 const SITE_URL = process.env.APP_URL || 'https://goldenmindpsychiatry.org';
 const LOGO_URL = `${SITE_URL}/golden_mind_card.webp`;
 
@@ -107,7 +109,27 @@ async function sendClinicEmail(opts: {
 
 async function startServer() {
   const app = express();
-  app.use(express.json());
+  app.set('trust proxy', 1);
+  app.use(express.json({ limit: '1mb' }));
+
+  // Production security & Google Sign-In popup compatibility headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Required so Firebase Google Sign-In popups can communicate back across origins
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    next();
+  });
+
+  // Health check endpoint for VPS / Nginx monitoring
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'Golden Mind Psychiatry PLLC',
+      uptimeSeconds: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // 1. Appointment Booking Email Dispatch (Doctor Notification + Patient Confirmation with Logo)
   app.post('/api/email/appointment', async (req, res) => {
@@ -126,7 +148,7 @@ async function startServer() {
         telehealthUrl,
       } = req.body || {};
 
-      // Branded Doctor Notification Email to info@goldenmindpsychiatry.org
+      // Branded Doctor Notification Email to info@goldenmindpsychiatry.org & beehobs@yahoo.com
       const doctorHtml = buildBrandedEmailHtml(
         `New Telehealth Appointment Booking: ${fullName}`,
         `
@@ -174,7 +196,7 @@ async function startServer() {
       );
 
       const doctorResult = await sendClinicEmail({
-        to: CLINIC_EMAIL,
+        to: DOCTOR_ALERT_RECIPIENTS,
         replyTo: email || CLINIC_EMAIL,
         subject: `[New Appointment] ${fullName} — ${conditionReason} (${preferredDate || 'Next Available'})`,
         html: doctorHtml,
@@ -195,7 +217,7 @@ async function startServer() {
     }
   });
 
-  // 2. Confidential Contact Inquiry Email Dispatch to Doctor (info@goldenmindpsychiatry.org)
+  // 2. Confidential Contact Inquiry Email Dispatch to Doctor (info@goldenmindpsychiatry.org & beehobs@yahoo.com)
   app.post('/api/email/contact', async (req, res) => {
     try {
       const { name, email, phone, message } = req.body || {};
@@ -213,7 +235,7 @@ async function startServer() {
       );
 
       const result = await sendClinicEmail({
-        to: CLINIC_EMAIL,
+        to: DOCTOR_ALERT_RECIPIENTS,
         replyTo: email || CLINIC_EMAIL,
         subject: `[Website Inquiry] ${name} — Golden Mind Psychiatry PLLC`,
         html,
@@ -259,7 +281,7 @@ async function startServer() {
         `
       );
       const result = await sendClinicEmail({
-        to: CLINIC_EMAIL,
+        to: DOCTOR_ALERT_RECIPIENTS,
         subject: `[New Portal Registration] ${fullName || email}`,
         html: doctorAlertHtml,
       });
@@ -271,21 +293,105 @@ async function startServer() {
     }
   });
 
+  // 4. Instant Portal Message Notification Alert (Client -> Provider beehobs@yahoo.com & info@goldenmindpsychiatry.org, or Provider -> Client)
+  app.post('/api/email/message-alert', async (req, res) => {
+    try {
+      const { direction, patientName, patientEmail, subject, body } = req.body || {};
+
+      if (direction === 'provider_to_patient' && patientEmail) {
+        const patientMsgHtml = buildBrandedEmailHtml(
+          `New Clinical Message from Brenda Hobyani, PMHNP-BC`,
+          `
+          <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Hello ${patientName || 'Valued Patient'},</h2>
+          <p style="margin:0 0 16px 0;"><strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> has sent you a new message or care update in your <strong>Golden Mind Psychiatry Client Portal</strong>.</p>
+          <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:14px;padding:16px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:#9E7206;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
+              Subject: ${subject || 'Clinical Care Update'}
+            </div>
+            <div style="font-size:13px;color:#1C1917;white-space:pre-line;">
+              ${body || 'Please sign in to your Client Portal to view your message and any attached links.'}
+            </div>
+          </div>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
+              Open Client Portal &amp; View Message
+            </a>
+          </div>
+          `
+        );
+
+        const result = await sendClinicEmail({
+          to: patientEmail,
+          subject: `[Golden Mind Portal] New Message: ${subject || 'Update from Brenda Hobyani, PMHNP-BC'}`,
+          html: patientMsgHtml,
+        });
+        res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
+        return;
+      }
+
+      // Default: Client sent a message -> Alert BOTH beehobs@yahoo.com and info@goldenmindpsychiatry.org
+      const adminAlertHtml = buildBrandedEmailHtml(
+        `New Client Portal Message from ${patientName || 'Patient'}`,
+        `
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Message in Your Portal</h2>
+        <p style="margin:0 0 16px 0;"><strong>${patientName || 'A Client'}</strong> (${patientEmail || 'Registered Portal Client'}) just sent you a message in the Golden Mind Psychiatry Portal. Please open your Provider Command Center to review and reply.</p>
+        <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:14px;padding:16px;margin-bottom:20px;">
+          <div style="font-size:12px;font-weight:700;color:#9E7206;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
+            Subject: ${subject || 'Client Portal Message'}
+          </div>
+          <div style="font-size:13px;color:#1C1917;white-space:pre-line;">
+            ${body || ''}
+          </div>
+        </div>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
+            Go to Provider Portal &amp; Check Message
+          </a>
+        </div>
+        `
+      );
+
+      const result = await sendClinicEmail({
+        to: DOCTOR_ALERT_RECIPIENTS,
+        replyTo: patientEmail || CLINIC_EMAIL,
+        subject: `[Client Portal Message] ${patientName || 'Patient'} — ${subject || 'New Message'}`,
+        html: adminAlertHtml,
+      });
+
+      res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
+    } catch (error) {
+      console.error('Portal message alert email error:', error);
+      res.status(200).json({ ok: true, deliveredViaSmtp: false });
+    }
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      '/assets',
+      express.static(path.join(distPath, 'assets'), {
+        maxAge: '365d',
+        immutable: true,
+      })
+    );
+    app.use(
+      express.static(distPath, {
+        maxAge: '1h',
+      })
+    );
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Golden Mind Psychiatry server running on http://0.0.0.0:${PORT}`);
   });

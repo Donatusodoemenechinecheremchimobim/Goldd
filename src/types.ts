@@ -64,6 +64,12 @@ export interface AppointmentFormData {
 
 export type UserRole = 'patient' | 'provider';
 
+export interface SharedPatientResource {
+  title: string;
+  url: string;
+  addedAt: string;
+}
+
 export interface PortalUser {
   uid: string;
   email: string;
@@ -75,6 +81,10 @@ export interface PortalUser {
   insuranceMemberId?: string;
   insuranceGroupNumber?: string;
   preferredPharmacy?: string;
+  diagnosis?: string;
+  treatmentPlanNotes?: string;
+  clinicalRecommendations?: string;
+  sharedResources?: SharedPatientResource[];
   onboardingCompleted: boolean;
   createdAt: string;
   updatedAt: string;
@@ -147,7 +157,12 @@ export interface AssessmentRecord {
   createdAt: string;
 }
 
-export type RefillStatus = 'active' | 'refill_requested' | 'approved_sent' | 'denied';
+export type RefillStatus =
+  | 'active'
+  | 'refill_requested'
+  | 'approved_sent'
+  | 'denied'
+  | 'discontinued';
 
 export interface MedicationRecord {
   id: string;

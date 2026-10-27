@@ -15,9 +15,10 @@ service cloud.firestore {
     // Strictly locked to authorized clinic provider email addresses — no self-promotion allowed
     function isAdmin() {
       return isSignedIn() && (
+        request.auth.token.email == "beehobs@yahoo.com" ||
+        request.auth.token.email == "info@goldenmindpsychiatry.org" ||
+        request.auth.token.email == "info@goldenmindpsychiatry.com" ||
         (request.auth.token.email == "chibundusadiq@gmail.com" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "info@goldenmindpsychiatry.org" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "info@goldenmindpsychiatry.com" && request.auth.token.email_verified == true) ||
         (request.auth.token.email == "goldenmindpsychiatry@gmail.com" && request.auth.token.email_verified == true) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
@@ -92,9 +93,9 @@ service cloud.firestore {
       isValidString(data.medicationName, 1, 200) &&
       isValidString(data.dosage, 1, 100) &&
       isValidString(data.frequency, 1, 160) &&
-      isValidString(data.pharmacy, 1, 250) &&
+      isValidString(data.pharmacy, 0, 250) &&
       data.refillsRemaining is number && data.refillsRemaining >= 0 && data.refillsRemaining <= 99 &&
-      data.refillStatus in ['active', 'refill_requested', 'approved_sent', 'denied'] &&
+      data.refillStatus in ['active', 'refill_requested', 'approved_sent', 'denied', 'discontinued'] &&
       isValidString(data.prescribedBy, 1, 160) &&
       isValidString(data.updatedAt, 1, 64);
     }

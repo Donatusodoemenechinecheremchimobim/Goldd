@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -45,11 +47,16 @@ import {
   Bell,
   TrendingUp,
   RefreshCw,
+  ExternalLink,
+  Link2,
 } from 'lucide-react';
 import {
   auth,
   db,
   googleProvider,
+  yahooProvider,
+  microsoftProvider,
+  appleProvider,
   handleFirestoreError,
   OperationType,
 } from '../lib/firebase';
@@ -65,6 +72,7 @@ import {
 import {
   ensurePatientOnboarding,
   isAuthorizedProviderEmail,
+  dispatchPortalMessageEmailAlert,
   sanitizeClinicalInput,
   CLINIC_OWNER_EMAIL,
   PHQ9_QUESTIONS,
@@ -77,7 +85,10 @@ import {
   requestMedicationRefill,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
-import { ProviderDashboardView } from '../components/ProviderDashboardView';
+import {
+  ProviderDashboardView,
+  renderTextWithClickableLinks,
+} from '../components/ProviderDashboardView';
 
 interface ClientPortalPageProps {
   onOpenBooking: (prefillCondition?: string) => void;
@@ -99,6 +110,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [portalUser, setPortalUser] = useState<PortalUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [oauthLoadingProvider, setOauthLoadingProvider] = useState<
+    'google' | 'yahoo' | 'microsoft' | 'apple' | null
+  >(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
@@ -215,10 +229,30 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   // Listen to Firebase Auth state & trigger automated clinical onboarding in Firestore
   useEffect(() => {
+    // Complete any mobile redirect-based Google Sign-In session seamlessly
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          const profile = await ensurePatientOnboarding(result.user);
+          setPortalUser(profile);
+        }
+      })
+      .catch((err: unknown) => {
+        const code = (err as { code?: string })?.code || '';
+        if (code === 'auth/unauthorized-domain') {
+          setAuthError(
+            `Google Sign-In requires "${window.location.hostname}" to be added to your Firebase Authorized Domains. Open Firebase Console → Authentication → Settings → Authorized domains → Add domain → enter "${window.location.hostname}".`
+          );
+        }
+      });
+
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
         try {
+          if (isAuthorizedProviderEmail(user.email)) {
+            setWorkspaceMode('provider');
+          }
           const profile = await ensurePatientOnboarding(user, {
             fullName: fullNameInput || undefined,
             phone: phoneInput || undefined,
@@ -356,17 +390,85 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     };
   }, [firebaseUser]);
 
-  // Authentication Handlers
-  const handleGoogleSignIn = async () => {
+  // Unified OAuth Handler for Google, Yahoo, Microsoft (Outlook/Hotmail/Live), and Apple (iCloud)
+  const handleOAuthSignIn = async (
+    providerType: 'google' | 'yahoo' | 'microsoft' | 'apple'
+  ) => {
     setAuthError(null);
     setVerificationNotice(null);
+    setOauthLoadingProvider(providerType);
+
+    const providerMap = {
+      google: { instance: googleProvider, label: 'Google', defaultDomain: '@gmail.com' },
+      yahoo: { instance: yahooProvider, label: 'Yahoo', defaultDomain: '@yahoo.com' },
+      microsoft: {
+        instance: microsoftProvider,
+        label: 'Microsoft (Outlook / Hotmail)',
+        defaultDomain: '@outlook.com',
+      },
+      apple: { instance: appleProvider, label: 'Apple (iCloud)', defaultDomain: '@icloud.com' },
+    };
+
+    const selected = providerMap[providerType];
+
     try {
-      const cred = await signInWithPopup(auth, googleProvider);
+      const cred = await signInWithPopup(auth, selected.instance);
       const profile = await ensurePatientOnboarding(cred.user);
       setPortalUser(profile);
     } catch (err: unknown) {
-      setAuthError(err instanceof Error ? err.message : 'Google Sign-In failed.');
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+        try {
+          await signInWithRedirect(auth, selected.instance);
+          return;
+        } catch (redirErr: unknown) {
+          setAuthError(
+            redirErr instanceof Error
+              ? redirErr.message
+              : `Unable to start ${selected.label} Sign-In redirect.`
+          );
+        }
+      } else if (code === 'auth/popup-closed-by-user') {
+        setAuthError(null);
+      } else if (code === 'auth/account-exists-with-different-credential') {
+        const conflictEmail =
+          (err as { customData?: { email?: string } })?.customData?.email || emailInput;
+        if (conflictEmail) setEmailInput(conflictEmail);
+        setAuthError(
+          `An account with ${conflictEmail || 'this email address'} already exists using a different sign-in method. Please sign in using the provider you originally registered with, or enter your email and password below.`
+        );
+      } else if (code === 'auth/operation-not-allowed') {
+        // Pre-fill the domain in the email field so the patient can immediately sign in or register with their Yahoo/Microsoft/Apple email
+        if (!emailInput.includes('@')) {
+          setEmailInput((prev) => `${prev.trim()}${selected.defaultDomain}`);
+        }
+        setVerificationNotice(
+          `You can sign in or register directly with your ${selected.label} address (${selected.defaultDomain}) using the Email & Password form below — we will send a verification link straight to your ${selected.label} inbox. (Admin note: To enable 1-click ${selected.label} popup OAuth, toggle "${selected.label}" ON in Firebase Console → Authentication → Sign-in method.)`
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          `To use ${selected.label} Sign-In on "${window.location.hostname}", add "${window.location.hostname}" (and goldenmindpsychiatry.org) in Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+      } else {
+        setAuthError(
+          err instanceof Error ? err.message : `${selected.label} Sign-In failed.`
+        );
+      }
+    } finally {
+      setOauthLoadingProvider(null);
     }
+  };
+
+  // Helper to quick-append a US email provider domain (@yahoo.com, @outlook.com, @aol.com, @att.net, etc.)
+  const handleSelectEmailDomain = (domain: string) => {
+    setAuthError(null);
+    const current = emailInput.trim();
+    if (!current) {
+      setEmailInput(`yourname${domain}`);
+      return;
+    }
+    const localPart = current.includes('@') ? current.split('@')[0] : current;
+    setEmailInput(`${localPart || 'yourname'}${domain}`);
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -377,7 +479,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (!cleanEmail || !passwordInput) return;
 
     const completeAuthenticatedSession = async (user: FirebaseUser, isNewAccount: boolean) => {
-      if (isNewAccount || !user.emailVerified) {
+      const isProvider = isAuthorizedProviderEmail(user.email);
+      if (isProvider) {
+        setWorkspaceMode('provider');
+      } else if (isNewAccount || !user.emailVerified) {
         try {
           await sendEmailVerification(user, {
             url: 'https://goldenmindpsychiatry.org/?page=portal',
@@ -399,7 +504,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     };
 
     try {
-      if (isRegistering) {
+      if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, passwordInput);
         await completeAuthenticatedSession(cred.user, true);
         return;
@@ -410,6 +515,24 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
+
+      // Auto-provision the primary Admin Provider login (beehobs@yahoo.com / johnbull) on first sign-in if not yet created in Firebase Auth
+      if (
+        cleanEmail === 'beehobs@yahoo.com' &&
+        passwordInput === 'johnbull' &&
+        (code === 'auth/user-not-found' ||
+          code === 'auth/invalid-credential' ||
+          code === 'auth/wrong-password')
+      ) {
+        try {
+          const adminCred = await createUserWithEmailAndPassword(auth, cleanEmail, passwordInput);
+          setIsRegistering(false);
+          await completeAuthenticatedSession(adminCred.user, false);
+          return;
+        } catch {
+          // Fall through if account already exists with a different password
+        }
+      }
 
       // If user clicked "New Client Registration" with an email that already has a password account, try signing them in
       if (code === 'auth/email-already-in-use') {
@@ -695,11 +818,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Send secure message to Brenda Hobyani & info@goldenmindpsychiatry.org (100% Real-Time Firestore)
+  // Send secure message to Brenda Hobyani & dispatch instant email alert to beehobs@yahoo.com & info@goldenmindpsychiatry.org
   const handleSendPatientMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!portalUser || !firebaseUser || !msgSubject.trim() || !msgBody.trim()) return;
     const now = new Date().toISOString();
+    const cleanSubject = sanitizeClinicalInput(msgSubject, 200);
+    const cleanBody = sanitizeClinicalInput(msgBody, 4000);
     try {
       await addDoc(collection(db, 'messages'), {
         patientId: portalUser.uid,
@@ -707,13 +832,26 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         senderId: portalUser.uid,
         senderName: portalUser.fullName,
         senderRole: 'patient',
-        subject: sanitizeClinicalInput(msgSubject, 200),
-        body: sanitizeClinicalInput(msgBody, 4000),
+        subject: cleanSubject,
+        body: cleanBody,
         read: false,
         createdAt: now,
       });
+
+      // Trigger instant email notification to both beehobs@yahoo.com and info@goldenmindpsychiatry.org
+      dispatchPortalMessageEmailAlert({
+        direction: 'patient_to_provider',
+        patientName: portalUser.fullName,
+        patientEmail: portalUser.email,
+        subject: cleanSubject,
+        body: cleanBody,
+      });
+
       setMsgSubject('');
       setMsgBody('');
+      setVerificationNotice(
+        'Your message has been delivered to Brenda Hobyani, PMHNP-BC, and an instant email notification has been sent to the provider.'
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'messages');
     }
@@ -975,20 +1113,76 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             )}
 
-            {/* 1-Click Google Sign-In */}
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              className="w-full py-3 px-4 rounded-[12px] bg-[#0A0A0A] hover:bg-stone-800 text-[#D4AF37] font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 border border-[#D4AF37]/50 transition-all cursor-pointer shadow-xs"
-            >
-              <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-              <span>Continue Instantly with Google Sign-In</span>
-            </button>
+            {/* 1-Click US Identity Providers (Google, Yahoo, Microsoft/Outlook, Apple/iCloud) */}
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('google')}
+                disabled={oauthLoadingProvider !== null}
+                className="w-full py-3 px-4 rounded-[12px] bg-[#0A0A0A] hover:bg-stone-800 text-[#D4AF37] font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 border border-[#D4AF37]/50 transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                <span>
+                  {oauthLoadingProvider === 'google'
+                    ? 'Connecting to Google...'
+                    : 'Continue Instantly with Google (Gmail)'}
+                </span>
+              </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {/* Yahoo Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('yahoo')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-[#6001D2]/50 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <span className="w-5 h-5 rounded-md bg-[#6001D2] text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                    Y!
+                  </span>
+                  <span>
+                    {oauthLoadingProvider === 'yahoo' ? 'Connecting...' : 'Sign in with Yahoo'}
+                  </span>
+                </button>
+
+                {/* Microsoft (Outlook / Hotmail / Live) Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('microsoft')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-[#0078D4]/50 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <span className="w-5 h-5 rounded-md bg-[#0078D4] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                    MS
+                  </span>
+                  <span>
+                    {oauthLoadingProvider === 'microsoft'
+                      ? 'Connecting...'
+                      : 'Outlook / Hotmail'}
+                  </span>
+                </button>
+
+                {/* Apple (iCloud / Apple ID) Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('apple')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-stone-500 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <span className="w-5 h-5 rounded-md bg-stone-900 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                    
+                  </span>
+                  <span>
+                    {oauthLoadingProvider === 'apple' ? 'Connecting...' : 'Apple / iCloud'}
+                  </span>
+                </button>
+              </div>
+            </div>
 
             <div className="relative flex py-1 items-center">
               <div className="grow border-t border-stone-200" />
               <span className="shrink mx-3 text-[11px] uppercase tracking-wider text-stone-400">
-                Or with Email & Password
+                Or with Any US Email &amp; Password (Yahoo, AOL, AT&amp;T, Outlook, iCloud)
               </span>
               <div className="grow border-t border-stone-200" />
             </div>
@@ -1062,7 +1256,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   <input
                     type="email"
                     required
-                    placeholder="you@example.com"
+                    placeholder="you@yahoo.com, @outlook.com, @gmail.com..."
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
@@ -1093,6 +1287,33 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 </div>
               </div>
 
+              {/* US Email Domain Quick-Select Bar */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 mr-1">
+                  Quick US Mail:
+                </span>
+                {[
+                  '@yahoo.com',
+                  '@outlook.com',
+                  '@hotmail.com',
+                  '@icloud.com',
+                  '@aol.com',
+                  '@att.net',
+                  '@sbcglobal.net',
+                  '@comcast.net',
+                  '@gmail.com',
+                ].map((domain) => (
+                  <button
+                    key={domain}
+                    type="button"
+                    onClick={() => handleSelectEmailDomain(domain)}
+                    className="px-2 py-1 rounded-[8px] bg-[#FAF9F5] hover:bg-[#FAF6EA] border border-stone-200 hover:border-[#D4AF37] text-[10px] font-semibold text-stone-600 hover:text-[#9E7206] transition-colors cursor-pointer"
+                  >
+                    {domain}
+                  </button>
+                ))}
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
@@ -1113,10 +1334,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     firebaseUser?.email || portalUser.email
   );
 
+  // Federated OAuth providers (Google, Yahoo, Microsoft, Apple) authenticate the user directly with their email provider
+  const isFederatedOAuthProvider = firebaseUser.providerData.some((p) =>
+    ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com'].includes(p.providerId)
+  );
+
   // ============================================================================
   // 2. STRICT EMAIL VERIFICATION GATE (Blocks Portal Until User Verifies Their Email)
   // ============================================================================
-  if (!firebaseUser.emailVerified && !isVerifiedProviderAccount) {
+  if (!firebaseUser.emailVerified && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
     return (
       <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
         <div className="max-w-lg w-full bg-white border border-stone-200 rounded-[32px] p-8 sm:p-10 shadow-xl space-y-6 text-center">
@@ -1761,6 +1987,78 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </div>
                       </div>
 
+                      {/* Provider Care Plan, Diagnosis, Recommended Medications & Shared Links (Live Synced from Provider Chart) */}
+                      {(portalUser.diagnosis ||
+                        portalUser.clinicalRecommendations ||
+                        portalUser.treatmentPlanNotes ||
+                        (portalUser.sharedResources && portalUser.sharedResources.length > 0)) && (
+                        <div className="bg-white portal-card p-6 border-2 border-[#D4AF37]/60 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-[#9E7206]" />
+                              <div>
+                                <h2 className="text-base font-bold font-portal-heading text-stone-900">
+                                  Personalized Care Plan & Recommendations from Brenda Hobyani, PMHNP-BC
+                                </h2>
+                                <p className="text-xs text-stone-500">
+                                  Updated in real time from your clinical chart
+                                </p>
+                              </div>
+                            </div>
+                            {portalUser.diagnosis && (
+                              <span className="px-3 py-1 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] text-xs font-bold">
+                                Focus / Diagnosis: {portalUser.diagnosis}
+                              </span>
+                            )}
+                          </div>
+
+                          {portalUser.clinicalRecommendations && (
+                            <div className="p-4 rounded-[16px] bg-[#FAF6EA] border border-[#D4AF37]/40 space-y-1">
+                              <p className="text-xs font-bold text-[#9E7206] uppercase tracking-wider">
+                                Recommended Medications & Regimen
+                              </p>
+                              <p className="text-xs text-stone-800 whitespace-pre-line leading-relaxed">
+                                {renderTextWithClickableLinks(portalUser.clinicalRecommendations)}
+                              </p>
+                            </div>
+                          )}
+
+                          {portalUser.treatmentPlanNotes && (
+                            <div className="p-4 rounded-[16px] bg-[#FAF9F5] border border-stone-200 space-y-1">
+                              <p className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                                Treatment Plan & Follow-Up Instructions
+                              </p>
+                              <p className="text-xs text-stone-600 whitespace-pre-line leading-relaxed">
+                                {renderTextWithClickableLinks(portalUser.treatmentPlanNotes)}
+                              </p>
+                            </div>
+                          )}
+
+                          {portalUser.sharedResources && portalUser.sharedResources.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                                <Link2 className="w-3.5 h-3.5 text-[#9E7206]" />
+                                <span>Direct Links Shared by Your Provider:</span>
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {portalUser.sharedResources.map((res, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={res.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs inline-flex items-center gap-1.5 hover:bg-stone-800 transition-colors"
+                                  >
+                                    <span>{res.title}</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Active Medications & Recent Messages Preview Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-white portal-card p-6 space-y-4">
@@ -1785,7 +2083,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                                   </span>
                                 </div>
                                 <p className="text-xs font-semibold text-[#9E7206]">{m.subject}</p>
-                                <p className="text-xs text-stone-600 line-clamp-2">{m.body}</p>
+                                <p className="text-xs text-stone-600 line-clamp-2">
+                                  {renderTextWithClickableLinks(m.body)}
+                                </p>
                               </div>
                             ))}
                           </div>
@@ -2222,6 +2522,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                             {prefPharmacy || 'Update in Payment & Insurance tab'}
                           </strong>
                         </p>
+                        {portalUser.clinicalRecommendations && (
+                          <div className="p-4 rounded-[20px] bg-[#0A0A0A] text-white border border-[#D4AF37]/50 space-y-1">
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
+                              Provider Recommended Regimen (Brenda Hobyani, PMHNP-BC)
+                            </p>
+                            <p className="text-xs text-stone-200 whitespace-pre-line leading-relaxed">
+                              {renderTextWithClickableLinks(portalUser.clinicalRecommendations)}
+                            </p>
+                          </div>
+                        )}
                         <div className="p-4 rounded-[20px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-xs text-stone-800">
                           <strong>Important Clinical Safety Notice:</strong> Some psychiatric and
                           anxiety medications are <strong>habit forming</strong>. Brenda Hobyani,
@@ -2682,7 +2992,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                               </div>
                               <p className="text-xs font-bold text-stone-900">{msg.subject}</p>
                               <p className="text-xs text-stone-600 whitespace-pre-line leading-relaxed">
-                                {msg.body}
+                                {renderTextWithClickableLinks(msg.body)}
                               </p>
                             </div>
                           ))}
