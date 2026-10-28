@@ -356,10 +356,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const unsubMsgs = onSnapshot(
       query(collection(db, 'messages'), where('patientId', '==', uid)),
       (snap) => {
-        const list = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<MessageRecord, 'id'>),
-        }));
+        const list = snap.docs
+          .map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<MessageRecord, 'id'>),
+          }))
+          .filter((m) => !m.subject?.startsWith('[New Patient Portal Registration]'));
         list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setMessages(list);
       },
@@ -1522,39 +1524,47 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               mobileSidebarOpen ? 'block' : 'hidden lg:block'
             } p-3 space-y-1`}
           >
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = workspaceMode === 'patient' && activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setWorkspaceMode('patient');
-                    setActiveTab(item.id);
-                    setMobileSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]'
-                      : 'text-stone-600 font-medium hover:bg-stone-50 hover:text-stone-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge !== undefined && (
-                    <span className="font-portal-heading tabular-nums text-[11px] font-bold px-2 py-0.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37]">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {isVerifiedProviderAccount ? (
+              <div className="w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]">
+                <div className="flex items-center gap-3">
+                  <Stethoscope className="w-4 h-4 shrink-0" />
+                  <span>Admin Provider Command Center</span>
+                </div>
+              </div>
+            ) : (
+              navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]'
+                        : 'text-stone-600 font-medium hover:bg-stone-50 hover:text-stone-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge !== undefined && (
+                      <span className="font-portal-heading tabular-nums text-[11px] font-bold px-2 py-0.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37]">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </nav>
         </div>
 
-        {/* Bottom Section: 'Practice Verified' Card + Stealth Provider Switch + Red-500 Logout */}
+        {/* Bottom Section: 'Practice Verified' Card + Red-500 Logout (No Mode Switch Button) */}
         <div
           className={`${
             mobileSidebarOpen ? 'block' : 'hidden lg:block'
@@ -1570,26 +1580,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               Brenda Hobyani, PMHNP-BC · 100% Telehealth Across Texas
             </p>
           </div>
-
-          {isVerifiedProviderAccount && (
-            <button
-              onClick={() =>
-                setWorkspaceMode(workspaceMode === 'provider' ? 'patient' : 'provider')
-              }
-              className={`w-full p-3 rounded-[12px] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-                workspaceMode === 'provider'
-                  ? 'bg-gold-gradient text-[#1C1917] border-transparent'
-                  : 'bg-[#0A0A0A] text-[#D4AF37] border-[#D4AF37]/40 hover:bg-stone-800'
-              }`}
-            >
-              <Stethoscope className="w-4 h-4" />
-              <span>
-                {workspaceMode === 'provider'
-                  ? 'Switch to Patient View'
-                  : 'Provider Command View'}
-              </span>
-            </button>
-          )}
 
           <button
             onClick={handleSignOut}
@@ -1609,7 +1599,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         <header className="sticky top-0 z-30 min-h-[72px] bg-white/90 backdrop-blur-md border-b border-stone-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-[18px] font-bold font-portal-heading text-stone-900 leading-tight">
-              {workspaceMode === 'provider' && isVerifiedProviderAccount
+              {isVerifiedProviderAccount
                 ? 'Provider Clinical Command Center'
                 : navItems.find((n) => n.id === activeTab)?.label || 'Client Portal Dashboard'}
             </h1>
@@ -1619,36 +1609,40 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative hidden sm:block">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search visits, bills, meds..."
-                value={portalSearchQuery}
-                onChange={(e) => setPortalSearchQuery(e.target.value)}
-                className="pl-9 pr-4 py-2 rounded-full bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#D4AF37] w-48 lg:w-56"
-              />
-            </div>
+            {!isVerifiedProviderAccount && (
+              <>
+                <div className="relative hidden sm:block">
+                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search visits, bills, meds..."
+                    value={portalSearchQuery}
+                    onChange={(e) => setPortalSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 rounded-full bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#D4AF37] w-48 lg:w-56"
+                  />
+                </div>
 
-            <button
-              onClick={() => setActiveTab(pendingIntakes.length > 0 ? 'intakes' : 'messages')}
-              className="relative w-10 h-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 flex items-center justify-center text-stone-700 hover:border-[#D4AF37] transition-colors cursor-pointer"
-              title="Notifications & Action Items"
-            >
-              <Bell className="w-4 h-4" />
-              {totalNotificationsCount > 0 && (
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 absolute top-2 right-2 ring-2 ring-white" />
-              )}
-            </button>
+                <button
+                  onClick={() => setActiveTab(pendingIntakes.length > 0 ? 'intakes' : 'messages')}
+                  className="relative w-10 h-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 flex items-center justify-center text-stone-700 hover:border-[#D4AF37] transition-colors cursor-pointer"
+                  title="Notifications & Action Items"
+                >
+                  <Bell className="w-4 h-4" />
+                  {totalNotificationsCount > 0 && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 absolute top-2 right-2 ring-2 ring-white" />
+                  )}
+                </button>
 
-            <button
-              onClick={() => onOpenBooking()}
-              className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Book Telehealth Visit</span>
-              <span className="md:hidden">Book</span>
-            </button>
+                <button
+                  onClick={() => onOpenBooking()}
+                  className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Book Telehealth Visit</span>
+                  <span className="md:hidden">Book</span>
+                </button>
+              </>
+            )}
 
             <div
               className="w-10 h-10 rounded-full bg-[#0A0A0A] border-2 border-[#D4AF37] text-[#D4AF37] font-portal-heading font-bold text-xs flex items-center justify-center shrink-0"
@@ -1676,7 +1670,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </div>
           )}
 
-          {workspaceMode === 'provider' && isVerifiedProviderAccount ? (
+          {isVerifiedProviderAccount ? (
             <ProviderDashboardView
               currentUser={portalUser}
               onLaunchTelehealth={(appt) => setActiveTelehealthAppt(appt)}
@@ -3322,7 +3316,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       <TelehealthRoomModal
         appointment={activeTelehealthAppt}
         onClose={() => setActiveTelehealthAppt(null)}
-        viewerRole={workspaceMode}
+        viewerRole={isVerifiedProviderAccount ? 'provider' : 'patient'}
       />
     </div>
   );

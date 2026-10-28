@@ -25,10 +25,8 @@ export const ADMIN_PROVIDER_EMAIL = 'beehobs@yahoo.com';
 
 export const AUTHORIZED_PROVIDER_EMAILS = [
   'beehobs@yahoo.com',
-  'chibundusadiq@gmail.com',
   'info@goldenmindpsychiatry.org',
   'info@goldenmindpsychiatry.com',
-  'goldenmindpsychiatry@gmail.com',
 ];
 
 export function isAuthorizedProviderEmail(email?: string | null): boolean {
@@ -219,6 +217,7 @@ export async function ensurePatientOnboarding(
 
   if (userSnap && userSnap.exists()) {
     const existing = userSnap.data() as PortalUser;
+    const resolvedRole = isVerifiedProvider ? 'provider' : 'patient';
     portalUser = {
       ...existing,
       fullName:
@@ -239,8 +238,16 @@ export async function ensurePatientOnboarding(
       insuranceMemberId: existing.insuranceMemberId || '',
       insuranceGroupNumber: existing.insuranceGroupNumber || '',
       preferredPharmacy: existing.preferredPharmacy || '',
-      role: isVerifiedProvider ? 'provider' : 'patient',
+      role: resolvedRole,
     };
+
+    if (existing.role !== resolvedRole) {
+      try {
+        await updateDoc(userRef, { role: resolvedRole, updatedAt: now });
+      } catch {
+        // Non-fatal
+      }
+    }
   } else {
     const firestoreUserDoc: PortalUser = {
       ...portalUser,
@@ -328,20 +335,6 @@ export async function ensurePatientOnboarding(
         senderRole: 'provider',
         subject: 'Welcome to Golden Mind Psychiatry PLLC — Intake Forms Assigned',
         body: `Hello ${portalUser.fullName},\n\nWelcome to Golden Mind Psychiatry PLLC! Your account is linked to ${email}.\n\nOur practice hours are Monday – Thursday from 8:00 AM – 4:00 PM and Friday from 9:00 AM – 1:00 PM (100% Telehealth across Texas). Before your upcoming session, please complete your assigned Intake Forms and baseline PHQ-9 / GAD-7 check-in.\n\nWarmly,\nBrenda Hobyani, MSN, APRN, PMHNP-BC`,
-        read: false,
-        createdAt: now,
-      });
-
-      // 5. Automated Clinic Notification Record to info@goldenmindpsychiatry.org
-      const ownerAlertRef = doc(collection(db, 'messages'));
-      batch.set(ownerAlertRef, {
-        patientId: uid,
-        patientName: portalUser.fullName,
-        senderId: uid,
-        senderName: portalUser.fullName,
-        senderRole: 'patient',
-        subject: `[New Patient Portal Registration] ${portalUser.fullName}`,
-        body: `New patient ${portalUser.fullName} (${email} · ${portalUser.phone || 'No phone provided'}) registered in the Client Portal. New Patient Intake Forms and PHQ-9/GAD-7 baseline screeners have been assigned.`,
         read: false,
         createdAt: now,
       });

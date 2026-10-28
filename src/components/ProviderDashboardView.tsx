@@ -52,6 +52,7 @@ import {
   dispatchPortalMessageEmailAlert,
   generateTelehealthRoomUrl,
   sanitizeClinicalInput,
+  isAuthorizedProviderEmail,
 } from '../services/clinicalAutomation';
 
 interface ProviderDashboardViewProps {
@@ -156,14 +157,13 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
-        const list = snap.docs.map((d) => d.data() as PortalUser);
-        // Sort patients so actual patient accounts appear first, ordered by most recently updated
-        list.sort((a, b) => {
-          if (a.role !== b.role) return a.role === 'patient' ? -1 : 1;
-          return (b.updatedAt || '').localeCompare(a.updatedAt || '');
-        });
+        const list = snap.docs
+          .map((d) => d.data() as PortalUser)
+          .filter((u) => !isAuthorizedProviderEmail(u.email));
+        // Order patient accounts by most recently updated
+        list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
         setPatients(list);
-        const firstPatient = list.find((p) => p.role === 'patient') || list[0];
+        const firstPatient = list[0];
         if (firstPatient && !rxPatientId) {
           setRxPatientId(firstPatient.uid);
           setReplyPatientId(firstPatient.uid);
