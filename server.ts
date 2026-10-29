@@ -17,6 +17,52 @@ const SITE_URL = process.env.APP_URL || 'https://goldenmindpsychiatry.org';
 const LOGO_URL = `${SITE_URL}/golden_mind_card.webp`;
 
 /**
+ * Escapes untrusted user strings before embedding in HTML emails to prevent XSS / HTML injection.
+ */
+function escapeHtml(raw: unknown, maxLen = 2000): string {
+  const str = typeof raw === 'string' ? raw.trim().slice(0, maxLen) : '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Validates and normalizes an email address to prevent header injection.
+ */
+function sanitizeEmailAddress(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw.trim().toLowerCase().replace(/[\r\n<>]/g, '').slice(0, 254);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned) ? cleaned : '';
+}
+
+/**
+ * High-throughput in-memory IP rate limiter with automatic sliding window cleanup.
+ */
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (entry.resetAt <= now) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, 60_000).unref();
+
+function checkRateLimit(ip: string, maxRequests = 15, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const existing = rateLimitStore.get(ip);
+  if (!existing || existing.resetAt <= now) {
+    rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  existing.count += 1;
+  return existing.count <= maxRequests;
+}
+
+/**
  * Wraps email body HTML inside the official Golden Mind Psychiatry PLLC
  * corporate HTML email template with the practice logo and Brenda Hobyani's signature.
  */
@@ -26,7 +72,7 @@ function buildBrandedEmailHtml(title: string, bodyHtml: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title}</title>
+  <title>${escapeHtml(title, 200)}</title>
 </head>
 <body style="margin:0;padding:24px;background-color:#FAF9F5;font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#1C1917;">
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:24px;overflow:hidden;border:1px solid #E7E5E4;">
@@ -62,9 +108,12 @@ function buildBrandedEmailHtml(title: string, bodyHtml: string): string {
 }
 
 /**
- * Creates Nodemailer SMTP transporter if SMTP_HOST / SMTP_USER / SMTP_PASS are configured in .env
+ * Pooled Nodemailer SMTP transporter for high-throughput, low-latency email dispatch.
  */
+let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 function getSmtpTransporter() {
+  if (cachedTransporter) return cachedTransporter;
+
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
@@ -75,12 +124,17 @@ function getSmtpTransporter() {
     return null;
   }
 
-  return nodemailer.createTransport({
+  cachedTransporter = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
     host,
     port,
     secure,
     auth: { user, pass },
   });
+
+  return cachedTransporter;
 }
 
 async function sendClinicEmail(opts: {
@@ -98,7 +152,7 @@ async function sendClinicEmail(opts: {
       from: fromAddress,
       to: opts.to,
       replyTo: opts.replyTo || CLINIC_EMAIL,
-      subject: opts.subject,
+      subject: opts.subject.replace(/[\r\n]/g, ' ').slice(0, 240),
       html: opts.html,
     });
     return { deliveredViaSmtp: true };
@@ -109,24 +163,50 @@ async function sendClinicEmail(opts: {
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '1mb' }));
 
-  // Production security & Google Sign-In popup compatibility headers
-  app.use((_req, res, next) => {
+  // Strict 64KB JSON body limit to block oversized payload attacks
+  app.use(express.json({ limit: '64kb' }));
+
+  // Production security headers, HTTPS HSTS, & OAuth popup compatibility
+  app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Required so Firebase Google Sign-In popups can communicate back across origins
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    );
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(self), microphone=(self), geolocation=()'
+    );
+    // Required so Firebase Google/Yahoo/Microsoft/Apple OAuth popups can communicate back across origins
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+
+    // Enforce rate limiting and bot honeypot protection on all /api/email/* routes
+    if (req.path.startsWith('/api/email/')) {
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkRateLimit(clientIp, 15, 60_000)) {
+        res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
+        return;
+      }
+      // Reject automated bots that fill hidden honeypot fields
+      if (req.body && req.body._gotcha) {
+        res.status(200).json({ ok: true, deliveredViaSmtp: false });
+        return;
+      }
+    }
+
     next();
   });
 
-  // Health check endpoint for VPS / Nginx monitoring
+  // Trimmed health check endpoint for VPS / Nginx monitoring
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
       service: 'Golden Mind Psychiatry PLLC',
-      uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
     });
   });
@@ -134,19 +214,17 @@ async function startServer() {
   // 1. Appointment Booking Email Dispatch (Doctor Notification + Patient Confirmation with Logo)
   app.post('/api/email/appointment', async (req, res) => {
     try {
-      const {
-        fullName,
-        email,
-        phone,
-        dateOfBirth,
-        serviceType,
-        conditionReason,
-        preferredDate,
-        preferredTime,
-        insuranceProvider,
-        notes,
-        telehealthUrl,
-      } = req.body || {};
+      const fullName = escapeHtml(req.body?.fullName, 160);
+      const email = sanitizeEmailAddress(req.body?.email);
+      const phone = escapeHtml(req.body?.phone, 40);
+      const dateOfBirth = escapeHtml(req.body?.dateOfBirth, 40);
+      const serviceType = escapeHtml(req.body?.serviceType, 200);
+      const conditionReason = escapeHtml(req.body?.conditionReason, 200);
+      const preferredDate = escapeHtml(req.body?.preferredDate, 64);
+      const preferredTime = escapeHtml(req.body?.preferredTime, 100);
+      const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
+      const notes = escapeHtml(req.body?.notes, 1500);
+      const telehealthUrl = escapeHtml(req.body?.telehealthUrl, 300);
 
       // Branded Doctor Notification Email to info@goldenmindpsychiatry.org & beehobs@yahoo.com
       const doctorHtml = buildBrandedEmailHtml(
@@ -220,7 +298,10 @@ async function startServer() {
   // 2. Confidential Contact Inquiry Email Dispatch to Doctor (info@goldenmindpsychiatry.org & beehobs@yahoo.com)
   app.post('/api/email/contact', async (req, res) => {
     try {
-      const { name, email, phone, message } = req.body || {};
+      const name = escapeHtml(req.body?.name, 160);
+      const email = sanitizeEmailAddress(req.body?.email);
+      const phone = escapeHtml(req.body?.phone, 40);
+      const message = escapeHtml(req.body?.message, 3000);
       const html = buildBrandedEmailHtml(
         `New Confidential Inquiry from ${name}`,
         `
@@ -251,7 +332,10 @@ async function startServer() {
   // 3. Branded Welcome & Verification Notification Email via SMTP
   app.post('/api/email/welcome-verify', async (req, res) => {
     try {
-      const { fullName, email, phone } = req.body || {};
+      const fullName = escapeHtml(req.body?.fullName, 160);
+      const email = sanitizeEmailAddress(req.body?.email);
+      const phone = escapeHtml(req.body?.phone, 40);
+
       if (email) {
         const clientHtml = buildBrandedEmailHtml(
           'Verify Your Client Portal Account — Golden Mind Psychiatry PLLC',
@@ -296,7 +380,11 @@ async function startServer() {
   // 4. Instant Portal Message Notification Alert (Client -> Provider beehobs@yahoo.com & info@goldenmindpsychiatry.org, or Provider -> Client)
   app.post('/api/email/message-alert', async (req, res) => {
     try {
-      const { direction, patientName, patientEmail, subject, body } = req.body || {};
+      const direction = req.body?.direction === 'provider_to_patient' ? 'provider_to_patient' : 'patient_to_provider';
+      const patientName = escapeHtml(req.body?.patientName, 160);
+      const patientEmail = sanitizeEmailAddress(req.body?.patientEmail);
+      const subject = escapeHtml(req.body?.subject, 240);
+      const body = escapeHtml(req.body?.body, 4000);
 
       if (direction === 'provider_to_patient' && patientEmail) {
         const patientMsgHtml = buildBrandedEmailHtml(

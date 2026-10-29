@@ -5,6 +5,9 @@ import {
   getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   sendEmailVerification,
   sendPasswordResetEmail,
   applyActionCode,
@@ -116,7 +119,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
-  // Auth Form State
+  // Auth Form State & Anti-Brute-Force / Bot Protection
   const [isRegistering, setIsRegistering] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -124,6 +127,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [phoneInput, setPhoneInput] = useState('');
   const [dobInput, setDobInput] = useState('');
   const [insuranceInput, setInsuranceInput] = useState('Blue Cross Blue Shield (BCBS)');
+  const [botHoneypot, setBotHoneypot] = useState('');
+  const [failedAuthAttempts, setFailedAuthAttempts] = useState(0);
+  const [authLockoutUntil, setAuthLockoutUntil] = useState<number>(0);
 
   // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=verifyEmail&oobCode=...)
   const [resetOobCode, setResetOobCode] = useState<string | null>(null);
@@ -203,6 +209,28 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       setEmailInput(emailParam);
     }
 
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      const savedEmail =
+        window.localStorage.getItem('gmp_magic_link_email') || emailParam || '';
+      if (savedEmail) {
+        signInWithEmailLink(auth, savedEmail, window.location.href)
+          .then(async (cred) => {
+            window.localStorage.removeItem('gmp_magic_link_email');
+            const profile = await ensurePatientOnboarding(cred.user);
+            setPortalUser(profile);
+            window.history.replaceState({}, document.title, '/?page=portal');
+          })
+          .catch((err) => {
+            setAuthError(
+              err instanceof Error
+                ? err.message
+                : 'This sign-in link has expired or was already used.'
+            );
+          });
+        return;
+      }
+    }
+
     if (modeParam === 'verifyEmail' && oobParam) {
       applyActionCode(auth, oobParam)
         .then(async () => {
@@ -240,9 +268,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       .catch((err: unknown) => {
         const code = (err as { code?: string })?.code || '';
         if (code === 'auth/unauthorized-domain') {
-          setAuthError(
-            `Google Sign-In requires "${window.location.hostname}" to be added to your Firebase Authorized Domains. Open Firebase Console → Authentication → Settings → Authorized domains → Add domain → enter "${window.location.hostname}".`
-          );
+          setAuthError('Please sign in or register using your email address and password below.');
         }
       });
 
@@ -392,7 +418,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     };
   }, [firebaseUser]);
 
-  // Unified OAuth Handler for Google, Yahoo, Microsoft (Outlook/Hotmail/Live), and Apple (iCloud)
+  // Unified OAuth Handler for Google, Yahoo Mail, Microsoft (Outlook/Hotmail/Live), and Apple (iCloud)
   const handleOAuthSignIn = async (
     providerType: 'google' | 'yahoo' | 'microsoft' | 'apple'
   ) => {
@@ -401,14 +427,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     setOauthLoadingProvider(providerType);
 
     const providerMap = {
-      google: { instance: googleProvider, label: 'Google', defaultDomain: '@gmail.com' },
-      yahoo: { instance: yahooProvider, label: 'Yahoo', defaultDomain: '@yahoo.com' },
+      google: { instance: googleProvider, label: 'Google (Gmail)', defaultDomain: '@gmail.com' },
+      yahoo: { instance: yahooProvider, label: 'Yahoo Mail', defaultDomain: '@yahoo.com' },
       microsoft: {
         instance: microsoftProvider,
-        label: 'Microsoft (Outlook / Hotmail)',
+        label: 'Outlook / Hotmail',
         defaultDomain: '@outlook.com',
       },
-      apple: { instance: appleProvider, label: 'Apple (iCloud)', defaultDomain: '@icloud.com' },
+      apple: { instance: appleProvider, label: 'Apple / iCloud', defaultDomain: '@icloud.com' },
     };
 
     const selected = providerMap[providerType];
@@ -437,27 +463,58 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           (err as { customData?: { email?: string } })?.customData?.email || emailInput;
         if (conflictEmail) setEmailInput(conflictEmail);
         setAuthError(
-          `An account with ${conflictEmail || 'this email address'} already exists using a different sign-in method. Please sign in using the provider you originally registered with, or enter your email and password below.`
+          `An account with ${conflictEmail || 'this email address'} already exists. Please sign in using your email and password below.`
         );
-      } else if (code === 'auth/operation-not-allowed') {
-        // Pre-fill the domain in the email field so the patient can immediately sign in or register with their Yahoo/Microsoft/Apple email
+      } else if (code === 'auth/operation-not-allowed' || code === 'auth/unauthorized-domain') {
+        // Pre-fill the domain in the email field so the client can immediately sign in or register with their email
         if (!emailInput.includes('@')) {
-          setEmailInput((prev) => `${prev.trim()}${selected.defaultDomain}`);
+          setEmailInput((prev) => `${prev.trim() || 'yourname'}${selected.defaultDomain}`);
+        } else {
+          const localPart = emailInput.split('@')[0] || 'yourname';
+          setEmailInput(`${localPart}${selected.defaultDomain}`);
         }
         setVerificationNotice(
-          `You can sign in or register directly with your ${selected.label} address (${selected.defaultDomain}) using the Email & Password form below — we will send a verification link straight to your ${selected.label} inbox. (Admin note: To enable 1-click ${selected.label} popup OAuth, toggle "${selected.label}" ON in Firebase Console → Authentication → Sign-in method.)`
-        );
-      } else if (code === 'auth/unauthorized-domain') {
-        setAuthError(
-          `To use ${selected.label} Sign-In on "${window.location.hostname}", add "${window.location.hostname}" (and goldenmindpsychiatry.org) in Firebase Console → Authentication → Settings → Authorized domains.`
+          `Enter your ${selected.label} email address (${selected.defaultDomain}) and password in the form below to sign in or create your Client Portal account.`
         );
       } else {
         setAuthError(
-          err instanceof Error ? err.message : `${selected.label} Sign-In failed.`
+          err instanceof Error ? err.message : `${selected.label} Sign-In failed. Please use your email and password below.`
         );
       }
     } finally {
       setOauthLoadingProvider(null);
+    }
+  };
+
+  // Passwordless 1-Click Email Link Sign-In (Works for Yahoo, Outlook, AOL, AT&T, iCloud, Gmail, etc.)
+  const handleSendMagicSignInLink = async () => {
+    setAuthError(null);
+    setVerificationNotice(null);
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setAuthError('Please enter your email address below first so we can send your sign-in link.');
+      return;
+    }
+    try {
+      await sendSignInLinkToEmail(auth, cleanEmail, {
+        url: `${window.location.origin}/?page=portal&email=${encodeURIComponent(cleanEmail)}`,
+        handleCodeInApp: true,
+      });
+      window.localStorage.setItem('gmp_magic_link_email', cleanEmail);
+      setVerificationNotice(
+        `A 1-click sign-in link has been sent to ${cleanEmail}. Open your email inbox and click the link to sign straight into your Client Portal.`
+      );
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setVerificationNotice(
+          'Please enter your email address and password in the form below to sign in or create your Client Portal account.'
+        );
+      } else {
+        setAuthError(
+          err instanceof Error ? err.message : 'Unable to send sign-in link. Please sign in with your email and password below.'
+        );
+      }
     }
   };
 
@@ -477,6 +534,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     e.preventDefault();
     setAuthError(null);
     setVerificationNotice(null);
+
+    // 1. Block automated bot submissions via hidden honeypot field
+    if (botHoneypot.trim() !== '') {
+      return;
+    }
+
+    // 2. Enforce login rate limiting after 5 failed attempts
+    if (authLockoutUntil > Date.now()) {
+      const waitSeconds = Math.ceil((authLockoutUntil - Date.now()) / 1000);
+      setAuthError(
+        `Too many failed login attempts. For your account security, please wait ${waitSeconds} seconds before trying again.`
+      );
+      return;
+    }
+
     const cleanEmail = emailInput.trim().toLowerCase();
     if (!cleanEmail || !passwordInput) return;
 
@@ -554,7 +626,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
       if (code === 'auth/operation-not-allowed') {
         setAuthError(
-          'Email/Password sign-in is currently disabled in your Firebase Console. To enable it, open Firebase Console → Authentication → Sign-in method → Enable "Email/Password", or click "Continue Instantly with Google Sign-In" above.'
+          'Please click "Continue Instantly with Google (Gmail)" above or contact our clinic at (432) 934-3185 for portal assistance.'
         );
         return;
       }
@@ -562,8 +634,19 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       if (
         code === 'auth/invalid-credential' ||
         code === 'auth/wrong-password' ||
-        code === 'auth/user-not-found'
+        code === 'auth/user-not-found' ||
+        code === 'auth/too-many-requests'
       ) {
+        const nextCount = failedAuthAttempts + 1;
+        setFailedAuthAttempts(nextCount);
+        if (nextCount >= 5 || code === 'auth/too-many-requests') {
+          setAuthLockoutUntil(Date.now() + 30_000);
+          setFailedAuthAttempts(0);
+          setAuthError(
+            'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot Password?" to reset via email.'
+          );
+          return;
+        }
         setAuthError(
           'Invalid email or password. If you are a new client, switch to the "New Client Registration" tab above, or click "Forgot Password?" to receive a reset link in your email.'
         );
@@ -595,7 +678,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       const code = (err as { code?: string })?.code || '';
       if (code === 'auth/operation-not-allowed') {
         setAuthError(
-          'Email/Password authentication must be enabled in Firebase Console (Authentication → Sign-in method → Email/Password) before password reset emails can be dispatched.'
+          'Unable to send a password reset email right now. Please sign in with Google above or contact our clinic at info@goldenmindpsychiatry.org.'
         );
       } else {
         setAuthError(
@@ -1115,7 +1198,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             )}
 
-            {/* 1-Click US Identity Providers (Google, Yahoo, Microsoft/Outlook, Apple/iCloud) */}
+            {/* 1-Click US Email & Identity Providers (Google/Gmail, Yahoo Mail, Microsoft Outlook/Hotmail, Apple/iCloud) */}
             <div className="space-y-2.5">
               <button
                 type="button"
@@ -1131,7 +1214,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 </span>
               </button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Yahoo Sign-In */}
                 <button
                   type="button"
@@ -1143,7 +1226,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     Y!
                   </span>
                   <span>
-                    {oauthLoadingProvider === 'yahoo' ? 'Connecting...' : 'Sign in with Yahoo'}
+                    {oauthLoadingProvider === 'yahoo' ? 'Connecting...' : 'Yahoo Mail'}
                   </span>
                 </button>
 
@@ -1178,6 +1261,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     {oauthLoadingProvider === 'apple' ? 'Connecting...' : 'Apple / iCloud'}
                   </span>
                 </button>
+
+                {/* 1-Click Magic Email Link */}
+                <button
+                  type="button"
+                  onClick={handleSendMagicSignInLink}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF6EA] hover:bg-[#f3ebd3] text-[#9E7206] font-bold text-xs flex items-center justify-center gap-1.5 border border-[#D4AF37]/50 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0" />
+                  <span>Email Sign-In Link</span>
+                </button>
               </div>
             </div>
 
@@ -1190,6 +1284,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </div>
 
             <form onSubmit={handleEmailAuth} className="space-y-4">
+              {/* Hidden Bot Honeypot Field (Anti-Bot Protection) */}
+              <input
+                type="text"
+                name="_gotcha"
+                tabIndex={-1}
+                autoComplete="off"
+                value={botHoneypot}
+                onChange={(e) => setBotHoneypot(e.target.value)}
+                className="hidden"
+                aria-hidden="true"
+              />
               {isRegistering && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -1336,9 +1441,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     firebaseUser?.email || portalUser.email
   );
 
-  // Federated OAuth providers (Google, Yahoo, Microsoft, Apple) authenticate the user directly with their email provider
+  // Federated OAuth providers (Google, Yahoo, Microsoft, Apple, Facebook, Twitter) authenticate the user directly with their provider
   const isFederatedOAuthProvider = firebaseUser.providerData.some((p) =>
-    ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com'].includes(p.providerId)
+    ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com'].includes(
+      p.providerId
+    )
   );
 
   // ============================================================================

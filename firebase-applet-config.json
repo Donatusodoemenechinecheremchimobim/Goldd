@@ -1,12 +1,12 @@
 {
-  "projectId": "gen-lang-client-0678487394",
-  "appId": "1:184483543277:web:ea7571cab52c6451bfb4e4",
-  "apiKey": "AIzaSyC47-c59TmS9OPVGWL7bza2xWANUSe2OMM",
-  "authDomain": "gen-lang-client-0678487394.firebaseapp.com",
+  "projectId": "golden-mind-psychiatry",
+  "appId": "1:234461995780:web:8821b25b7cddb75390a651",
+  "apiKey": "AIzaSyDNYtWMfuDxd_pRnWjKsAqYCjrZQKqzg-c",
+  "authDomain": "golden-mind-psychiatry.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-goldenmindpsychi-fcaec566-1e71-476a-901e-8e362f55fd45",
-  "storageBucket": "gen-lang-client-0678487394.firebasestorage.app",
-  "messagingSenderId": "184483543277",
+  "storageBucket": "golden-mind-psychiatry.firebasestorage.app",
+  "messagingSenderId": "234461995780",
   "measurementId": "",
-  "oAuthClientId": "184483543277-mmjhd3diu6f4ve4jqo0pcgf83qs6iiot.apps.googleusercontent.com",
+  "oAuthClientId": "234461995780-m8957fh014bad98amm9phnp22s7dma0g.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

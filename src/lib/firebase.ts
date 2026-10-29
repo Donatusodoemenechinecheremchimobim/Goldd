@@ -1,5 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  OAuthProvider,
+  FacebookAuthProvider,
+  TwitterAuthProvider,
+} from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -9,7 +15,7 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore with the named database from config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Initialize Firebase Auth & US Identity Providers (Google, Yahoo, Microsoft, Apple)
+// Initialize Firebase Auth & US Identity Providers (Google, Yahoo, Microsoft, Apple, Facebook, X/Twitter)
 export const auth = getAuth(app);
 
 export const googleProvider = new GoogleAuthProvider();
@@ -26,6 +32,11 @@ microsoftProvider.setCustomParameters({ prompt: 'select_account' });
 export const appleProvider = new OAuthProvider('apple.com');
 appleProvider.addScope('email');
 appleProvider.addScope('name');
+
+export const facebookProvider = new FacebookAuthProvider();
+facebookProvider.addScope('email');
+
+export const twitterProvider = new TwitterAuthProvider();
 
 export enum OperationType {
   CREATE = 'create',

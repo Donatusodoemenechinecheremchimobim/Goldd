@@ -131,15 +131,26 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Collection Rules (Strict Tenant Isolation per Patient UID)
+    // Collection Rules (Strict Tenant Isolation & Anti-Field-Tampering)
     // ===============================================================
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if (isOwner(userId) && request.resource.data.role == 'patient' && isValidUser(request.resource.data)) ||
-        (isAdmin() && isValidUser(request.resource.data));
-      allow update: if (isOwner(userId) && request.resource.data.uid == resource.data.uid && request.resource.data.role == resource.data.role && isValidUser(request.resource.data)) ||
-        (isAdmin() && isValidUser(request.resource.data));
+      allow create: if (
+        isOwner(userId) &&
+        request.resource.data.role == 'patient' &&
+        !request.resource.data.keys().hasAny(['diagnosisSummary', 'clinicalRecommendations', 'treatmentPlanNotes', 'sharedResources']) &&
+        isValidUser(request.resource.data)
+      ) || (isAdmin() && isValidUser(request.resource.data));
+      allow update: if (
+        isOwner(userId) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.get('diagnosisSummary', '') == resource.data.get('diagnosisSummary', '') &&
+        request.resource.data.get('clinicalRecommendations', '') == resource.data.get('clinicalRecommendations', '') &&
+        request.resource.data.get('treatmentPlanNotes', '') == resource.data.get('treatmentPlanNotes', '') &&
+        isValidUser(request.resource.data)
+      ) || (isAdmin() && isValidUser(request.resource.data));
       allow delete: if isAdmin();
     }
 
@@ -193,10 +204,22 @@ service cloud.firestore {
     match /medications/{medicationId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
       allow create: if isValidMedication(request.resource.data) && (
-        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+        isAdmin() || (
+          isSignedIn() &&
+          request.resource.data.patientId == request.auth.uid &&
+          request.resource.data.refillStatus in ['active', 'refill_requested']
+        )
       );
       allow update: if isValidMedication(request.resource.data) && (
-        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+        isAdmin() || (
+          isSignedIn() &&
+          resource.data.patientId == request.auth.uid &&
+          request.resource.data.patientId == request.auth.uid &&
+          request.resource.data.medicationName == resource.data.medicationName &&
+          request.resource.data.dosage == resource.data.dosage &&
+          request.resource.data.refillsRemaining == resource.data.refillsRemaining &&
+          request.resource.data.refillStatus == 'refill_requested'
+        )
       );
       allow delete: if isAdmin();
     }
@@ -204,10 +227,21 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid);
       allow create: if isValidMessage(request.resource.data) && (
-        isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
+        isAdmin() || (
+          isSignedIn() &&
+          request.resource.data.patientId == request.auth.uid &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.senderRole == 'patient'
+        )
       );
       allow update: if isValidMessage(request.resource.data) && (
-        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+        isAdmin() || (
+          isSignedIn() &&
+          resource.data.patientId == request.auth.uid &&
+          request.resource.data.patientId == request.auth.uid &&
+          request.resource.data.body == resource.data.body &&
+          request.resource.data.subject == resource.data.subject
+        )
       );
       allow delete: if isAdmin();
     }
@@ -218,7 +252,14 @@ service cloud.firestore {
         isAdmin() || (isSignedIn() && request.resource.data.patientId == request.auth.uid)
       );
       allow update: if isValidInvoice(request.resource.data) && (
-        isAdmin() || (isSignedIn() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+        isAdmin() || (
+          isSignedIn() &&
+          resource.data.patientId == request.auth.uid &&
+          request.resource.data.patientId == request.auth.uid &&
+          request.resource.data.amount == resource.data.amount &&
+          request.resource.data.insuranceCoveredAmount == resource.data.insuranceCoveredAmount &&
+          request.resource.data.patientResponsibility == resource.data.patientResponsibility
+        )
       );
       allow delete: if isAdmin();
     }
