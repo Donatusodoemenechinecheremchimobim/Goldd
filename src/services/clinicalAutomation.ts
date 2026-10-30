@@ -129,6 +129,27 @@ export function generateTelehealthRoomUrl(seed?: string): string {
   return `https://telehealth.goldenmindpsychiatry.org/tx-hipaa-room/gmp-${randomCode || 'tx2026'}`;
 }
 
+export function isPatientRegistrationComplete(user?: PortalUser | null): boolean {
+  if (!user) return false;
+  if (isAuthorizedProviderEmail(user.email) || user.role === 'provider') return true;
+  const hasDob = Boolean(
+    user.dateOfBirth &&
+      user.dateOfBirth.trim() !== '' &&
+      user.dateOfBirth.trim().toLowerCase() !== 'not provided'
+  );
+  const hasPhone = Boolean(
+    user.phone &&
+      user.phone.trim() !== '' &&
+      user.phone.trim().toLowerCase() !== 'not provided'
+  );
+  const hasName = Boolean(
+    user.fullName &&
+      user.fullName.trim() !== '' &&
+      user.fullName.trim().toLowerCase() !== 'patient'
+  );
+  return hasDob && hasPhone && hasName;
+}
+
 /**
  * Automated Clinical Onboarding Engine:
  * 1. Ensures `/users/{uid}` document exists (with strict patient vs verified provider role).
@@ -165,13 +186,20 @@ export async function ensurePatientOnboarding(
   const cleanName = sanitizeClinicalInput(rawName, 120) || 'Patient';
   const formattedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
 
+  const initialPhone = sanitizeClinicalInput(extraProfile?.phone || '', 40);
+  const initialDob = sanitizeClinicalInput(extraProfile?.dateOfBirth || '', 20);
+
   // Real patient profile with zero fabricated insurance IDs or pharmacy placeholders
   let portalUser: PortalUser = {
     uid,
     email,
     fullName: formattedName,
-    phone: sanitizeClinicalInput(extraProfile?.phone || '', 40),
-    dateOfBirth: sanitizeClinicalInput(extraProfile?.dateOfBirth || '', 20),
+    phone: initialPhone,
+    dateOfBirth: initialDob,
+    biologicalSex: sanitizeClinicalInput(extraProfile?.biologicalSex || '', 60),
+    address: sanitizeClinicalInput(extraProfile?.address || '', 250),
+    emergencyContact: sanitizeClinicalInput(extraProfile?.emergencyContact || '', 200),
+    primaryConcern: sanitizeClinicalInput(extraProfile?.primaryConcern || '', 240),
     role: isVerifiedProvider ? 'provider' : 'patient',
     insuranceProvider: sanitizeClinicalInput(
       extraProfile?.insuranceProvider || '',
@@ -189,6 +217,7 @@ export async function ensurePatientOnboarding(
       extraProfile?.preferredPharmacy || '',
       200
     ),
+    registrationCompleted: isVerifiedProvider || Boolean(initialPhone && initialDob),
     onboardingCompleted: isVerifiedProvider,
     createdAt: now,
     updatedAt: now,
@@ -218,6 +247,12 @@ export async function ensurePatientOnboarding(
   if (userSnap && userSnap.exists()) {
     const existing = userSnap.data() as PortalUser;
     const resolvedRole = isVerifiedProvider ? 'provider' : 'patient';
+    const mergedPhone = extraProfile?.phone?.trim()
+      ? sanitizeClinicalInput(extraProfile.phone, 40)
+      : existing.phone || '';
+    const mergedDob = extraProfile?.dateOfBirth?.trim()
+      ? sanitizeClinicalInput(extraProfile.dateOfBirth, 20)
+      : existing.dateOfBirth || '';
     portalUser = {
       ...existing,
       fullName:
@@ -226,24 +261,46 @@ export async function ensurePatientOnboarding(
           : extraProfile?.fullName?.trim()
           ? formattedName
           : existing.fullName || formattedName,
-      phone: extraProfile?.phone?.trim()
-        ? sanitizeClinicalInput(extraProfile.phone, 40)
-        : existing.phone || '',
-      dateOfBirth: extraProfile?.dateOfBirth?.trim()
-        ? sanitizeClinicalInput(extraProfile.dateOfBirth, 20)
-        : existing.dateOfBirth || '',
+      phone: mergedPhone,
+      dateOfBirth: mergedDob,
+      biologicalSex: extraProfile?.biologicalSex?.trim()
+        ? sanitizeClinicalInput(extraProfile.biologicalSex, 60)
+        : existing.biologicalSex || '',
+      address: extraProfile?.address?.trim()
+        ? sanitizeClinicalInput(extraProfile.address, 250)
+        : existing.address || '',
+      emergencyContact: extraProfile?.emergencyContact?.trim()
+        ? sanitizeClinicalInput(extraProfile.emergencyContact, 200)
+        : existing.emergencyContact || '',
+      primaryConcern: extraProfile?.primaryConcern?.trim()
+        ? sanitizeClinicalInput(extraProfile.primaryConcern, 240)
+        : existing.primaryConcern || '',
       insuranceProvider: extraProfile?.insuranceProvider?.trim()
         ? sanitizeClinicalInput(extraProfile.insuranceProvider, 120)
         : existing.insuranceProvider || '',
       insuranceMemberId: existing.insuranceMemberId || '',
       insuranceGroupNumber: existing.insuranceGroupNumber || '',
       preferredPharmacy: existing.preferredPharmacy || '',
+      registrationCompleted:
+        existing.registrationCompleted || Boolean(mergedPhone && mergedDob),
       role: resolvedRole,
     };
 
-    if (existing.role !== resolvedRole) {
+    if (
+      existing.role !== resolvedRole ||
+      (extraProfile?.phone?.trim() && existing.phone !== mergedPhone) ||
+      (extraProfile?.dateOfBirth?.trim() && existing.dateOfBirth !== mergedDob)
+    ) {
       try {
-        await updateDoc(userRef, { role: resolvedRole, updatedAt: now });
+        await updateDoc(userRef, {
+          role: resolvedRole,
+          fullName: portalUser.fullName,
+          phone: portalUser.phone,
+          dateOfBirth: portalUser.dateOfBirth,
+          insuranceProvider: portalUser.insuranceProvider,
+          registrationCompleted: portalUser.registrationCompleted,
+          updatedAt: now,
+        });
       } catch {
         // Non-fatal
       }

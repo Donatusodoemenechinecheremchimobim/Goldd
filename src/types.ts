@@ -76,6 +76,10 @@ export interface PortalUser {
   fullName: string;
   phone?: string;
   dateOfBirth?: string;
+  biologicalSex?: string;
+  address?: string;
+  emergencyContact?: string;
+  primaryConcern?: string;
   role: UserRole;
   insuranceProvider?: string;
   insuranceMemberId?: string;
@@ -85,6 +89,7 @@ export interface PortalUser {
   treatmentPlanNotes?: string;
   clinicalRecommendations?: string;
   sharedResources?: SharedPatientResource[];
+  registrationCompleted?: boolean;
   onboardingCompleted: boolean;
   createdAt: string;
   updatedAt: string;

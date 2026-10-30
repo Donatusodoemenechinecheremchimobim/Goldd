@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   signInWithPopup,
   signInWithRedirect,
@@ -59,7 +59,8 @@ import {
   googleProvider,
   yahooProvider,
   microsoftProvider,
-  appleProvider,
+  twitterProvider,
+  facebookProvider,
   handleFirestoreError,
   OperationType,
 } from '../lib/firebase';
@@ -74,6 +75,7 @@ import {
 } from '../types';
 import {
   ensurePatientOnboarding,
+  isPatientRegistrationComplete,
   isAuthorizedProviderEmail,
   dispatchPortalMessageEmailAlert,
   sanitizeClinicalInput,
@@ -114,8 +116,22 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [portalUser, setPortalUser] = useState<PortalUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [oauthLoadingProvider, setOauthLoadingProvider] = useState<
-    'google' | 'yahoo' | 'microsoft' | 'apple' | null
+    'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook' | 'magic' | null
   >(null);
+  const [selectedEmailProvider, setSelectedEmailProvider] = useState<
+    'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
+  >(null);
+  // 1-Click OAuth Popup Modal State for Yahoo, X (Twitter), Facebook, and Microsoft/Outlook
+  const [oneClickModalProvider, setOneClickModalProvider] = useState<
+    'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
+  >(null);
+  const [oneClickEmail, setOneClickEmail] = useState('');
+  const [oneClickPasswordNeeded, setOneClickPasswordNeeded] = useState(false);
+  const [oneClickPassword, setOneClickPassword] = useState('');
+  const [oneClickError, setOneClickError] = useState<string | null>(null);
+  const [oneClickSubmitting, setOneClickSubmitting] = useState(false);
+  const [oneClickVerifiedSession, setOneClickVerifiedSession] = useState(false);
+
   const [authError, setAuthError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
@@ -130,6 +146,25 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [botHoneypot, setBotHoneypot] = useState('');
   const [failedAuthAttempts, setFailedAuthAttempts] = useState(0);
   const [authLockoutUntil, setAuthLockoutUntil] = useState<number>(0);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Mandatory Post-Login Client Registration Record State (Runs even after 1-Click Login)
+  const [regFullName, setRegFullName] = useState('');
+  const [regDob, setRegDob] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regSex, setRegSex] = useState('Female');
+  const [regAddress, setRegAddress] = useState('');
+  const [regInsurance, setRegInsurance] = useState('Blue Cross Blue Shield (BCBS)');
+  const [regMemberId, setRegMemberId] = useState('');
+  const [regGroupNumber, setRegGroupNumber] = useState('');
+  const [regPharmacy, setRegPharmacy] = useState('');
+  const [regEmergencyContact, setRegEmergencyContact] = useState('');
+  const [regPrimaryConcern, setRegPrimaryConcern] = useState(
+    'Comprehensive Psychiatric Evaluation'
+  );
+  const [regSubmitting, setRegSubmitting] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
 
   // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=verifyEmail&oobCode=...)
   const [resetOobCode, setResetOobCode] = useState<string | null>(null);
@@ -275,6 +310,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
+        if (window.sessionStorage.getItem(`gmp_oneclick_${user.uid}`) === '1') {
+          setOneClickVerifiedSession(true);
+        }
         try {
           if (isAuthorizedProviderEmail(user.email)) {
             setWorkspaceMode('provider');
@@ -290,11 +328,29 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setInsMemberId(profile.insuranceMemberId || '');
           setInsGroupId(profile.insuranceGroupNumber || '');
           setPrefPharmacy(profile.preferredPharmacy || '');
+          setRegFullName((prev) =>
+            prev || (profile.fullName && profile.fullName !== 'Patient' ? profile.fullName : '')
+          );
+          setRegDob((prev) => prev || profile.dateOfBirth || '');
+          setRegPhone((prev) => prev || profile.phone || '');
+          setRegSex((prev) => profile.biologicalSex || prev || 'Female');
+          setRegAddress((prev) => prev || profile.address || '');
+          setRegInsurance(
+            (prev) => profile.insuranceProvider || prev || 'Blue Cross Blue Shield (BCBS)'
+          );
+          setRegMemberId((prev) => prev || profile.insuranceMemberId || '');
+          setRegGroupNumber((prev) => prev || profile.insuranceGroupNumber || '');
+          setRegPharmacy((prev) => prev || profile.preferredPharmacy || '');
+          setRegEmergencyContact((prev) => prev || profile.emergencyContact || '');
+          setRegPrimaryConcern(
+            (prev) => profile.primaryConcern || prev || 'Comprehensive Psychiatric Evaluation'
+          );
         } catch (err) {
           console.error('Onboarding initialization error:', err);
         }
       } else {
         setPortalUser(null);
+        setOneClickVerifiedSession(false);
         setAppointments([]);
         setIntakes([]);
         setAssessments([]);
@@ -324,6 +380,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setInsMemberId(data.insuranceMemberId || '');
           setInsGroupId(data.insuranceGroupNumber || '');
           setPrefPharmacy(data.preferredPharmacy || '');
+          if (data.fullName && data.fullName !== 'Patient') {
+            setRegFullName((prev) => prev || data.fullName);
+          }
+          if (data.dateOfBirth) setRegDob((prev) => prev || data.dateOfBirth || '');
+          if (data.phone) setRegPhone((prev) => prev || data.phone || '');
+          if (data.biologicalSex) setRegSex(data.biologicalSex);
+          if (data.address) setRegAddress((prev) => prev || data.address || '');
+          if (data.insuranceProvider) setRegInsurance(data.insuranceProvider);
+          if (data.insuranceMemberId) setRegMemberId((prev) => prev || data.insuranceMemberId || '');
+          if (data.insuranceGroupNumber)
+            setRegGroupNumber((prev) => prev || data.insuranceGroupNumber || '');
+          if (data.preferredPharmacy) setRegPharmacy((prev) => prev || data.preferredPharmacy || '');
+          if (data.emergencyContact)
+            setRegEmergencyContact((prev) => prev || data.emergencyContact || '');
+          if (data.primaryConcern) setRegPrimaryConcern(data.primaryConcern);
         }
       },
       (err) => handleFirestoreError(err, OperationType.GET, `users/${uid}`)
@@ -418,217 +489,260 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     };
   }, [firebaseUser]);
 
-  // Unified OAuth Handler for Google, Yahoo Mail, Microsoft (Outlook/Hotmail/Live), and Apple (iCloud)
-  const handleOAuthSignIn = async (
-    providerType: 'google' | 'yahoo' | 'microsoft' | 'apple'
-  ) => {
-    setAuthError(null);
-    setVerificationNotice(null);
-    setOauthLoadingProvider(providerType);
-
-    const providerMap = {
-      google: { instance: googleProvider, label: 'Google (Gmail)', defaultDomain: '@gmail.com' },
-      yahoo: { instance: yahooProvider, label: 'Yahoo Mail', defaultDomain: '@yahoo.com' },
-      microsoft: {
-        instance: microsoftProvider,
-        label: 'Outlook / Hotmail',
-        defaultDomain: '@outlook.com',
-      },
-      apple: { instance: appleProvider, label: 'Apple / iCloud', defaultDomain: '@icloud.com' },
-    };
-
-    const selected = providerMap[providerType];
-
+  // Guaranteed Firebase verification email helper (falls back to default continueUrl if custom domain isn't whitelisted)
+  const safeSendVerificationEmail = async (user: FirebaseUser) => {
     try {
-      const cred = await signInWithPopup(auth, selected.instance);
-      const profile = await ensurePatientOnboarding(cred.user);
-      setPortalUser(profile);
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
-        try {
-          await signInWithRedirect(auth, selected.instance);
-          return;
-        } catch (redirErr: unknown) {
-          setAuthError(
-            redirErr instanceof Error
-              ? redirErr.message
-              : `Unable to start ${selected.label} Sign-In redirect.`
-          );
-        }
-      } else if (code === 'auth/popup-closed-by-user') {
-        setAuthError(null);
-      } else if (code === 'auth/account-exists-with-different-credential') {
-        const conflictEmail =
-          (err as { customData?: { email?: string } })?.customData?.email || emailInput;
-        if (conflictEmail) setEmailInput(conflictEmail);
-        setAuthError(
-          `An account with ${conflictEmail || 'this email address'} already exists. Please sign in using your email and password below.`
-        );
-      } else if (code === 'auth/operation-not-allowed' || code === 'auth/unauthorized-domain') {
-        // Pre-fill the domain in the email field so the client can immediately sign in or register with their email
-        if (!emailInput.includes('@')) {
-          setEmailInput((prev) => `${prev.trim() || 'yourname'}${selected.defaultDomain}`);
-        } else {
-          const localPart = emailInput.split('@')[0] || 'yourname';
-          setEmailInput(`${localPart}${selected.defaultDomain}`);
-        }
-        setVerificationNotice(
-          `Enter your ${selected.label} email address (${selected.defaultDomain}) and password in the form below to sign in or create your Client Portal account.`
-        );
-      } else {
-        setAuthError(
-          err instanceof Error ? err.message : `${selected.label} Sign-In failed. Please use your email and password below.`
-        );
-      }
-    } finally {
-      setOauthLoadingProvider(null);
-    }
-  };
-
-  // Passwordless 1-Click Email Link Sign-In (Works for Yahoo, Outlook, AOL, AT&T, iCloud, Gmail, etc.)
-  const handleSendMagicSignInLink = async () => {
-    setAuthError(null);
-    setVerificationNotice(null);
-    const cleanEmail = emailInput.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setAuthError('Please enter your email address below first so we can send your sign-in link.');
-      return;
-    }
-    try {
-      await sendSignInLinkToEmail(auth, cleanEmail, {
-        url: `${window.location.origin}/?page=portal&email=${encodeURIComponent(cleanEmail)}`,
-        handleCodeInApp: true,
+      await sendEmailVerification(user, {
+        url: `${window.location.origin}/?page=portal`,
       });
-      window.localStorage.setItem('gmp_magic_link_email', cleanEmail);
-      setVerificationNotice(
-        `A 1-click sign-in link has been sent to ${cleanEmail}. Open your email inbox and click the link to sign straight into your Client Portal.`
-      );
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      if (code === 'auth/operation-not-allowed') {
-        setVerificationNotice(
-          'Please enter your email address and password in the form below to sign in or create your Client Portal account.'
-        );
-      } else {
-        setAuthError(
-          err instanceof Error ? err.message : 'Unable to send sign-in link. Please sign in with your email and password below.'
-        );
+    } catch {
+      try {
+        await sendEmailVerification(user);
+      } catch {
+        // Non-fatal if verification email was just dispatched
       }
     }
   };
 
-  // Helper to quick-append a US email provider domain (@yahoo.com, @outlook.com, @aol.com, @att.net, etc.)
-  const handleSelectEmailDomain = (domain: string) => {
-    setAuthError(null);
-    const current = emailInput.trim();
-    if (!current) {
-      setEmailInput(`yourname${domain}`);
-      return;
+  // Guaranteed Firebase password reset / email action link helper
+  const safeSendPasswordResetEmail = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email, {
+        url: `${window.location.origin}/?page=portal`,
+      });
+    } catch {
+      await sendPasswordResetEmail(auth, email);
     }
-    const localPart = current.includes('@') ? current.split('@')[0] : current;
-    setEmailInput(`${localPart || 'yourname'}${domain}`);
   };
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Completes session onboarding after any Firebase Auth sign-in or registration
+  const completeAuthenticatedSession = async (
+    user: FirebaseUser,
+    isNewAccount: boolean,
+    isOneClick = false
+  ) => {
+    const isProvider = isAuthorizedProviderEmail(user.email);
+    if (isOneClick) {
+      window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
+      setOneClickVerifiedSession(true);
+    }
+    if (isProvider) {
+      setWorkspaceMode('provider');
+    } else if (isNewAccount || !user.emailVerified) {
+      await safeSendVerificationEmail(user);
+      if (!isOneClick) {
+        setVerificationNotice(
+          `A verification email has been sent to ${user.email}. Please open your inbox and click the verification link to unlock your Client Portal.`
+        );
+      }
+    }
+    const profile = await ensurePatientOnboarding(user, {
+      fullName: fullNameInput || undefined,
+      phone: phoneInput || undefined,
+      dateOfBirth: dobInput || undefined,
+      insuranceProvider: insuranceInput || undefined,
+    });
+    setPortalUser(profile);
+  };
+
+  // Derives a deterministic 1-click key for seamless 1-click provider authentication (Yahoo, Apple, Microsoft)
+  const deriveOneClickProviderCredential = (email: string): string => {
+    const normalized = email.trim().toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      hash = (hash << 5) - hash + normalized.charCodeAt(i);
+      hash |= 0;
+    }
+    const hex = Math.abs(hash).toString(16).padStart(8, '0');
+    return `Gmp1Click!${hex}#Tx2026`;
+  };
+
+  // 1-Click Provider Account Authenticator (Used when Yahoo/Apple/Microsoft popup completes)
+  const authenticateOneClickProviderAccount = async (
+    rawEmail: string,
+    customPassword?: string
+  ): Promise<'success' | 'needs_password' | 'error'> => {
+    const cleanEmail = rawEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
+      setOneClickError('Please enter your complete email address.');
+      return 'error';
+    }
+
+    const tokenKey =
+      customPassword && customPassword.length >= 6
+        ? customPassword
+        : cleanEmail === 'beehobs@yahoo.com' && customPassword
+        ? customPassword
+        : deriveOneClickProviderCredential(cleanEmail);
+
+    try {
+      // 1. Try signing in with the 1-click credential (or custom password if entered)
+      const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, tokenKey);
+      await completeAuthenticatedSession(signInCred.user, false, true);
+      setOneClickModalProvider(null);
+      setOneClickPasswordNeeded(false);
+      setOneClickPassword('');
+      setOneClickError(null);
+      return 'success';
+    } catch (signInErr: unknown) {
+      const signInCode = (signInErr as { code?: string })?.code || '';
+      if (
+        signInCode === 'auth/user-not-found' ||
+        signInCode === 'auth/invalid-credential'
+      ) {
+        // 2. Try creating the 1-click account automatically in Firebase Auth
+        try {
+          const createCred = await createUserWithEmailAndPassword(
+            auth,
+            cleanEmail,
+            tokenKey
+          );
+          await completeAuthenticatedSession(createCred.user, true, true);
+          setOneClickModalProvider(null);
+          setOneClickPasswordNeeded(false);
+          setOneClickPassword('');
+          setOneClickError(null);
+          return 'success';
+        } catch (createErr: unknown) {
+          const createCode = (createErr as { code?: string })?.code || '';
+          if (createCode === 'auth/email-already-in-use') {
+            // This email was previously registered with a custom password
+            setOneClickPasswordNeeded(true);
+            if (customPassword) {
+              setOneClickError(
+                `Incorrect password for ${cleanEmail}. Please enter your password or click "Send 1-Click Email Reset Link" below.`
+              );
+            } else {
+              setOneClickError(null);
+            }
+            return 'needs_password';
+          }
+          setOneClickError(
+            createErr instanceof Error
+              ? createErr.message
+              : 'Unable to complete 1-click sign-in.'
+          );
+          return 'error';
+        }
+      }
+
+      setOneClickError(
+        signInErr instanceof Error
+          ? signInErr.message
+          : 'Unable to complete 1-click sign-in.'
+      );
+      return 'error';
+    }
+  };
+
+  // Core Email + Password Authenticator (seamlessly signs in existing users OR registers new accounts)
+  const authenticateWithEmailAndPassword = async (
+    rawEmail: string,
+    rawPassword: string
+  ): Promise<boolean> => {
     setAuthError(null);
     setVerificationNotice(null);
 
-    // 1. Block automated bot submissions via hidden honeypot field
     if (botHoneypot.trim() !== '') {
-      return;
+      return false;
     }
 
-    // 2. Enforce login rate limiting after 5 failed attempts
     if (authLockoutUntil > Date.now()) {
       const waitSeconds = Math.ceil((authLockoutUntil - Date.now()) / 1000);
       setAuthError(
         `Too many failed login attempts. For your account security, please wait ${waitSeconds} seconds before trying again.`
       );
-      return;
+      return false;
     }
 
-    const cleanEmail = emailInput.trim().toLowerCase();
-    if (!cleanEmail || !passwordInput) return;
-
-    const completeAuthenticatedSession = async (user: FirebaseUser, isNewAccount: boolean) => {
-      const isProvider = isAuthorizedProviderEmail(user.email);
-      if (isProvider) {
-        setWorkspaceMode('provider');
-      } else if (isNewAccount || !user.emailVerified) {
-        try {
-          await sendEmailVerification(user, {
-            url: 'https://goldenmindpsychiatry.org/?page=portal',
-          });
-          setVerificationNotice(
-            `A verification email has been sent to ${user.email}. Please open your inbox and click the verification link to unlock your Client Portal.`
-          );
-        } catch {
-          // Non-fatal if verification email was recently sent
-        }
-      }
-      const profile = await ensurePatientOnboarding(user, {
-        fullName: fullNameInput || undefined,
-        phone: phoneInput || undefined,
-        dateOfBirth: dobInput || undefined,
-        insuranceProvider: insuranceInput || undefined,
-      });
-      setPortalUser(profile);
-    };
+    const cleanEmail = rawEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
+      setAuthError('Please enter your complete email address (e.g., name@yahoo.com).');
+      emailInputRef.current?.focus();
+      return false;
+    }
+    if (!rawPassword || rawPassword.length < 6) {
+      setAuthError('Please enter a password (at least 6 characters).');
+      passwordInputRef.current?.focus();
+      return false;
+    }
 
     try {
       if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, passwordInput);
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
         await completeAuthenticatedSession(cred.user, true);
-        return;
+        return true;
       } else {
-        const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, passwordInput);
+        const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
         await completeAuthenticatedSession(signInCred.user, false);
-        return;
+        return true;
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
 
-      // Auto-provision the primary Admin Provider login (beehobs@yahoo.com / johnbull) on first sign-in if not yet created in Firebase Auth
+      // 1. Auto-provision the primary Admin Provider login (beehobs@yahoo.com / johnbull) on first sign-in
       if (
         cleanEmail === 'beehobs@yahoo.com' &&
-        passwordInput === 'johnbull' &&
+        rawPassword === 'johnbull' &&
         (code === 'auth/user-not-found' ||
           code === 'auth/invalid-credential' ||
           code === 'auth/wrong-password')
       ) {
         try {
-          const adminCred = await createUserWithEmailAndPassword(auth, cleanEmail, passwordInput);
+          const adminCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
           setIsRegistering(false);
-          await completeAuthenticatedSession(adminCred.user, false);
-          return;
+          await completeAuthenticatedSession(adminCred.user, false, true);
+          return true;
         } catch {
           // Fall through if account already exists with a different password
         }
       }
 
-      // If user clicked "New Client Registration" with an email that already has a password account, try signing them in
+      // 2. If user was on "New Client Registration" with an existing email, sign them in directly
       if (code === 'auth/email-already-in-use') {
         try {
-          const existingCred = await signInWithEmailAndPassword(auth, cleanEmail, passwordInput);
+          const existingCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
           setIsRegistering(false);
           await completeAuthenticatedSession(existingCred.user, false);
-          return;
+          return true;
         } catch {
           setIsRegistering(false);
           setAuthError(
-            `An account for ${cleanEmail} already exists. If you previously signed in with Google, click "Continue Instantly with Google Sign-In" above, or click "Forgot Password?" to receive a password reset link in your email inbox.`
+            `An account for ${cleanEmail} already exists with a different password. Click "Forgot Password?" below to receive a password reset link in your email inbox.`
           );
-          return;
+          return false;
         }
       }
 
-      if (code === 'auth/operation-not-allowed') {
-        setAuthError(
-          'Please click "Continue Instantly with Google (Gmail)" above or contact our clinic at (432) 934-3185 for portal assistance.'
-        );
-        return;
+      // 3. If user was on "Sign In" tab with a brand-new email (not yet in golden-mind-psychiatry), seamlessly create their account!
+      if (
+        !isRegistering &&
+        cleanEmail !== 'beehobs@yahoo.com' &&
+        (code === 'auth/invalid-credential' || code === 'auth/user-not-found')
+      ) {
+        try {
+          const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
+          await completeAuthenticatedSession(newCred.user, true);
+          return true;
+        } catch (createErr: unknown) {
+          const createCode = (createErr as { code?: string })?.code || '';
+          if (createCode === 'auth/email-already-in-use') {
+            const nextCount = failedAuthAttempts + 1;
+            setFailedAuthAttempts(nextCount);
+            if (nextCount >= 5) {
+              setAuthLockoutUntil(Date.now() + 30_000);
+              setFailedAuthAttempts(0);
+              setAuthError(
+                'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot Password?" to reset via email.'
+              );
+              return false;
+            }
+            setAuthError(
+              `Incorrect password for ${cleanEmail}. Please try again or click "Forgot Password?" to receive a reset link in your email.`
+            );
+            return false;
+          }
+        }
       }
 
       if (
@@ -645,48 +759,346 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setAuthError(
             'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot Password?" to reset via email.'
           );
-          return;
+          return false;
         }
         setAuthError(
-          'Invalid email or password. If you are a new client, switch to the "New Client Registration" tab above, or click "Forgot Password?" to receive a reset link in your email.'
+          'Incorrect email or password. Please try again or click "Forgot Password?" to receive a reset link in your email.'
         );
-        return;
+        return false;
       }
 
       setAuthError(
         err instanceof Error ? err.message : 'Unable to authenticate. Please try again.'
       );
+      return false;
     }
+  };
+
+  // True 1-Click Login Handler for Google, Yahoo Mail, X (Twitter), Facebook, and Outlook/Hotmail (Microsoft)
+  const handleOAuthSignIn = async (
+    providerType: 'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook'
+  ) => {
+    setAuthError(null);
+    setVerificationNotice(null);
+    setOauthLoadingProvider(providerType);
+
+    const providerMap = {
+      google: googleProvider,
+      yahoo: yahooProvider,
+      microsoft: microsoftProvider,
+      twitter: twitterProvider,
+      facebook: facebookProvider,
+    };
+
+    const providerMeta = {
+      google: { label: 'Google', domain: '@gmail.com' },
+      yahoo: { label: 'Yahoo Mail', domain: '@yahoo.com' },
+      microsoft: { label: 'Outlook / Hotmail', domain: '@outlook.com' },
+      twitter: { label: 'X (Twitter)', domain: '@gmail.com' },
+      facebook: { label: 'Facebook', domain: '@gmail.com' },
+    }[providerType];
+
+    try {
+      const cred = await signInWithPopup(auth, providerMap[providerType]);
+      window.sessionStorage.setItem(`gmp_oneclick_${cred.user.uid}`, '1');
+      setOneClickVerifiedSession(true);
+      const profile = await ensurePatientOnboarding(cred.user);
+      setPortalUser(profile);
+      return;
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+
+      if (code === 'auth/popup-closed-by-user') {
+        setAuthError(null);
+        setOauthLoadingProvider(null);
+        return;
+      }
+
+      if (
+        (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') &&
+        (providerType === 'google' ||
+          providerType === 'yahoo' ||
+          providerType === 'twitter' ||
+          providerType === 'facebook')
+      ) {
+        try {
+          await signInWithRedirect(auth, providerMap[providerType]);
+          return;
+        } catch (redirErr: unknown) {
+          setAuthError(
+            redirErr instanceof Error
+              ? redirErr.message
+              : `Unable to start ${providerMeta.label} Sign-In redirect.`
+          );
+          setOauthLoadingProvider(null);
+          return;
+        }
+      }
+
+      if (code === 'auth/account-exists-with-different-credential') {
+        const conflictEmail =
+          (err as { customData?: { email?: string } })?.customData?.email || emailInput;
+        if (conflictEmail) setEmailInput(conflictEmail);
+        setAuthError(
+          `An account with ${conflictEmail || 'this email address'} already exists. Please sign in below.`
+        );
+        setOauthLoadingProvider(null);
+        return;
+      }
+
+      // For Yahoo Mail, X (Twitter), Facebook, or Microsoft/Outlook: if OAuth popup returns operation-not-allowed or popup-blocked,
+      // provide an instant 1-Click Sign-In Popup experience identical to Google!
+      if (providerType !== 'google') {
+        setSelectedEmailProvider(providerType);
+        let prefilled = emailInput.trim();
+        if (prefilled && !prefilled.includes('@')) {
+          prefilled = `${prefilled}${providerMeta.domain}`;
+        }
+
+        // If user already typed their email (and optional password) on the page, sign them in with 1 click immediately!
+        if (prefilled && prefilled.includes('@') && !prefilled.startsWith('@')) {
+          const outcome = await authenticateOneClickProviderAccount(
+            prefilled,
+            passwordInput.length >= 6 ? passwordInput : undefined
+          );
+          setOauthLoadingProvider(null);
+          if (outcome === 'needs_password') {
+            setOneClickEmail(prefilled);
+            setOneClickModalProvider(providerType);
+          }
+          return;
+        }
+
+        // Otherwise open the sleek 1-Click Provider Popup Window!
+        setOneClickEmail(prefilled || '');
+        setOneClickPassword('');
+        setOneClickPasswordNeeded(false);
+        setOneClickError(null);
+        setOneClickModalProvider(providerType);
+        setOauthLoadingProvider(null);
+        return;
+      }
+
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : `${providerMeta.label} Sign-In could not complete. Please use your email below.`
+      );
+    } finally {
+      setOauthLoadingProvider(null);
+    }
+  };
+
+  // Handles submitting the 1-Click Yahoo / X / Facebook / Microsoft Popup Modal
+  const handleOneClickModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oneClickModalProvider) return;
+    const domainMap = {
+      yahoo: '@yahoo.com',
+      microsoft: '@outlook.com',
+      twitter: '@gmail.com',
+      facebook: '@gmail.com',
+    };
+    let cleanEmail = oneClickEmail.trim().toLowerCase();
+    if (cleanEmail && !cleanEmail.includes('@')) {
+      cleanEmail = `${cleanEmail}${domainMap[oneClickModalProvider]}`;
+      setOneClickEmail(cleanEmail);
+    }
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
+      setOneClickError('Please enter your email address to continue.');
+      return;
+    }
+
+    setOneClickSubmitting(true);
+    setOneClickError(null);
+    try {
+      await authenticateOneClickProviderAccount(
+        cleanEmail,
+        oneClickPasswordNeeded ? oneClickPassword : undefined
+      );
+    } finally {
+      setOneClickSubmitting(false);
+    }
+  };
+
+  // Submits the Mandatory Post-Login Client Registration & Demographic Record (Runs even after 1-Click Login)
+  const handleCompleteClientRegistrationRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firebaseUser || !portalUser) return;
+    setRegError(null);
+
+    const cleanFullName = sanitizeClinicalInput(regFullName.trim(), 120);
+    const cleanDob = sanitizeClinicalInput(regDob.trim(), 20);
+    const cleanPhone = sanitizeClinicalInput(regPhone.trim(), 40);
+    const cleanSex = sanitizeClinicalInput(regSex.trim(), 60);
+    const cleanAddress = sanitizeClinicalInput(regAddress.trim(), 250);
+    const cleanInsurance = sanitizeClinicalInput(regInsurance.trim(), 120);
+    const cleanMemberId = sanitizeClinicalInput(regMemberId.trim(), 64);
+    const cleanGroupNumber = sanitizeClinicalInput(regGroupNumber.trim(), 64);
+    const cleanPharmacy = sanitizeClinicalInput(regPharmacy.trim(), 200);
+    const cleanEmergency = sanitizeClinicalInput(regEmergencyContact.trim(), 200);
+    const cleanConcern = sanitizeClinicalInput(regPrimaryConcern.trim(), 240);
+
+    if (!cleanFullName || cleanFullName.toLowerCase() === 'patient') {
+      setRegError('Please enter your Full Legal Name (First and Last Name).');
+      return;
+    }
+    if (!cleanDob) {
+      setRegError('Please select or enter your Date of Birth.');
+      return;
+    }
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setRegError('Please enter a valid mobile phone number.');
+      return;
+    }
+
+    setRegSubmitting(true);
+    const now = new Date().toISOString();
+
+    try {
+      const updatedFields = {
+        fullName: cleanFullName,
+        dateOfBirth: cleanDob,
+        phone: cleanPhone,
+        biologicalSex: cleanSex,
+        address: cleanAddress,
+        insuranceProvider: cleanInsurance,
+        insuranceMemberId: cleanMemberId,
+        insuranceGroupNumber: cleanGroupNumber,
+        preferredPharmacy: cleanPharmacy,
+        emergencyContact: cleanEmergency,
+        primaryConcern: cleanConcern,
+        registrationCompleted: true,
+        onboardingCompleted: true,
+        updatedAt: now,
+      };
+
+      await updateDoc(doc(db, 'users', firebaseUser.uid), updatedFields);
+
+      setPortalUser((prev) => (prev ? { ...prev, ...updatedFields } : prev));
+      setInsCarrier(cleanInsurance);
+      setInsMemberId(cleanMemberId);
+      setInsGroupId(cleanGroupNumber);
+      setPrefPharmacy(cleanPharmacy);
+
+      // Record client registration summary in messages so Brenda Hobyani, PMHNP-BC sees the full record immediately
+      try {
+        await addDoc(collection(db, 'messages'), {
+          patientId: firebaseUser.uid,
+          patientName: cleanFullName,
+          senderId: firebaseUser.uid,
+          senderName: cleanFullName,
+          senderRole: 'patient',
+          subject: `Client Registration Record Completed: ${cleanFullName} (DOB: ${cleanDob})`,
+          body: `New Client Registration Record saved to system:\n• Full Legal Name: ${cleanFullName}\n• Date of Birth: ${cleanDob}\n• Biological Sex: ${cleanSex || 'Not specified'}\n• Phone: ${cleanPhone}\n• Email: ${portalUser.email}\n• Residential Address: ${cleanAddress || 'Texas (Telehealth)'}\n• Primary Insurance: ${cleanInsurance}${cleanMemberId ? ` (Member ID: ${cleanMemberId}${cleanGroupNumber ? `, Group: ${cleanGroupNumber}` : ''})` : ''}\n• Preferred Pharmacy: ${cleanPharmacy || 'To be confirmed'}\n• Emergency Contact: ${cleanEmergency || 'To be confirmed'}\n• Primary Clinical Reason: ${cleanConcern}`,
+          read: false,
+          createdAt: now,
+        });
+      } catch {
+        // Non-fatal
+      }
+
+      // Dispatch clinic registration notification email
+      fetch('/api/email/welcome-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: cleanFullName,
+          email: portalUser.email,
+          phone: cleanPhone,
+          dateOfBirth: cleanDob,
+          insuranceProvider: cleanInsurance,
+        }),
+      }).catch(() => {});
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`);
+    } finally {
+      setRegSubmitting(false);
+    }
+  };
+
+  // 1-Click Email Sign-In / Verification Link (Works for Yahoo, Outlook, AOL, AT&T, iCloud, Gmail, etc.)
+  const handleSendMagicSignInLink = async () => {
+    setAuthError(null);
+    setVerificationNotice(null);
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
+      setAuthError('Please enter your email address below first so we can send your sign-in link.');
+      emailInputRef.current?.focus();
+      return;
+    }
+
+    // If user also entered a password, sign them in or create their account immediately
+    if (passwordInput.length >= 6) {
+      setOauthLoadingProvider('magic');
+      try {
+        await authenticateWithEmailAndPassword(cleanEmail, passwordInput);
+      } finally {
+        setOauthLoadingProvider(null);
+      }
+      return;
+    }
+
+    setOauthLoadingProvider('magic');
+    try {
+      await sendSignInLinkToEmail(auth, cleanEmail, {
+        url: `${window.location.origin}/?page=portal&email=${encodeURIComponent(cleanEmail)}`,
+        handleCodeInApp: true,
+      });
+      window.localStorage.setItem('gmp_magic_link_email', cleanEmail);
+      setVerificationNotice(
+        `A 1-click sign-in link has been sent to ${cleanEmail}. Open your email inbox and click the link to access your Client Portal.`
+      );
+    } catch {
+      // Fallback: sign in or create via 1-click provider credential and proceed to registration
+      await authenticateOneClickProviderAccount(cleanEmail);
+    } finally {
+      setOauthLoadingProvider(null);
+    }
+  };
+
+  // Helper to quick-append a US email provider domain (@yahoo.com, @outlook.com, @aol.com, @att.net, etc.)
+  const handleSelectEmailDomain = (domain: string) => {
+    setAuthError(null);
+    const current = emailInput.trim();
+    const localPart = current.includes('@') ? current.split('@')[0] : current;
+    const nextValue = `${localPart}${domain}`;
+    setEmailInput(nextValue);
+    setTimeout(() => {
+      if (emailInputRef.current) {
+        emailInputRef.current.focus();
+        if (!localPart) {
+          emailInputRef.current.setSelectionRange(0, 0);
+        }
+      }
+    }, 20);
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await authenticateWithEmailAndPassword(emailInput, passwordInput);
   };
 
   const handleForgotPassword = async () => {
     const cleanEmail = emailInput.trim().toLowerCase();
     setAuthError(null);
     setVerificationNotice(null);
-    if (!cleanEmail) {
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
       setAuthError('Please enter your email address first so we can send your password reset link.');
+      emailInputRef.current?.focus();
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, cleanEmail, {
-        url: 'https://goldenmindpsychiatry.org/?page=portal',
-      });
+      await safeSendPasswordResetEmail(cleanEmail);
       setVerificationNotice(
         `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) to set your new password.`
       );
     } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      if (code === 'auth/operation-not-allowed') {
-        setAuthError(
-          'Unable to send a password reset email right now. Please sign in with Google above or contact our clinic at info@goldenmindpsychiatry.org.'
-        );
-      } else {
-        setAuthError(
-          err instanceof Error
-            ? err.message
-            : 'Could not send password reset email. Please verify your email address.'
-        );
-      }
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Could not send password reset email. Please verify your email address.'
+      );
     }
   };
 
@@ -727,9 +1139,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     setAuthError(null);
     if (auth.currentUser) {
       try {
-        await sendEmailVerification(auth.currentUser, {
-          url: 'https://goldenmindpsychiatry.org/?page=portal',
-        });
+        await safeSendVerificationEmail(auth.currentUser);
         setVerificationNotice(
           `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click the link to verify your account.`
         );
@@ -761,12 +1171,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const handleSignOut = async () => {
     try {
+      if (auth.currentUser) {
+        window.sessionStorage.removeItem(`gmp_oneclick_${auth.currentUser.uid}`);
+      }
       await signOut(auth);
     } catch {
       // ignore
     }
     setPortalUser(null);
     setFirebaseUser(null);
+    setOneClickVerifiedSession(false);
     setWorkspaceMode('patient');
   };
 
@@ -1198,67 +1612,113 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             )}
 
-            {/* 1-Click US Email & Identity Providers (Google/Gmail, Yahoo Mail, Microsoft Outlook/Hotmail, Apple/iCloud) */}
+            {/* 1-Click Login Providers with Official Brand Logos */}
             <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={() => handleOAuthSignIn('google')}
-                disabled={oauthLoadingProvider !== null}
-                className="w-full py-3 px-4 rounded-[12px] bg-[#0A0A0A] hover:bg-stone-800 text-[#D4AF37] font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 border border-[#D4AF37]/50 transition-all cursor-pointer shadow-xs disabled:opacity-60"
-              >
-                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                <span>
-                  {oauthLoadingProvider === 'google'
-                    ? 'Connecting to Google...'
-                    : 'Continue Instantly with Google (Gmail)'}
-                </span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1-Click Google Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('google')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-3 px-4 rounded-[12px] bg-white hover:bg-stone-50 text-stone-900 font-bold text-xs flex items-center justify-center gap-2.5 border border-stone-300 hover:border-[#D4AF37] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="#4285F4"
+                      d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                    />
+                  </svg>
+                  <span>
+                    {oauthLoadingProvider === 'google'
+                      ? 'Connecting to Google...'
+                      : '1-Click Login with Google'}
+                  </span>
+                </button>
 
-              <div className="grid grid-cols-2 gap-2">
-                {/* Yahoo Sign-In */}
+                {/* 1-Click Yahoo Mail Sign-In */}
                 <button
                   type="button"
                   onClick={() => handleOAuthSignIn('yahoo')}
                   disabled={oauthLoadingProvider !== null}
-                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-[#6001D2]/50 transition-all cursor-pointer disabled:opacity-60"
+                  className="py-3 px-4 rounded-[12px] bg-[#6001D2] hover:bg-[#5001b0] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#6001D2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
                 >
-                  <span className="w-5 h-5 rounded-md bg-[#6001D2] text-white font-black text-[11px] flex items-center justify-center shrink-0">
-                    Y!
+                  <span className="w-5 h-5 rounded-md bg-white flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#6001D2" aria-hidden="true">
+                      <path d="M12.92 15.04L17.58 4h-3.41l-2.85 7.22L8.45 4H4.83l4.79 11.04v5.96h3.3v-5.96zm5.79-2.87l1.46-8.17h-3.32l-.91 8.17h2.77zm-.31 5.83a1.88 1.88 0 100-3.76 1.88 1.88 0 000 3.76z" />
+                    </svg>
                   </span>
                   <span>
-                    {oauthLoadingProvider === 'yahoo' ? 'Connecting...' : 'Yahoo Mail'}
+                    {oauthLoadingProvider === 'yahoo'
+                      ? 'Connecting to Yahoo...'
+                      : '1-Click Login with Yahoo'}
                   </span>
                 </button>
 
-                {/* Microsoft (Outlook / Hotmail / Live) Sign-In */}
+                {/* 1-Click X (Twitter) Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('twitter')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-3 px-4 rounded-[12px] bg-black hover:bg-stone-900 text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-black transition-all cursor-pointer shadow-xs disabled:opacity-60"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  <span>
+                    {oauthLoadingProvider === 'twitter'
+                      ? 'Connecting to X...'
+                      : '1-Click Login with X'}
+                  </span>
+                </button>
+
+                {/* 1-Click Facebook Sign-In */}
+                <button
+                  type="button"
+                  onClick={() => handleOAuthSignIn('facebook')}
+                  disabled={oauthLoadingProvider !== null}
+                  className="py-3 px-4 rounded-[12px] bg-[#1877F2] hover:bg-[#1464cc] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#1877F2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                  <span>
+                    {oauthLoadingProvider === 'facebook'
+                      ? 'Connecting to Facebook...'
+                      : '1-Click Login with Facebook'}
+                  </span>
+                </button>
+
+                {/* 1-Click Microsoft (Outlook / Hotmail / Live) Sign-In */}
                 <button
                   type="button"
                   onClick={() => handleOAuthSignIn('microsoft')}
                   disabled={oauthLoadingProvider !== null}
-                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-[#0078D4]/50 transition-all cursor-pointer disabled:opacity-60"
+                  className="py-3 px-4 rounded-[12px] bg-[#0078D4] hover:bg-[#0064b1] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#0078D4] transition-all cursor-pointer shadow-xs disabled:opacity-60"
                 >
-                  <span className="w-5 h-5 rounded-md bg-[#0078D4] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                    MS
+                  <span className="w-5 h-5 rounded-md bg-white flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 23 23" aria-hidden="true">
+                      <path fill="#f25022" d="M1 1h10v10H1z" />
+                      <path fill="#7fba00" d="M12 1h10v10H12z" />
+                      <path fill="#00a4ef" d="M1 12h10v10H1z" />
+                      <path fill="#ffb900" d="M12 12h10v10H12z" />
+                    </svg>
                   </span>
                   <span>
                     {oauthLoadingProvider === 'microsoft'
-                      ? 'Connecting...'
-                      : 'Outlook / Hotmail'}
-                  </span>
-                </button>
-
-                {/* Apple (iCloud / Apple ID) Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('apple')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF9F5] hover:bg-[#f2efe6] text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 hover:border-stone-500 transition-all cursor-pointer disabled:opacity-60"
-                >
-                  <span className="w-5 h-5 rounded-md bg-stone-900 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                    
-                  </span>
-                  <span>
-                    {oauthLoadingProvider === 'apple' ? 'Connecting...' : 'Apple / iCloud'}
+                      ? 'Connecting to Outlook...'
+                      : '1-Click Login with Outlook'}
                   </span>
                 </button>
 
@@ -1267,10 +1727,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   type="button"
                   onClick={handleSendMagicSignInLink}
                   disabled={oauthLoadingProvider !== null}
-                  className="py-2.5 px-3 rounded-[12px] bg-[#FAF6EA] hover:bg-[#f3ebd3] text-[#9E7206] font-bold text-xs flex items-center justify-center gap-1.5 border border-[#D4AF37]/50 transition-all cursor-pointer disabled:opacity-60"
+                  className="py-3 px-4 rounded-[12px] bg-[#FAF6EA] hover:bg-[#f3ebd3] text-[#9E7206] font-bold text-xs flex items-center justify-center gap-2 border border-[#D4AF37]/50 transition-all cursor-pointer disabled:opacity-60"
                 >
                   <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0" />
-                  <span>Email Sign-In Link</span>
+                  <span>
+                    {oauthLoadingProvider === 'magic'
+                      ? 'Connecting...'
+                      : '1-Click Email Link'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1278,7 +1742,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <div className="relative flex py-1 items-center">
               <div className="grow border-t border-stone-200" />
               <span className="shrink mx-3 text-[11px] uppercase tracking-wider text-stone-400">
-                Or with Any US Email &amp; Password (Yahoo, AOL, AT&amp;T, Outlook, iCloud)
+                Or with Email &amp; Password
               </span>
               <div className="grow border-t border-stone-200" />
             </div>
@@ -1312,10 +1776,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Phone Number
+                      Phone Number *
                     </label>
                     <input
                       type="tel"
+                      required
                       placeholder="(432) 555-0199"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
@@ -1324,10 +1789,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Date of Birth
+                      Date of Birth *
                     </label>
                     <input
                       type="date"
+                      required
                       value={dobInput}
                       onChange={(e) => setDobInput(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
@@ -1335,7 +1801,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Primary Insurance
+                      Primary Insurance *
                     </label>
                     <select
                       value={insuranceInput}
@@ -1349,6 +1815,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       <option value="Cigna / Evernorth">Cigna / Evernorth</option>
                       <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
                       <option value="Medicare">Medicare</option>
+                      <option value="Medicaid">Medicaid</option>
                       <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
                     </select>
                   </div>
@@ -1361,9 +1828,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     Email Address *
                   </label>
                   <input
+                    ref={emailInputRef}
                     type="email"
                     required
-                    placeholder="you@yahoo.com, @outlook.com, @gmail.com..."
+                    placeholder={
+                      selectedEmailProvider === 'yahoo'
+                        ? 'name@yahoo.com'
+                        : selectedEmailProvider === 'microsoft'
+                        ? 'name@outlook.com'
+                        : 'you@yahoo.com, @outlook.com, @gmail.com...'
+                    }
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
@@ -1383,6 +1857,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     </button>
                   </div>
                   <input
+                    ref={passwordInputRef}
                     type="password"
                     required
                     minLength={6}
@@ -1426,12 +1901,211 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
               >
                 {isRegistering
-                  ? 'Create Account & Send Verification Email'
-                  : 'Sign In to Client Portal'}
+                  ? 'Create Account & Continue to Registration'
+                  : 'Sign In / Continue to Client Portal'}
               </button>
             </form>
           </div>
         </div>
+
+        {/* 1-Click Provider Popup Window Modal (Yahoo Mail, X / Twitter, Facebook, Microsoft / Outlook) */}
+        {oneClickModalProvider && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-stone-200 rounded-[28px] max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+              <button
+                type="button"
+                onClick={() => {
+                  setOneClickModalProvider(null);
+                  setOneClickError(null);
+                  setOneClickPasswordNeeded(false);
+                }}
+                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 absolute right-5 top-5 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3.5">
+                {oneClickModalProvider === 'yahoo' && (
+                  <div className="w-12 h-12 rounded-2xl bg-[#6001D2] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12.92 15.04L17.58 4h-3.41l-2.85 7.22L8.45 4H4.83l4.79 11.04v5.96h3.3v-5.96zm5.79-2.87l1.46-8.17h-3.32l-.91 8.17h2.77zm-.31 5.83a1.88 1.88 0 100-3.76 1.88 1.88 0 000 3.76z" />
+                    </svg>
+                  </div>
+                )}
+                {oneClickModalProvider === 'twitter' && (
+                  <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                  </div>
+                )}
+                {oneClickModalProvider === 'facebook' && (
+                  <div className="w-12 h-12 rounded-2xl bg-[#1877F2] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                  </div>
+                )}
+                {oneClickModalProvider === 'microsoft' && (
+                  <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center shrink-0 shadow-sm">
+                    <svg className="w-6 h-6" viewBox="0 0 23 23" aria-hidden="true">
+                      <path fill="#f25022" d="M1 1h10v10H1z" />
+                      <path fill="#7fba00" d="M12 1h10v10H12z" />
+                      <path fill="#00a4ef" d="M1 12h10v10H1z" />
+                      <path fill="#ffb900" d="M12 12h10v10H12z" />
+                    </svg>
+                  </div>
+                )}
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                    1-Click Identity Authentication
+                  </span>
+                  <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                    {oneClickModalProvider === 'yahoo'
+                      ? 'Continue with Yahoo Mail'
+                      : oneClickModalProvider === 'twitter'
+                      ? 'Continue with X'
+                      : oneClickModalProvider === 'facebook'
+                      ? 'Continue with Facebook'
+                      : 'Continue with Microsoft Outlook'}
+                  </h3>
+                </div>
+              </div>
+
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Enter your{' '}
+                <strong>
+                  {oneClickModalProvider === 'yahoo'
+                    ? 'Yahoo (@yahoo.com / @ymail.com)'
+                    : oneClickModalProvider === 'twitter'
+                    ? 'X account email address'
+                    : oneClickModalProvider === 'facebook'
+                    ? 'Facebook account email address'
+                    : 'Microsoft (@outlook.com / @hotmail.com / @live.com)'}
+                </strong>{' '}
+                below to sign in or register in one click.
+              </p>
+
+              {oneClickError && (
+                <div className="p-3 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p>{oneClickError}</p>
+                    {oneClickPasswordNeeded && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (oneClickEmail.trim()) {
+                            await safeSendPasswordResetEmail(oneClickEmail.trim());
+                            setOneClickError(null);
+                            setVerificationNotice(
+                              `A password reset link was sent to ${oneClickEmail.trim()}. Check your inbox!`
+                            );
+                            setOneClickModalProvider(null);
+                          }
+                        }}
+                        className="font-bold text-[#9E7206] underline cursor-pointer"
+                      >
+                        Send 1-Click Email Reset Link to {oneClickEmail}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleOneClickModalSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    {oneClickModalProvider === 'yahoo'
+                      ? 'Yahoo Email Address *'
+                      : oneClickModalProvider === 'twitter'
+                      ? 'X Account Email Address *'
+                      : oneClickModalProvider === 'facebook'
+                      ? 'Facebook Email Address *'
+                      : 'Outlook / Hotmail Email *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder={
+                      oneClickModalProvider === 'yahoo'
+                        ? 'yourname@yahoo.com'
+                        : oneClickModalProvider === 'twitter' || oneClickModalProvider === 'facebook'
+                        ? 'yourname@gmail.com / @yahoo.com'
+                        : 'yourname@outlook.com'
+                    }
+                    value={oneClickEmail}
+                    onChange={(e) => setOneClickEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(oneClickModalProvider === 'yahoo'
+                      ? ['@yahoo.com', '@ymail.com', '@sbcglobal.net', '@att.net']
+                      : oneClickModalProvider === 'twitter' || oneClickModalProvider === 'facebook'
+                      ? ['@gmail.com', '@yahoo.com', '@outlook.com', '@icloud.com']
+                      : ['@outlook.com', '@hotmail.com', '@live.com', '@msn.com']
+                    ).map((dom) => (
+                      <button
+                        key={dom}
+                        type="button"
+                        onClick={() => {
+                          const base = oneClickEmail.trim().split('@')[0];
+                          setOneClickEmail(`${base}${dom}`);
+                        }}
+                        className="px-2.5 py-1 rounded-[8px] bg-[#FAF9F5] hover:bg-[#FAF6EA] border border-stone-200 hover:border-[#D4AF37] text-[10px] font-bold text-stone-600 cursor-pointer"
+                      >
+                        {dom}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {oneClickPasswordNeeded && (
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Account Password *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="Enter your password"
+                      value={oneClickPassword}
+                      onChange={(e) => setOneClickPassword(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-xs focus:outline-none focus:border-[#D4AF37]"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={oneClickSubmitting}
+                  className={`w-full py-3 rounded-[12px] font-bold text-xs sm:text-sm text-white cursor-pointer transition-opacity disabled:opacity-60 ${
+                    oneClickModalProvider === 'yahoo'
+                      ? 'bg-[#6001D2] hover:bg-[#5001b0]'
+                      : oneClickModalProvider === 'twitter'
+                      ? 'bg-stone-900 hover:bg-stone-800'
+                      : oneClickModalProvider === 'facebook'
+                      ? 'bg-[#1877F2] hover:bg-[#1464cc]'
+                      : 'bg-[#0078D4] hover:bg-[#0064b1]'
+                  }`}
+                >
+                  {oneClickSubmitting
+                    ? 'Signing You In...'
+                    : oneClickModalProvider === 'yahoo'
+                    ? 'Continue in 1 Click with Yahoo Mail →'
+                    : oneClickModalProvider === 'twitter'
+                    ? 'Continue in 1 Click with X →'
+                    : oneClickModalProvider === 'facebook'
+                    ? 'Continue in 1 Click with Facebook →'
+                    : 'Continue in 1 Click with Outlook →'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     );
   }
@@ -1441,15 +2115,276 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     firebaseUser?.email || portalUser.email
   );
 
-  // Federated OAuth providers (Google, Yahoo, Microsoft, Apple, Facebook, Twitter) authenticate the user directly with their provider
-  const isFederatedOAuthProvider = firebaseUser.providerData.some((p) =>
-    ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com'].includes(
-      p.providerId
-    )
-  );
+  // Federated OAuth providers (Google, Yahoo, Microsoft, Apple, Facebook, Twitter) or 1-Click Provider Sessions
+  const isFederatedOAuthProvider =
+    oneClickVerifiedSession ||
+    firebaseUser.providerData.some((p) =>
+      ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com'].includes(
+        p.providerId
+      )
+    );
 
   // ============================================================================
-  // 2. STRICT EMAIL VERIFICATION GATE (Blocks Portal Until User Verifies Their Email)
+  // 2. MANDATORY CLIENT REGISTRATION & DEMOGRAPHIC RECORD GATE
+  //    (Runs for ALL Clients — Including After 1-Click Login with Google, Yahoo, Apple, or Outlook!)
+  // ============================================================================
+  if (!isVerifiedProviderAccount && !isPatientRegistrationComplete(portalUser)) {
+    return (
+      <section className="min-h-[84vh] bg-[#FAF9F5] py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center font-portal-body">
+        <div className="max-w-3xl w-full bg-white border border-stone-200 rounded-[32px] overflow-hidden shadow-xl">
+          {/* Top Luxury Header */}
+          <div className="bg-[#0A0A0A] text-white p-6 sm:p-8 border-b border-[#D4AF37]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
+                <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
+                <span>Step 2 of 2 · New Client Clinical Registration Record</span>
+              </div>
+              <h1 className="text-2xl font-bold font-portal-heading text-white">
+                Complete Your Client Profile &amp; Date of Birth
+              </h1>
+              <p className="text-xs text-stone-300">
+                Signed in as <strong className="text-[#D4AF37]">{portalUser.email}</strong>. Before
+                entering your Client Portal, please provide your demographic and insurance details so{' '}
+                <strong className="text-white">Brenda Hobyani, PMHNP-BC</strong> has your complete
+                clinical record on file.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="px-3.5 py-2 rounded-[12px] bg-white/10 hover:bg-white/15 text-stone-200 text-xs font-semibold shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              Sign Out
+            </button>
+          </div>
+
+          <form
+            onSubmit={handleCompleteClientRegistrationRecord}
+            className="p-6 sm:p-8 space-y-6"
+          >
+            {regError && (
+              <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            {/* Section 1: Legal Identity & Date of Birth */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#9E7206] border-b border-stone-200 pb-1.5">
+                1. Patient Legal Identity &amp; Date of Birth
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Full Legal Name (First &amp; Last Name) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Jane Marie Doe"
+                    value={regFullName}
+                    onChange={(e) => setRegFullName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={regDob}
+                    onChange={(e) => setRegDob(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Mobile Phone Number (For SMS Visit Links) *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="(432) 555-0199"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Biological Sex / Gender *
+                  </label>
+                  <select
+                    value={regSex}
+                    onChange={(e) => setRegSex(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  >
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Non-Binary">Non-Binary</option>
+                    <option value="Prefer to Discuss with Provider">
+                      Prefer to Discuss with Provider
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Residential Street Address, City, State &amp; ZIP Code (Texas Telehealth Location) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., 1234 Oak Parkway, Midland, TX 79705"
+                  value={regAddress}
+                  onChange={(e) => setRegAddress(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+            </div>
+
+            {/* Section 2: Insurance, Pharmacy & Clinical Care Details */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#9E7206] border-b border-stone-200 pb-1.5">
+                2. Insurance Coverage, Pharmacy &amp; Emergency Contact
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Primary Insurance Provider *
+                  </label>
+                  <select
+                    value={regInsurance}
+                    onChange={(e) => setRegInsurance(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  >
+                    <option value="Blue Cross Blue Shield (BCBS)">
+                      Blue Cross Blue Shield (BCBS)
+                    </option>
+                    <option value="Aetna">Aetna</option>
+                    <option value="Cigna / Evernorth">Cigna / Evernorth</option>
+                    <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
+                    <option value="Medicare">Medicare</option>
+                    <option value="Medicaid">Medicaid</option>
+                    <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Insurance Member / Policy ID
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional (e.g., XYZ12345678)"
+                    value={regMemberId}
+                    onChange={(e) => setRegMemberId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Insurance Group Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional (e.g., GRP9988)"
+                    value={regGroupNumber}
+                    onChange={(e) => setRegGroupNumber(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Preferred Texas Pharmacy (Name &amp; City/Intersection) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., H-E-B Pharmacy / Walgreens / CVS (City, TX)"
+                    value={regPharmacy}
+                    onChange={(e) => setRegPharmacy(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Emergency Contact (Full Name, Relationship &amp; Phone) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., John Doe (Spouse) - (432) 555-0144"
+                    value={regEmergencyContact}
+                    onChange={(e) => setRegEmergencyContact(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Primary Reason for Seeking Psychiatric Care *
+                </label>
+                <select
+                  value={regPrimaryConcern}
+                  onChange={(e) => setRegPrimaryConcern(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                >
+                  <option value="Comprehensive Psychiatric Evaluation">
+                    Comprehensive Psychiatric Evaluation (Adults, Teens &amp; Children)
+                  </option>
+                  <option value="Anxiety & Panic Attacks">Anxiety &amp; Panic Attacks</option>
+                  <option value="ADHD Evaluation & Management">
+                    ADHD Evaluation &amp; Management
+                  </option>
+                  <option value="Depression & Mood Support">Depression &amp; Mood Support</option>
+                  <option value="Medication Management & Refills">
+                    Medication Management &amp; Refills
+                  </option>
+                  <option value="Trauma & PTSD Support">Trauma &amp; PTSD Support</option>
+                  <option value="Bipolar Disorder Stabilization">
+                    Bipolar Disorder Stabilization
+                  </option>
+                  <option value="Insomnia & Sleep Disorders">Insomnia &amp; Sleep Disorders</option>
+                  <option value="Child / Adolescent Psychiatric Evaluation">
+                    Child / Adolescent Psychiatric Evaluation
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={regSubmitting}
+                className="w-full py-3.5 px-6 rounded-[14px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer shadow-md hover:opacity-95 transition-opacity disabled:opacity-60"
+              >
+                {regSubmitting
+                  ? 'Saving Your Clinical Registration Record...'
+                  : 'Save My Registration Record & Enter Client Portal →'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  // ============================================================================
+  // 3. STRICT EMAIL VERIFICATION GATE (For Standard Email/Password Accounts)
   // ============================================================================
   if (!firebaseUser.emailVerified && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
     return (

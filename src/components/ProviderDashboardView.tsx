@@ -627,18 +627,47 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-xs text-stone-300">
-              Email: <strong className="text-white">{activeChartPatient.email}</strong> · Phone:{' '}
-              <strong className="text-white">{activeChartPatient.phone || 'Not listed'}</strong> ·
-              DOB: <strong className="text-white">{activeChartPatient.dateOfBirth || 'N/A'}</strong>{' '}
-              · Insurance:{' '}
+            <p className="text-xs text-stone-300 leading-relaxed">
+              DOB: <strong className="text-[#D4AF37]">{activeChartPatient.dateOfBirth || 'Pending'}</strong>{' '}
+              {activeChartPatient.biologicalSex ? (
+                <>
+                  · Sex: <strong className="text-white">{activeChartPatient.biologicalSex}</strong>{' '}
+                </>
+              ) : null}
+              · Phone: <strong className="text-white">{activeChartPatient.phone || 'Not listed'}</strong>{' '}
+              · Email: <strong className="text-white">{activeChartPatient.email}</strong>
+              <br />
+              Address:{' '}
+              <strong className="text-white">
+                {activeChartPatient.address || 'Texas (Telehealth)'}
+              </strong>{' '}
+              · Emergency Contact:{' '}
+              <strong className="text-white">
+                {activeChartPatient.emergencyContact || 'Not listed'}
+              </strong>
+              <br />
+              Insurance:{' '}
               <strong className="text-[#D4AF37]">
                 {activeChartPatient.insuranceProvider || 'Self-Pay / Unspecified'}
+                {activeChartPatient.insuranceMemberId
+                  ? ` (Member ID: ${activeChartPatient.insuranceMemberId}${
+                      activeChartPatient.insuranceGroupNumber
+                        ? `, Grp: ${activeChartPatient.insuranceGroupNumber}`
+                        : ''
+                    })`
+                  : ''}
               </strong>{' '}
               · Pharmacy:{' '}
               <strong className="text-white">
                 {activeChartPatient.preferredPharmacy || 'Not set'}
               </strong>
+              {activeChartPatient.primaryConcern ? (
+                <>
+                  {' '}
+                  · Chief Concern:{' '}
+                  <strong className="text-[#D4AF37]">{activeChartPatient.primaryConcern}</strong>
+                </>
+              ) : null}
             </p>
           </div>
 
@@ -1664,10 +1693,17 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-stone-600">
-                              Phone: {patient.phone || 'Not listed'} · Insurance:{' '}
-                              <strong>{patient.insuranceProvider || 'Not specified'}</strong> ·
+                            <p className="text-xs text-stone-600 leading-relaxed">
+                              DOB: <strong>{patient.dateOfBirth || 'Pending'}</strong>
+                              {patient.biologicalSex ? ` (${patient.biologicalSex})` : ''} · Phone:{' '}
+                              <strong>{patient.phone || 'Not listed'}</strong> · Insurance:{' '}
+                              <strong>{patient.insuranceProvider || 'Not specified'}</strong>
+                              {patient.insuranceMemberId ? ` (#${patient.insuranceMemberId})` : ''} ·
                               Pharmacy: {patient.preferredPharmacy || 'Not set'}
+                              {patient.address ? ` · Address: ${patient.address}` : ''}
+                              {patient.emergencyContact
+                                ? ` · Emergency: ${patient.emergencyContact}`
+                                : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-500 font-portal-heading tabular-nums pt-0.5">
                               <span>{pMeds.length} Medication(s)</span>
