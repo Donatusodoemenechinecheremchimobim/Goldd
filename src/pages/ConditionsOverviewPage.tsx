@@ -7,7 +7,6 @@ import {
   Brain,
   ArrowRight,
   Calendar,
-  Sparkles,
   ChevronRight,
   CheckCircle2,
   Filter
@@ -157,7 +156,7 @@ export const ConditionsOverviewPage: React.FC<ConditionsOverviewPageProps> = ({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-stone-100">
               <div className="space-y-1 max-w-2xl">
                 <span className="text-xs font-semibold text-[#9E7206] uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#B8860B]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#B8860B]" />
                   <span>General Condition</span>
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917]">

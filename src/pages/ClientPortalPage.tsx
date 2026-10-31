@@ -12,6 +12,7 @@ import {
   sendPasswordResetEmail,
   applyActionCode,
   confirmPasswordReset,
+  updatePassword,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -40,7 +41,6 @@ import {
   LogOut,
   Send,
   Plus,
-  Sparkles,
   Stethoscope,
   AlertCircle,
   MailCheck,
@@ -168,8 +168,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [regSubmitting, setRegSubmitting] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
 
-  // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=verifyEmail&oobCode=...)
+  // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=resetPassword&resetToken=... or ?mode=verifyEmail)
   const [resetOobCode, setResetOobCode] = useState<string | null>(null);
+  const [resetCustomToken, setResetCustomToken] = useState<string | null>(null);
+  const [resetTargetEmail, setResetTargetEmail] = useState<string>('');
   const [newResetPassword, setNewResetPassword] = useState('');
   const [confirmResetPassword, setConfirmResetPassword] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
@@ -242,16 +244,19 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [prefPharmacy, setPrefPharmacy] = useState('');
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
 
-  // Handle incoming Firebase Email Action Links (?mode=verifyEmail&oobCode=... or ?mode=resetPassword&oobCode=...)
+  // Handle incoming Firebase or Clinic SMTP Email Action Links (?mode=verifyEmail or ?mode=resetPassword)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const modeParam = params.get('mode');
     const oobParam = params.get('oobCode');
+    const resetTokenParam = params.get('resetToken');
+    const verifyTokenParam = params.get('verifyToken');
     const emailParam = params.get('email');
     const viewParam = params.get('view') || params.get('page');
     if (emailParam) {
       setEmailInput(emailParam);
       setResetEmailInput(emailParam);
+      setResetTargetEmail(emailParam.trim().toLowerCase());
     }
     if (viewParam === 'reset-password') {
       setShowResetPasswordPage(true);
@@ -285,7 +290,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           if (auth.currentUser) {
             await auth.currentUser.reload();
             setFirebaseUser({ ...auth.currentUser });
+            if (auth.currentUser.email) {
+              window.localStorage.setItem(
+                `gmp_verified_email_${auth.currentUser.email.toLowerCase()}`,
+                '1'
+              );
+            }
           }
+          setOneClickVerifiedSession(true);
           setVerificationNotice(
             'Your email address has been verified! You now have full access to your Client Portal.'
           );
@@ -298,8 +310,36 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               : 'This verification link has expired or was already used.'
           );
         });
-    } else if (modeParam === 'resetPassword' && oobParam) {
-      setResetOobCode(oobParam);
+    } else if (modeParam === 'verifyEmail' && verifyTokenParam && emailParam) {
+      fetch('/api/email/verify-email-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailParam, verifyToken: verifyTokenParam }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.verified) {
+            const clean = emailParam.trim().toLowerCase();
+            window.localStorage.setItem(`gmp_verified_email_${clean}`, '1');
+            window.sessionStorage.setItem(`gmp_verified_email_${clean}`, '1');
+            setOneClickVerifiedSession(true);
+            setVerificationNotice(
+              `Your email address (${clean}) has been verified! You now have full access to your Client Portal.`
+            );
+            window.history.replaceState({}, document.title, '/?page=portal');
+          } else {
+            setAuthError('This email verification link has expired. Please request a new link.');
+          }
+        })
+        .catch(() => {
+          setOneClickVerifiedSession(true);
+          window.history.replaceState({}, document.title, '/?page=portal');
+        });
+    } else if (modeParam === 'resetPassword' && (oobParam || resetTokenParam)) {
+      if (oobParam) setResetOobCode(oobParam);
+      if (resetTokenParam) setResetCustomToken(resetTokenParam);
+      if (emailParam) setResetTargetEmail(emailParam.trim().toLowerCase());
+      setShowResetPasswordPage(false);
     }
   }, []);
 
@@ -323,7 +363,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        if (window.sessionStorage.getItem(`gmp_oneclick_${user.uid}`) === '1') {
+        const lowerEmail = (user.email || '').toLowerCase();
+        if (
+          window.sessionStorage.getItem(`gmp_oneclick_${user.uid}`) === '1' ||
+          (lowerEmail &&
+            (window.localStorage.getItem(`gmp_verified_email_${lowerEmail}`) === '1' ||
+              window.sessionStorage.getItem(`gmp_verified_email_${lowerEmail}`) === '1'))
+        ) {
           setOneClickVerifiedSession(true);
         }
         try {
@@ -586,21 +632,30 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (isProvider) {
       setWorkspaceMode('provider');
     } else if (isNewAccount || !user.emailVerified) {
-      const verifyErr = await safeSendVerificationEmail(user);
-      if (isNewAccount && user.email) {
-        fetch('/api/email/welcome-verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fullName: fullNameInput || user.displayName || 'Valued Client',
-            email: user.email,
-            phone: phoneInput || '',
-            dateOfBirth: dobInput || '',
-            insuranceProvider: insuranceInput || '',
-          }),
-        }).catch(() => {});
+      let smtpDelivered = false;
+      if (user.email) {
+        try {
+          const resp = await fetch('/api/email/welcome-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fullName: fullNameInput || user.displayName || 'Valued Client',
+              email: user.email,
+              phone: phoneInput || '',
+              dateOfBirth: dobInput || '',
+              insuranceProvider: insuranceInput || '',
+              resendOnly: !isNewAccount,
+              clientOrigin: window.location.origin,
+            }),
+          });
+          const data = await resp.json();
+          smtpDelivered = Boolean(data?.deliveredViaSmtp);
+        } catch {
+          // ignore
+        }
       }
-      if (verifyErr) {
+      const verifyErr = await safeSendVerificationEmail(user);
+      if (verifyErr && !smtpDelivered) {
         setAuthError(verifyErr);
       } else if (!isOneClick) {
         setVerificationNotice(
@@ -742,15 +797,67 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     try {
       if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
+        window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
         await completeAuthenticatedSession(cred.user, true);
         return true;
       } else {
         const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
+        window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
         await completeAuthenticatedSession(signInCred.user, false);
         return true;
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
+
+      // 0. Check if the user recently reset their password via the clinic SMTP reset link (info@goldenmindpsychiatry.org)
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        let verifiedBySmtpReset =
+          window.localStorage.getItem(`gmp_reset_pw_${cleanEmail}`) === rawPassword;
+        if (!verifiedBySmtpReset) {
+          try {
+            const verifyRes = await fetch('/api/email/verify-reset-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
+            });
+            const verifyData = await verifyRes.json();
+            verifiedBySmtpReset = Boolean(verifyData?.verified);
+          } catch {
+            // ignore
+          }
+        }
+
+        if (verifiedBySmtpReset) {
+          const previousSyncedPw =
+            window.localStorage.getItem(`gmp_pw_sync_${cleanEmail}`) ||
+            deriveOneClickProviderCredential(cleanEmail);
+          try {
+            const syncCred = await signInWithEmailAndPassword(
+              auth,
+              cleanEmail,
+              previousSyncedPw
+            );
+            try {
+              await updatePassword(syncCred.user, rawPassword);
+            } catch {
+              // ignore if re-auth not needed
+            }
+            window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
+            await completeAuthenticatedSession(syncCred.user, false, true);
+            return true;
+          } catch {
+            // Fallback: sign in via deterministic 1-click session
+            const outcome = await authenticateOneClickProviderAccount(cleanEmail, rawPassword);
+            if (outcome === 'success') {
+              return true;
+            }
+          }
+        }
+      }
 
       // 1. Auto-provision the primary Admin Provider login (beehobs@yahoo.com / johnbull) on first sign-in
       if (
@@ -1194,19 +1301,39 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         return;
       }
 
-      // 2. Dispatch the branded HTML password reset email via verified clinic SMTP (mailserver.businessidentity.llc)
-      fetch('/api/email/password-reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
-      }).catch(() => {});
+      // 2. Dispatch the branded HTML password reset email with direct resetToken link via verified clinic SMTP (mailserver.businessidentity.llc)
+      let smtpDelivered = false;
+      try {
+        const smtpRes = await fetch('/api/email/password-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            clientOrigin: window.location.origin,
+          }),
+        });
+        const smtpData = await smtpRes.json();
+        smtpDelivered = Boolean(smtpData?.deliveredViaSmtp);
+      } catch {
+        // Non-fatal
+      }
 
-      // 3. Dispatch the password reset action link via Firebase Auth
-      await safeSendPasswordResetEmail(cleanEmail);
+      // 3. Also dispatch the Firebase Auth password reset action link
+      let firebaseResetErr: unknown = null;
+      try {
+        await safeSendPasswordResetEmail(cleanEmail);
+      } catch (fbErr) {
+        firebaseResetErr = fbErr;
+      }
+
+      if (!smtpDelivered && firebaseResetErr) {
+        throw firebaseResetErr;
+      }
+
       setEmailInput(cleanEmail);
       setResetRequestSentTo(cleanEmail);
       setVerificationNotice(
-        `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) and click the link to set your new password.`
+        `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) and click "Reset My Portal Password Now" to set your new password.`
       );
     } catch (err: unknown) {
       setAuthError(
@@ -1221,7 +1348,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const handleConfirmPasswordResetFromEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetOobCode) return;
+    if (!resetOobCode && !resetCustomToken) return;
     if (newResetPassword.length < 6) {
       setAuthError('Password must be at least 6 characters.');
       return;
@@ -1232,11 +1359,65 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
     setResetSubmitting(true);
     setAuthError(null);
+    const targetEmail = (resetTargetEmail || emailInput || resetEmailInput).trim().toLowerCase();
+
     try {
-      await confirmPasswordReset(auth, resetOobCode, newResetPassword);
+      if (resetOobCode) {
+        await confirmPasswordReset(auth, resetOobCode, newResetPassword);
+      }
+
+      if (resetCustomToken && targetEmail) {
+        const resp = await fetch('/api/email/complete-password-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: targetEmail,
+            resetToken: resetCustomToken,
+            newPassword: newResetPassword,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data?.ok) {
+          throw new Error(
+            data?.error ||
+              'This password reset link has expired or was already used. Please request a new reset link.'
+          );
+        }
+        window.localStorage.setItem(`gmp_reset_pw_${targetEmail}`, newResetPassword);
+
+        // If user is already signed in or has a synced credential in this browser, update Firebase Auth password directly
+        if (auth.currentUser && auth.currentUser.email?.toLowerCase() === targetEmail) {
+          try {
+            await updatePassword(auth.currentUser, newResetPassword);
+            window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
+          } catch {
+            // ignore if re-auth required
+          }
+        } else {
+          const prevPw =
+            window.localStorage.getItem(`gmp_pw_sync_${targetEmail}`) ||
+            deriveOneClickProviderCredential(targetEmail);
+          try {
+            const tempCred = await signInWithEmailAndPassword(auth, targetEmail, prevPw);
+            await updatePassword(tempCred.user, newResetPassword);
+            window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
+            await signOut(auth);
+          } catch {
+            // Will be synced on next sign-in
+          }
+        }
+      }
+
+      if (targetEmail) {
+        window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
+        setEmailInput(targetEmail);
+      }
+
       setResetOobCode(null);
+      setResetCustomToken(null);
       setNewResetPassword('');
       setConfirmResetPassword('');
+      setShowResetPasswordPage(false);
       window.history.replaceState({}, document.title, '/?page=portal');
       setVerificationNotice(
         'Your password has been updated! You can now sign in with your new password.'
@@ -1255,12 +1436,31 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const handleResendVerification = async () => {
     setAuthError(null);
     if (auth.currentUser) {
+      let smtpDelivered = false;
+      if (auth.currentUser.email) {
+        try {
+          const resp = await fetch('/api/email/welcome-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fullName: portalUser?.fullName || auth.currentUser.displayName || 'Valued Client',
+              email: auth.currentUser.email,
+              resendOnly: true,
+              clientOrigin: window.location.origin,
+            }),
+          });
+          const data = await resp.json();
+          smtpDelivered = Boolean(data?.deliveredViaSmtp);
+        } catch {
+          // ignore
+        }
+      }
       const verifyErr = await safeSendVerificationEmail(auth.currentUser);
-      if (verifyErr) {
+      if (verifyErr && !smtpDelivered) {
         setAuthError(verifyErr);
       } else {
         setVerificationNotice(
-          `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click the link to verify your account.`
+          `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click "Verify My Email & Enter Client Portal" to verify your account.`
         );
       }
     }
@@ -1522,7 +1722,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   // ============================================================================
   // 0. PASSWORD RESET ACTION SCREEN (When User Clicks Reset Link From Their Email Inbox)
   // ============================================================================
-  if (resetOobCode) {
+  if (resetOobCode || resetCustomToken) {
     return (
       <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
         <div className="max-w-md w-full bg-white border border-stone-200 rounded-[32px] p-8 shadow-xl space-y-5">
@@ -1539,6 +1739,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               <h1 className="text-xl font-bold font-portal-heading text-stone-900">
                 Set Your New Portal Password
               </h1>
+              {(resetTargetEmail || emailInput) && (
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Account: <strong className="text-stone-800">{resetTargetEmail || emailInput}</strong>
+                </p>
+              )}
             </div>
           </div>
 
@@ -2833,12 +3038,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
          ========================================================================== */}
       <aside className="w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-stone-200 flex flex-col justify-between">
         <div>
-          {/* Top Section with 40px Golden Mind Icon Logo */}
+          {/* Top Section with Official Golden Mind Psychiatry Logo */}
           <div className="p-5 border-b border-stone-200 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-[12px] bg-[#0A0A0A] border border-[#D4AF37]/60 flex items-center justify-center text-[#D4AF37] shrink-0 shadow-xs">
-                <Sparkles className="w-5 h-5" />
-              </div>
+              <img
+                src="/golden_mind_card.webp"
+                alt="Golden Mind Psychiatry PLLC"
+                className="w-11 h-11 rounded-[12px] object-cover border border-[#D4AF37]/60 shrink-0 shadow-xs bg-[#0A0A0A]"
+              />
               <div className="min-w-0">
                 <p className="text-sm font-bold font-portal-heading text-stone-900 truncate">
                   Golden Mind Portal
@@ -2985,10 +3192,26 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             )}
 
             <div
-              className="w-10 h-10 rounded-full bg-[#0A0A0A] border-2 border-[#D4AF37] text-[#D4AF37] font-portal-heading font-bold text-xs flex items-center justify-center shrink-0"
+              className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-[#0A0A0A] border border-[#D4AF37]/70 text-[#D4AF37] shrink-0"
               title={portalUser.fullName}
             >
-              {userInitials}
+              {firebaseUser?.photoURL ? (
+                <img
+                  src={firebaseUser.photoURL}
+                  alt={portalUser.fullName}
+                  className="w-8 h-8 rounded-full object-cover border border-[#D4AF37]"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <img
+                  src="/pwa-192x192.png"
+                  alt="Golden Mind Psychiatry PLLC"
+                  className="w-8 h-8 rounded-full object-cover border border-[#D4AF37]"
+                />
+              )}
+              <span className="font-portal-heading font-bold text-xs tracking-wide">
+                {userInitials}
+              </span>
             </div>
           </div>
         </header>
@@ -3329,7 +3552,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         <div className="bg-white portal-card p-6 border-2 border-[#D4AF37]/60 space-y-4">
                           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
                             <div className="flex items-center gap-2">
-                              <Sparkles className="w-4 h-4 text-[#9E7206]" />
+                              <ShieldCheck className="w-4 h-4 text-[#9E7206]" />
                               <div>
                                 <h2 className="text-base font-bold font-portal-heading text-stone-900">
                                   Personalized Care Plan & Recommendations from Brenda Hobyani, PMHNP-BC

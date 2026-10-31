@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, RotateCcw, ClipboardCheck } from 'lucide-react';
+import { ArrowRight, RotateCcw, ClipboardCheck } from 'lucide-react';
 
 interface SymptomScreenerProps {
   onOpenBooking: (prefillCondition?: string) => void;
@@ -448,7 +448,7 @@ export const SymptomScreener: React.FC<SymptomScreenerProps> = ({ onOpenBooking 
               onClick={() => onOpenBooking(result.conditionName)}
               className="w-full sm:w-auto px-6 py-3 rounded-full bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm hover:shadow-[0_4px_20px_rgba(212,175,55,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
             >
-              <Sparkles className="w-4 h-4 text-[#1C1917]" />
+              <ClipboardCheck className="w-4 h-4 text-[#1C1917]" />
               <span>Discuss Results with Brenda Hobyani, PMHNP-BC</span>
             </button>
 

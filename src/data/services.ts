@@ -48,7 +48,7 @@ export const servicesData: Service[] = [
     name: 'Integrative & Lifestyle Psychiatry',
     shortDesc: 'Mind-body interventions addressing sleep architecture, functional nutrition, and nervous system regulation.',
     serviceCategory: 'Whole-Person Protocol',
-    iconName: 'Sparkles',
+    iconName: 'HeartHandshake',
     details: 'Personalized lifestyle prescriptions that work synergistically with medical treatment. We address gut-brain health, circadian light entrainment, targeted nutraceuticals, and stress reduction.',
     benefits: [
       'Guidance on clinical-grade psychiatric supplements (Omega-3s, L-Methylfolate, Magnesium)',

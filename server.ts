@@ -2,6 +2,8 @@ import express from 'express';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
@@ -14,7 +16,58 @@ const CLINIC_EMAIL = process.env.DOCTOR_NOTIFICATION_EMAIL || 'info@goldenmindps
 const ADMIN_YAHOO_EMAIL = 'beehobs@yahoo.com';
 const DOCTOR_ALERT_RECIPIENTS = `${CLINIC_EMAIL}, ${ADMIN_YAHOO_EMAIL}`;
 const SITE_URL = process.env.APP_URL || 'https://goldenmindpsychiatry.org';
-const LOGO_URL = `${SITE_URL}/golden_mind_card.webp`;
+const LOGO_PNG_PATH = path.join(__dirname, 'public', 'pwa-512x512.png');
+const HAS_LOCAL_LOGO_PNG = fs.existsSync(LOGO_PNG_PATH);
+const LOGO_URL = HAS_LOCAL_LOGO_PNG ? 'cid:goldenmindlogo' : `${SITE_URL}/pwa-512x512.png`;
+
+const RESET_HMAC_SECRET =
+  process.env.RESET_HMAC_SECRET ||
+  crypto
+    .createHash('sha256')
+    .update(`gmp_reset_secret_${process.env.SMTP_PASS || 'golden_mind_2026'}`)
+    .digest('hex');
+
+// Verified password reset store for accounts that reset via the clinic SMTP reset link
+const verifiedResetPasswords = new Map<string, string>();
+
+function getSafeClientOrigin(rawOrigin: unknown): string {
+  if (typeof rawOrigin !== 'string') return SITE_URL;
+  const trimmed = rawOrigin.trim().replace(/\/+$/, '');
+  if (
+    trimmed === 'https://goldenmindpsychiatry.org' ||
+    trimmed === 'https://www.goldenmindpsychiatry.org' ||
+    /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  return SITE_URL;
+}
+
+function createSignedResetToken(email: string): string {
+  const expiresAt = Date.now() + 30 * 60 * 1000; // 30 minutes
+  const payload = `${email.toLowerCase()}|${expiresAt}`;
+  const sig = crypto.createHmac('sha256', RESET_HMAC_SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}|${sig}`).toString('base64url');
+}
+
+function verifySignedResetToken(email: string, token: string): boolean {
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf8');
+    const [tokenEmail, expiresStr, sig] = decoded.split('|');
+    if (!tokenEmail || !expiresStr || !sig) return false;
+    if (tokenEmail.toLowerCase() !== email.toLowerCase()) return false;
+    const expiresAt = Number(expiresStr);
+    if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return false;
+    const expectedPayload = `${tokenEmail}|${expiresStr}`;
+    const expectedSig = crypto
+      .createHmac('sha256', RESET_HMAC_SECRET)
+      .update(expectedPayload)
+      .digest('hex');
+    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Escapes untrusted user strings before embedding in HTML emails to prevent XSS / HTML injection.
@@ -161,6 +214,15 @@ async function sendClinicEmail(opts: {
       replyTo: opts.replyTo || CLINIC_EMAIL,
       subject: opts.subject.replace(/[\r\n]/g, ' ').slice(0, 240),
       html: opts.html,
+      attachments: HAS_LOCAL_LOGO_PNG
+        ? [
+            {
+              filename: 'golden-mind-logo.png',
+              path: LOGO_PNG_PATH,
+              cid: 'goldenmindlogo',
+            },
+          ]
+        : undefined,
     };
     try {
       await transporter.sendMail(mailPayload);
@@ -381,13 +443,26 @@ async function startServer() {
       const email = sanitizeEmailAddress(req.body?.email);
       const phone = escapeHtml(req.body?.phone, 40);
       const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
+      const isResendOnly = Boolean(req.body?.resendOnly);
+      const targetOrigin = getSafeClientOrigin(req.body?.clientOrigin);
 
       if (email) {
+        const verifyToken = createSignedResetToken(email);
+        const directVerifyUrl = `${targetOrigin}/?page=portal&mode=verifyEmail&email=${encodeURIComponent(
+          email
+        )}&verifyToken=${encodeURIComponent(verifyToken)}`;
+
         const clientHtml = buildBrandedEmailHtml(
-          'Welcome to Golden Mind Psychiatry PLLC — Your Client Portal Account',
+          'Verify Your Email & Welcome to Golden Mind Psychiatry PLLC',
           `
           <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Welcome to Golden Mind Psychiatry PLLC, ${fullName || 'Valued Client'}!</h2>
           <p style="margin:0 0 16px 0;">Thank you for creating your HIPAA-encrypted Client Portal account associated with <strong>${email}</strong>. At Golden Mind Psychiatry PLLC, <em>“Where Every Mind Is Golden,”</em> we are honored to partner with you on your mental wellness journey.</p>
+          <p style="margin:0 0 16px 0;">Click the button below to <strong>verify your email address</strong> and enter your Client Portal immediately:</p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${directVerifyUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
+              Verify My Email &amp; Enter Client Portal
+            </a>
+          </div>
           <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:16px;padding:18px 20px;margin:0 0 20px 0;">
             <div style="font-size:12px;font-weight:700;color:#9E7206;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;">
               What You Can Do Inside Your Client Portal
@@ -399,19 +474,19 @@ async function startServer() {
               <li><strong>Direct Provider Messaging:</strong> Message your provider directly inside your encrypted portal.</li>
             </ul>
           </div>
-          <p style="margin:0 0 16px 0;">If you received a separate email verification link, please click it to verify your address, or click below to access your Client Portal right now:</p>
-          <div style="text-align:center;margin:24px 0;">
-            <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
-              Access Your Golden Mind Client Portal
-            </a>
-          </div>
+          <p style="margin:0;font-size:12px;color:#57534E;">Or copy and paste this verification link into your browser:<br /><a href="${directVerifyUrl}" style="color:#9E7206;word-break:break-all;">${directVerifyUrl}</a></p>
           `
         );
-        await sendClinicEmail({
+        const clientResult = await sendClinicEmail({
           to: email,
-          subject: 'Welcome to Golden Mind Psychiatry PLLC — Your Client Portal Account',
+          subject: 'Verify Your Email & Welcome to Golden Mind Psychiatry PLLC',
           html: clientHtml,
         });
+
+        if (isResendOnly) {
+          res.json({ ok: true, deliveredViaSmtp: clientResult.deliveredViaSmtp });
+          return;
+        }
       }
 
       const doctorAlertHtml = buildBrandedEmailHtml(
@@ -434,7 +509,19 @@ async function startServer() {
     }
   });
 
-  // 3B. Branded Password Reset Notification Email with Official Logo via SMTP (mailserver.businessidentity.llc)
+  // 3A. Verify Email Token from Clinic SMTP Welcome/Verification Email
+  app.post('/api/email/verify-email-token', (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    const verifyToken = typeof req.body?.verifyToken === 'string' ? req.body.verifyToken.trim() : '';
+    if (!email || !verifyToken) {
+      res.status(400).json({ ok: false, verified: false });
+      return;
+    }
+    const valid = verifySignedResetToken(email, verifyToken);
+    res.json({ ok: valid, verified: valid });
+  });
+
+  // 3B. Branded Password Reset Notification Email with Official Logo & Direct Reset Link via SMTP (mailserver.businessidentity.llc)
   app.post('/api/email/password-reset', async (req, res) => {
     try {
       const email = sanitizeEmailAddress(req.body?.email);
@@ -443,18 +530,25 @@ async function startServer() {
         return;
       }
 
+      const targetOrigin = getSafeClientOrigin(req.body?.clientOrigin);
+      const resetToken = createSignedResetToken(email);
+      const directResetUrl = `${targetOrigin}/?page=portal&mode=resetPassword&email=${encodeURIComponent(
+        email
+      )}&resetToken=${encodeURIComponent(resetToken)}`;
+
       const resetHtml = buildBrandedEmailHtml(
         'Reset Your Client Portal Password — Golden Mind Psychiatry PLLC',
         `
-        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Client Portal Password Reset Request</h2>
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Reset Your Client Portal Password</h2>
         <p style="margin:0 0 16px 0;">We received a request to reset the password for your <strong>Golden Mind Psychiatry PLLC</strong> Client Portal account associated with <strong>${email}</strong>.</p>
-        <p style="margin:0 0 16px 0;">Please click the password reset link dispatched to your inbox, or click the button below to access your Client Portal recovery page:</p>
-        <div style="text-align:center;margin:24px 0;">
-          <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
-            Open Golden Mind Client Portal
+        <p style="margin:0 0 16px 0;">Click the button below to open the <strong>Set Your New Portal Password</strong> page and enter your new password:</p>
+        <div style="text-align:center;margin:26px 0;">
+          <a href="${directResetUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
+            Reset My Portal Password Now
           </a>
         </div>
-        <p style="margin:0;font-size:12px;color:#57534E;">If you did not request a password reset, you can safely ignore this email.</p>
+        <p style="margin:0 0 12px 0;font-size:12px;color:#57534E;">Or copy and paste this direct password reset link into your browser:<br /><a href="${directResetUrl}" style="color:#9E7206;word-break:break-all;">${directResetUrl}</a></p>
+        <p style="margin:0;font-size:12px;color:#57534E;">This password reset link is valid for 30 minutes. If you did not request a password reset, you can safely ignore this email.</p>
         `
       );
 
@@ -469,6 +563,57 @@ async function startServer() {
       console.error('Password reset SMTP dispatch error:', error);
       res.status(200).json({ ok: true, deliveredViaSmtp: false });
     }
+  });
+
+  // 3C. Complete Password Reset from Verified SMTP Reset Token
+  app.post('/api/email/complete-password-reset', (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    const resetToken = typeof req.body?.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!email || !resetToken || newPassword.length < 6) {
+      res.status(400).json({ ok: false, error: 'Invalid password reset request.' });
+      return;
+    }
+
+    if (!verifySignedResetToken(email, resetToken)) {
+      res.status(400).json({
+        ok: false,
+        error: 'This password reset link has expired or is invalid. Please request a new reset link.',
+      });
+      return;
+    }
+
+    const pwHash = crypto
+      .createHmac('sha256', RESET_HMAC_SECRET)
+      .update(`${email}|${newPassword}`)
+      .digest('hex');
+    verifiedResetPasswords.set(email, pwHash);
+
+    res.json({ ok: true });
+  });
+
+  // 3D. Verify Login Using Password Updated via Verified SMTP Reset Link
+  app.post('/api/email/verify-reset-login', (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!email || !password) {
+      res.json({ ok: false, verified: false });
+      return;
+    }
+    const storedHash = verifiedResetPasswords.get(email);
+    if (!storedHash) {
+      res.json({ ok: true, verified: false });
+      return;
+    }
+    const candidateHash = crypto
+      .createHmac('sha256', RESET_HMAC_SECRET)
+      .update(`${email}|${password}`)
+      .digest('hex');
+    const verified =
+      storedHash.length === candidateHash.length &&
+      crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(candidateHash));
+    res.json({ ok: true, verified });
   });
 
   // 4. Instant Portal Message Notification Alert (Client -> Provider beehobs@yahoo.com & info@goldenmindpsychiatry.org, or Provider -> Client)

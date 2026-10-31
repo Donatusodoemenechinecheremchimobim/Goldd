@@ -32,7 +32,6 @@ import {
   Edit3,
   Trash2,
   ClipboardCheck,
-  Sparkles,
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
@@ -700,7 +699,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
             >
               <div className="flex items-center justify-between border-b border-stone-200 pb-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#9E7206]" />
+                  <ShieldCheck className="w-4 h-4 text-[#9E7206]" />
                   <div>
                     <h3 className="text-base font-bold font-portal-heading text-stone-900">
                       Patient Care Plan, Recommended Drugs & Portal Links

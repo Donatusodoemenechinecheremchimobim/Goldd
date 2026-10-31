@@ -5,7 +5,6 @@ import { providerBrenda, aboutUsOfficial } from '../data/provider';
 import { SymptomScreener } from '../components/SymptomScreener';
 import {
   ArrowRight,
-  Sparkles,
   Shield,
   Video,
   MapPin,
@@ -383,7 +382,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
 
             <div className="p-7 rounded-3xl bg-[#FAF8F5] border border-stone-200/90 space-y-4 shadow-xs">
               <div className="w-12 h-12 rounded-2xl bg-[#FAF4E2] border border-[#D4AF37]/40 flex items-center justify-center text-[#9E7206]">
-                <Sparkles className="w-6 h-6" />
+                <Shield className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-serif font-bold text-[#1C1917]">
                 02. Precision Pharmacotherapy

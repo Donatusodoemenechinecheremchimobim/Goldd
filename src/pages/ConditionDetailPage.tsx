@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
-  Sparkles,
   HelpCircle,
   Shield,
   HeartHandshake,
@@ -326,7 +325,7 @@ export const ConditionDetailPage: React.FC<ConditionDetailPageProps> = ({
           {/* Holistic & Lifestyle Supports */}
           <div className="p-7 rounded-3xl bg-white border border-stone-200 space-y-4 shadow-xs">
             <div className="flex items-center gap-2 text-[#9E7206]">
-              <Sparkles className="w-5 h-5" />
+              <HeartHandshake className="w-5 h-5" />
               <h3 className="text-lg font-serif font-bold text-[#1C1917]">
                 Integrative & Lifestyle Pillars
               </h3>
