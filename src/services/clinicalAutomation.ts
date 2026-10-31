@@ -32,29 +32,31 @@ export const AUTHORIZED_PROVIDER_EMAILS = [
   'info@goldenmindpsychiatry.com',
 ];
 
-export function isAuthorizedProviderEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return AUTHORIZED_PROVIDER_EMAILS.includes(email.trim().toLowerCase());
+export function normalizePortalEmail(rawEmail?: string | null): string {
+  if (!rawEmail) return '';
+  return rawEmail
+    .trim()
+    .toLowerCase()
+    .replace(/\+portal(?=@)/i, '');
 }
 
-/**
- * Computes a deterministic, URL-safe SHA-256 hex digest of a normalized email address
- * for zero-PII account existence checks in `/account_directory/{emailHash}`.
- */
-export async function computeEmailDirectoryHash(rawEmail: string): Promise<string> {
-  const normalized = rawEmail.trim().toLowerCase();
+export function isAuthorizedProviderEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return AUTHORIZED_PROVIDER_EMAILS.includes(normalizePortalEmail(email));
+}
+
+async function sha256Hex(input: string): Promise<string> {
   if (typeof window !== 'undefined' && window.crypto?.subtle) {
-    const encoded = new TextEncoder().encode(`gmp_acct_${normalized}`);
+    const encoded = new TextEncoder().encode(input);
     const digest = await window.crypto.subtle.digest('SHA-256', encoded);
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
-  // Fallback deterministic 32-char hash if Web Crypto is unavailable
-  let h1 = 0xdeadbeef ^ normalized.length;
-  let h2 = 0x41c6ce57 ^ normalized.length;
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized.charCodeAt(i);
+  let h1 = 0xdeadbeef ^ input.length;
+  let h2 = 0x41c6ce57 ^ input.length;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
     h1 = Math.imul(h1 ^ ch, 2654435761);
     h2 = Math.imul(h2 ^ ch, 1597334677);
   }
@@ -68,26 +70,168 @@ export async function computeEmailDirectoryHash(rawEmail: string): Promise<strin
 }
 
 /**
- * Registers a user's email hash in `/account_directory/{emailHash}` (stores zero PII).
+ * Computes a deterministic, URL-safe SHA-256 hex digest of a normalized email address
+ * for zero-PII account existence checks in `/account_directory/{emailHash}`.
  */
-export async function registerEmailInAccountDirectory(rawEmail?: string | null): Promise<void> {
-  if (!rawEmail || !rawEmail.includes('@')) return;
+export async function computeEmailDirectoryHash(rawEmail: string): Promise<string> {
+  const normalized = normalizePortalEmail(rawEmail);
+  return sha256Hex(`gmp_acct_${normalized}`);
+}
+
+/**
+ * Computes a salted SHA-256 password hash for storing/verifying in `/account_directory/{emailHash}`.
+ */
+export async function computeAccountPasswordHash(
+  rawEmail: string,
+  rawPassword: string
+): Promise<string> {
+  const normalized = normalizePortalEmail(rawEmail);
+  return sha256Hex(`gmp_pw_v1_${normalized}:${rawPassword}`);
+}
+
+/**
+ * Registers or updates a user's email hash (and optional passwordHash / emailVerified) in `/account_directory/{emailHash}` in Firestore.
+ */
+export async function registerEmailInAccountDirectory(
+  rawEmail?: string | null,
+  rawPassword?: string,
+  emailVerified?: boolean
+): Promise<void> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail || !cleanEmail.includes('@')) return;
   try {
-    const emailHash = await computeEmailDirectoryHash(rawEmail);
-    await setDoc(doc(db, 'account_directory', emailHash), {
+    const emailHash = await computeEmailDirectoryHash(cleanEmail);
+    const dirRef = doc(db, 'account_directory', emailHash);
+    let existingPasswordHash: string | undefined;
+    let existingEmailVerified: boolean | undefined;
+    try {
+      const snap = await getDoc(dirRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (typeof data?.passwordHash === 'string') {
+          existingPasswordHash = data.passwordHash;
+        }
+        if (typeof data?.emailVerified === 'boolean') {
+          existingEmailVerified = data.emailVerified;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const payload: Record<string, unknown> = {
       exists: true,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    if (rawPassword && rawPassword.length >= 6) {
+      payload.passwordHash = await computeAccountPasswordHash(cleanEmail, rawPassword);
+    } else if (existingPasswordHash) {
+      payload.passwordHash = existingPasswordHash;
+    }
+    if (typeof emailVerified === 'boolean') {
+      payload.emailVerified = emailVerified;
+    } else if (typeof existingEmailVerified === 'boolean') {
+      payload.emailVerified = existingEmailVerified;
+    }
+    await setDoc(dirRef, payload);
   } catch {
-    // Non-fatal if user is not yet authenticated
+    // Non-fatal
   }
+}
+
+/**
+ * Marks an email address as verified in `/account_directory/{emailHash}` and on the backend server.
+ */
+export async function markEmailVerifiedInAccountDirectory(rawEmail?: string | null): Promise<void> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail || !cleanEmail.includes('@')) return;
+  try {
+    window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+    window.sessionStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+  } catch {
+    // ignore
+  }
+  await Promise.all([
+    registerEmailInAccountDirectory(cleanEmail, undefined, true),
+    fetch('/api/email/mark-email-verified', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    }).catch(() => {}),
+  ]);
+}
+
+/**
+ * Checks whether an email address has been verified via `/account_directory/{emailHash}`, server store, or browser storage.
+ */
+export async function checkEmailVerifiedInAccountDirectory(rawEmail?: string | null): Promise<boolean> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail || !cleanEmail.includes('@')) return false;
+  try {
+    if (
+      window.localStorage.getItem(`gmp_verified_email_${cleanEmail}`) === '1' ||
+      window.sessionStorage.getItem(`gmp_verified_email_${cleanEmail}`) === '1'
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const emailHash = await computeEmailDirectoryHash(cleanEmail);
+    const dirSnap = await getDoc(doc(db, 'account_directory', emailHash));
+    if (dirSnap.exists() && dirSnap.data()?.emailVerified === true) {
+      window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const resp = await fetch('/api/email/check-email-verified', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    const data = await resp.json();
+    if (data?.verified) {
+      window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/**
+ * Verifies whether a candidate password matches the stored `passwordHash` in Cloud Firestore `/account_directory/{emailHash}`.
+ */
+export async function verifyPasswordInAccountDirectory(
+  rawEmail: string,
+  rawPassword: string
+): Promise<boolean> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail || !cleanEmail.includes('@') || !rawPassword) return false;
+  try {
+    const [emailHash, expectedPwHash] = await Promise.all([
+      computeEmailDirectoryHash(cleanEmail),
+      computeAccountPasswordHash(cleanEmail, rawPassword),
+    ]);
+    const dirSnap = await getDoc(doc(db, 'account_directory', emailHash));
+    if (dirSnap.exists() && dirSnap.data()?.passwordHash === expectedPwHash) {
+      return true;
+    }
+  } catch {
+    // Ignore
+  }
+  return false;
 }
 
 /**
  * Checks whether an email address is linked to an existing account in our database or Firebase Auth.
  */
 export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boolean> {
-  const cleanEmail = rawEmail.trim().toLowerCase();
+  const cleanEmail = normalizePortalEmail(rawEmail);
   if (!cleanEmail || !cleanEmail.includes('@')) return false;
 
   // 1. Authorized clinic / provider accounts are always recognized
@@ -249,16 +393,13 @@ export async function ensurePatientOnboarding(
 ): Promise<PortalUser> {
   const uid = authUser.uid;
   const email = sanitizeClinicalInput(
-    authUser.email || extraProfile?.email || 'patient@goldenmindpsychiatry.org',
+    normalizePortalEmail(authUser.email || extraProfile?.email) ||
+      'patient@goldenmindpsychiatry.org',
     254
   );
   const now = new Date().toISOString();
   const isVerifiedProvider = isAuthorizedProviderEmail(email);
-  const isDirectAdminEmail = [
-    'beehobs@yahoo.com',
-    'info@goldenmindpsychiatry.org',
-    'info@goldenmindpsychiatry.com',
-  ].includes(email.toLowerCase());
+  const isDirectAdminEmail = AUTHORIZED_PROVIDER_EMAILS.includes(email.toLowerCase());
   const canWriteProviderRole =
     isVerifiedProvider && (authUser.emailVerified || isDirectAdminEmail);
 

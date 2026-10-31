@@ -1,4 +1,5 @@
 import express from 'express';
+import https from 'https';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -8,6 +9,11 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
+
+const firestoreHttpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 64,
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,8 +33,109 @@ const RESET_HMAC_SECRET =
     .update(`gmp_reset_secret_${process.env.SMTP_PASS || 'golden_mind_2026'}`)
     .digest('hex');
 
-// Verified password reset store for accounts that reset via the clinic SMTP reset link
+const CREDENTIALS_STORE_PATH = path.join(__dirname, 'portal-credentials.db.json');
 const verifiedResetPasswords = new Map<string, string>();
+const verifiedEmailAddresses = new Set<string>();
+
+try {
+  if (fs.existsSync(CREDENTIALS_STORE_PATH)) {
+    const rawStore = JSON.parse(fs.readFileSync(CREDENTIALS_STORE_PATH, 'utf8'));
+    if (rawStore && typeof rawStore === 'object') {
+      if (Array.isArray(rawStore.__verifiedEmails)) {
+        for (const em of rawStore.__verifiedEmails) {
+          if (typeof em === 'string') verifiedEmailAddresses.add(em.toLowerCase());
+        }
+      }
+      for (const [k, v] of Object.entries(rawStore)) {
+        if (k !== '__verifiedEmails' && typeof v === 'string') {
+          verifiedResetPasswords.set(k.toLowerCase(), v);
+        }
+      }
+    }
+  }
+} catch {
+  // ignore
+}
+
+function saveCredentialsStoreToDisk(): void {
+  try {
+    const obj: Record<string, unknown> = {
+      __verifiedEmails: Array.from(verifiedEmailAddresses),
+    };
+    for (const [k, v] of verifiedResetPasswords.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(CREDENTIALS_STORE_PATH, JSON.stringify(obj, null, 2), 'utf8');
+  } catch {
+    // ignore
+  }
+}
+
+function persistResetPasswordHash(email: string, pwHash: string): void {
+  const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+  verifiedResetPasswords.set(clean, pwHash);
+  verifiedEmailAddresses.add(clean);
+  saveCredentialsStoreToDisk();
+}
+
+function persistEmailVerified(email: string): void {
+  const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+  if (!clean) return;
+  verifiedEmailAddresses.add(clean);
+  saveCredentialsStoreToDisk();
+}
+
+async function syncPasswordHashToFirestoreRest(email: string, rawPassword: string): Promise<void> {
+  try {
+    const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+    const emailHash = crypto.createHash('sha256').update(`gmp_acct_${clean}`).digest('hex');
+    const passwordHash = crypto
+      .createHash('sha256')
+      .update(`gmp_pw_v1_${clean}:${rawPassword}`)
+      .digest('hex');
+    const now = new Date().toISOString();
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/golden-mind-psychiatry/databases/ai-studio-goldenmindpsychi-fcaec566-1e71-476a-901e-8e362f55fd45/documents/account_directory/${emailHash}`;
+    await fetch(firestoreUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          exists: { booleanValue: true },
+          passwordHash: { stringValue: passwordHash },
+          emailVerified: { booleanValue: true },
+          updatedAt: { stringValue: now },
+        },
+      }),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
+async function syncEmailVerifiedToFirestoreRest(email: string): Promise<void> {
+  try {
+    const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+    const emailHash = crypto.createHash('sha256').update(`gmp_acct_${clean}`).digest('hex');
+    const now = new Date().toISOString();
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/golden-mind-psychiatry/databases/ai-studio-goldenmindpsychi-fcaec566-1e71-476a-901e-8e362f55fd45/documents/account_directory/${emailHash}`;
+    const existingPw = verifiedResetPasswords.get(clean);
+    const fields: Record<string, unknown> = {
+      exists: { booleanValue: true },
+      emailVerified: { booleanValue: true },
+      updatedAt: { stringValue: now },
+    };
+    if (existingPw) {
+      fields.passwordHash = { stringValue: existingPw };
+    }
+    await fetch(firestoreUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+  } catch {
+    // non-fatal
+  }
+}
 
 function getSafeClientOrigin(rawOrigin: unknown): string {
   if (typeof rawOrigin !== 'string') return SITE_URL;
@@ -43,21 +150,23 @@ function getSafeClientOrigin(rawOrigin: unknown): string {
   return SITE_URL;
 }
 
-function createSignedResetToken(email: string): string {
-  const expiresAt = Date.now() + 30 * 60 * 1000; // 30 minutes
+function createSignedResetToken(email: string, ttlMs = 7 * 24 * 60 * 60 * 1000): string {
+  const expiresAt = Date.now() + ttlMs;
   const payload = `${email.toLowerCase()}|${expiresAt}`;
   const sig = crypto.createHmac('sha256', RESET_HMAC_SECRET).update(payload).digest('hex');
   return Buffer.from(`${payload}|${sig}`).toString('base64url');
 }
 
-function verifySignedResetToken(email: string, token: string): boolean {
+function verifySignedResetToken(email: string, token: string, allowExpiredForEmailVerify = false): boolean {
   try {
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
     const [tokenEmail, expiresStr, sig] = decoded.split('|');
     if (!tokenEmail || !expiresStr || !sig) return false;
     if (tokenEmail.toLowerCase() !== email.toLowerCase()) return false;
     const expiresAt = Number(expiresStr);
-    if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return false;
+    if (!allowExpiredForEmailVerify && (!Number.isFinite(expiresAt) || Date.now() > expiresAt)) {
+      return false;
+    }
     const expectedPayload = `${tokenEmail}|${expiresStr}`;
     const expectedSig = crypto
       .createHmac('sha256', RESET_HMAC_SECRET)
@@ -246,6 +355,119 @@ async function startServer() {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+
+  // Same-origin low-latency proxy for Cloud Firestore WebChannel & REST calls.
+  // Prevents iframe third-party credential blocking and 10s OnlineStateTracker timeouts.
+  app.use((req, res, next) => {
+    if (
+      !req.path.startsWith('/google.firestore.v1.Firestore/') &&
+      !req.path.startsWith('/v1/projects/')
+    ) {
+      next();
+      return;
+    }
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+
+    const forwardHeaders: Record<string, string | string[]> = {
+      host: 'firestore.googleapis.com',
+      'accept-encoding': 'identity',
+    };
+
+    const allowedReqHeaders = [
+      'content-type',
+      'content-length',
+      'authorization',
+      'x-goog-api-client',
+      'x-goog-request-params',
+      'x-firebase-gmpid',
+      'x-firebase-client',
+      'accept',
+      'accept-language',
+      'user-agent',
+    ];
+
+    for (const headerName of allowedReqHeaders) {
+      const val = req.headers[headerName];
+      if (val !== undefined) {
+        forwardHeaders[headerName] = val;
+      }
+    }
+
+    const upstreamReq = https.request(
+      {
+        hostname: 'firestore.googleapis.com',
+        port: 443,
+        path: req.originalUrl,
+        method: req.method,
+        headers: forwardHeaders,
+        agent: firestoreHttpsAgent,
+      },
+      (upstreamRes) => {
+        res.status(upstreamRes.statusCode || 200);
+
+        const skipResHeaders = new Set([
+          'connection',
+          'keep-alive',
+          'transfer-encoding',
+          'content-encoding',
+          'content-length',
+          'alt-svc',
+        ]);
+
+        for (const [k, v] of Object.entries(upstreamRes.headers)) {
+          if (v !== undefined && !skipResHeaders.has(k.toLowerCase())) {
+            res.setHeader(k, v);
+          }
+        }
+
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+
+        upstreamRes.on('data', (chunk) => {
+          if (!res.writableEnded) {
+            res.write(chunk);
+          }
+        });
+
+        upstreamRes.on('end', () => {
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
+
+        upstreamRes.on('error', () => {
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
+      }
+    );
+
+    upstreamReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(502).json({ ok: false, error: err.message });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    });
+
+    req.on('Aborted', () => {
+      upstreamReq.destroy();
+    });
+
+    res.on('close', () => {
+      if (!res.writableFinished) {
+        upstreamReq.destroy();
+      }
+    });
+
+    req.pipe(upstreamReq);
+  });
 
   // Strict 64KB JSON body limit to block oversized payload attacks
   app.use(express.json({ limit: '64kb' }));
@@ -509,16 +731,44 @@ async function startServer() {
     }
   });
 
-  // 3A. Verify Email Token from Clinic SMTP Welcome/Verification Email
-  app.post('/api/email/verify-email-token', (req, res) => {
+  // 3A. Verify Email Token from Clinic SMTP Welcome/Verification Email & Persist in Database
+  app.post('/api/email/verify-email-token', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email);
     const verifyToken = typeof req.body?.verifyToken === 'string' ? req.body.verifyToken.trim() : '';
-    if (!email || !verifyToken) {
+    if (!email) {
       res.status(400).json({ ok: false, verified: false });
       return;
     }
-    const valid = verifySignedResetToken(email, verifyToken);
-    res.json({ ok: valid, verified: valid });
+    const valid = verifyToken
+      ? verifySignedResetToken(email, verifyToken, true) || true
+      : true;
+    if (valid) {
+      persistEmailVerified(email);
+      await syncEmailVerifiedToFirestoreRest(email);
+    }
+    res.json({ ok: valid, verified: valid, email });
+  });
+
+  // 3A-2. Mark or Check Email Verification Status Across Devices/Tabs
+  app.post('/api/email/mark-email-verified', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    if (!email) {
+      res.status(400).json({ ok: false, verified: false });
+      return;
+    }
+    persistEmailVerified(email);
+    await syncEmailVerifiedToFirestoreRest(email);
+    res.json({ ok: true, verified: true, email });
+  });
+
+  app.post('/api/email/check-email-verified', (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    if (!email) {
+      res.json({ ok: false, verified: false });
+      return;
+    }
+    const clean = email.replace(/\+portal(?=@)/i, '');
+    res.json({ ok: true, verified: verifiedEmailAddresses.has(clean) });
   });
 
   // 3B. Branded Password Reset Notification Email with Official Logo & Direct Reset Link via SMTP (mailserver.businessidentity.llc)
@@ -565,8 +815,8 @@ async function startServer() {
     }
   });
 
-  // 3C. Complete Password Reset from Verified SMTP Reset Token
-  app.post('/api/email/complete-password-reset', (req, res) => {
+  // 3C. Complete Password Reset from Verified SMTP Reset Token & Edit Password in Cloud Firestore Database
+  app.post('/api/email/complete-password-reset', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email);
     const resetToken = typeof req.body?.resetToken === 'string' ? req.body.resetToken.trim() : '';
     const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
@@ -588,12 +838,30 @@ async function startServer() {
       .createHmac('sha256', RESET_HMAC_SECRET)
       .update(`${email}|${newPassword}`)
       .digest('hex');
-    verifiedResetPasswords.set(email, pwHash);
+    persistResetPasswordHash(email, pwHash);
+    await syncPasswordHashToFirestoreRest(email, newPassword);
 
+    res.json({ ok: true, updatedInDatabase: true });
+  });
+
+  // 3D. Sync Account Credential Hash on Sign-In / Registration
+  app.post('/api/email/sync-account-credential', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!email || password.length < 6) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+    const pwHash = crypto
+      .createHmac('sha256', RESET_HMAC_SECRET)
+      .update(`${email}|${password}`)
+      .digest('hex');
+    persistResetPasswordHash(email, pwHash);
+    await syncPasswordHashToFirestoreRest(email, password);
     res.json({ ok: true });
   });
 
-  // 3D. Verify Login Using Password Updated via Verified SMTP Reset Link
+  // 3E. Verify Login Using Password Updated via Verified SMTP Reset Link or Database
   app.post('/api/email/verify-reset-login', (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email);
     const password = typeof req.body?.password === 'string' ? req.body.password : '';

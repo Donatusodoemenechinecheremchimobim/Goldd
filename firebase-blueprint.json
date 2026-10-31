@@ -208,13 +208,23 @@
     },
     "AccountDirectoryEntry": {
       "title": "AccountDirectoryEntry",
-      "description": "Zero-PII SHA-256 email hash registry to verify whether an email address is linked to an existing portal account",
+      "description": "Zero-PII SHA-256 email hash registry, verification status, and password hash verifier for portal accounts",
       "type": "object",
       "properties": {
         "exists": { "type": "boolean", "description": "Always true for registered accounts" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of registration or sync" }
+        "passwordHash": { "type": "string", "description": "Salted SHA-256 hex digest of the account password" },
+        "emailVerified": { "type": "boolean", "description": "Whether the user has verified their email address" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of registration or password update" }
       },
       "required": ["exists", "updatedAt"]
+    },
+    "ConnectionTest": {
+      "title": "ConnectionTest",
+      "description": "Read-only connectivity test document used on application boot",
+      "type": "object",
+      "properties": {
+        "ok": { "type": "boolean", "description": "Connectivity status flag" }
+      }
     }
   },
   "firestore": {
@@ -253,6 +263,10 @@
     "/account_directory/{emailHash}": {
       "schema": { "$ref": "#/entities/AccountDirectoryEntry" },
       "description": "Zero-PII SHA-256 email hash directory for password reset verification"
+    },
+    "/test/{testId}": {
+      "schema": { "$ref": "#/entities/ConnectionTest" },
+      "description": "Read-only connection verification probe"
     }
   }
 }

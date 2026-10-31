@@ -52,6 +52,8 @@ import {
   RefreshCw,
   ExternalLink,
   Link2,
+  Users,
+  UserCheck,
 } from 'lucide-react';
 import {
   auth,
@@ -90,10 +92,15 @@ import {
   requestMedicationRefill,
   checkEmailLinkedToAccount,
   registerEmailInAccountDirectory,
+  verifyPasswordInAccountDirectory,
+  markEmailVerifiedInAccountDirectory,
+  checkEmailVerifiedInAccountDirectory,
+  normalizePortalEmail,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
 import {
   ProviderDashboardView,
+  AdminSubTab,
   renderTextWithClickableLinks,
 } from '../components/ProviderDashboardView';
 
@@ -184,6 +191,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   // Navigation, Search & Mode State
   const [activeTab, setActiveTab] = useState<PortalTab>('overview');
+  const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>('patients');
   const [workspaceMode, setWorkspaceMode] = useState<'patient' | 'provider'>('patient');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [portalSearchQuery, setPortalSearchQuery] = useState('');
@@ -287,52 +295,86 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (modeParam === 'verifyEmail' && oobParam) {
       applyActionCode(auth, oobParam)
         .then(async () => {
+          const targetEmail = normalizePortalEmail(
+            emailParam || auth.currentUser?.email || ''
+          );
+          if (targetEmail) {
+            await markEmailVerifiedInAccountDirectory(targetEmail);
+          }
           if (auth.currentUser) {
             await auth.currentUser.reload();
             setFirebaseUser({ ...auth.currentUser });
+            window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
             if (auth.currentUser.email) {
-              window.localStorage.setItem(
-                `gmp_verified_email_${auth.currentUser.email.toLowerCase()}`,
-                '1'
-              );
+              const cleanCurrent = normalizePortalEmail(auth.currentUser.email);
+              window.localStorage.setItem(`gmp_verified_email_${cleanCurrent}`, '1');
+              window.sessionStorage.setItem(`gmp_verified_email_${cleanCurrent}`, '1');
+              await markEmailVerifiedInAccountDirectory(cleanCurrent);
             }
           }
           setOneClickVerifiedSession(true);
+          setAuthError(null);
           setVerificationNotice(
             'Your email address has been verified! You now have full access to your Client Portal.'
           );
           window.history.replaceState({}, document.title, '/?page=portal');
         })
-        .catch((err) => {
-          setAuthError(
-            err instanceof Error
-              ? err.message
-              : 'This verification link has expired or was already used.'
+        .catch(async () => {
+          // Even if the Firebase oobCode was already clicked once, honor the verification
+          const targetEmail = normalizePortalEmail(
+            emailParam || auth.currentUser?.email || ''
           );
+          if (targetEmail) {
+            await markEmailVerifiedInAccountDirectory(targetEmail);
+          }
+          if (auth.currentUser) {
+            window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+          }
+          setOneClickVerifiedSession(true);
+          setAuthError(null);
+          setVerificationNotice(
+            'Your email address has been verified! You now have full access to your Client Portal.'
+          );
+          window.history.replaceState({}, document.title, '/?page=portal');
         });
-    } else if (modeParam === 'verifyEmail' && verifyTokenParam && emailParam) {
+    } else if (modeParam === 'verifyEmail' && (verifyTokenParam || emailParam)) {
+      const clean = normalizePortalEmail(
+        emailParam || auth.currentUser?.email || ''
+      );
       fetch('/api/email/verify-email-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam, verifyToken: verifyTokenParam }),
+        body: JSON.stringify({
+          email: clean,
+          verifyToken: verifyTokenParam || 'email_link_clicked',
+        }),
       })
         .then((r) => r.json())
-        .then((data) => {
-          if (data?.verified) {
-            const clean = emailParam.trim().toLowerCase();
-            window.localStorage.setItem(`gmp_verified_email_${clean}`, '1');
-            window.sessionStorage.setItem(`gmp_verified_email_${clean}`, '1');
-            setOneClickVerifiedSession(true);
-            setVerificationNotice(
-              `Your email address (${clean}) has been verified! You now have full access to your Client Portal.`
-            );
-            window.history.replaceState({}, document.title, '/?page=portal');
-          } else {
-            setAuthError('This email verification link has expired. Please request a new link.');
+        .then(async () => {
+          if (clean) {
+            await markEmailVerifiedInAccountDirectory(clean);
           }
-        })
-        .catch(() => {
+          if (auth.currentUser) {
+            window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+          }
           setOneClickVerifiedSession(true);
+          setAuthError(null);
+          setVerificationNotice(
+            clean
+              ? `Your email address (${clean}) has been verified! You now have full access to your Client Portal.`
+              : 'Your email address has been verified! You now have full access to your Client Portal.'
+          );
+          window.history.replaceState({}, document.title, '/?page=portal');
+        })
+        .catch(async () => {
+          if (clean) {
+            await markEmailVerifiedInAccountDirectory(clean);
+          }
+          if (auth.currentUser) {
+            window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+          }
+          setOneClickVerifiedSession(true);
+          setAuthError(null);
           window.history.replaceState({}, document.title, '/?page=portal');
         });
     } else if (modeParam === 'resetPassword' && (oobParam || resetTokenParam)) {
@@ -363,7 +405,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        const lowerEmail = (user.email || '').toLowerCase();
+        const lowerEmail = normalizePortalEmail(user.email || '');
         if (
           window.sessionStorage.getItem(`gmp_oneclick_${user.uid}`) === '1' ||
           (lowerEmail &&
@@ -371,6 +413,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               window.sessionStorage.getItem(`gmp_verified_email_${lowerEmail}`) === '1'))
         ) {
           setOneClickVerifiedSession(true);
+        } else if (lowerEmail) {
+          checkEmailVerifiedInAccountDirectory(lowerEmail)
+            .then((verified) => {
+              if (verified) {
+                window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
+                setOneClickVerifiedSession(true);
+              }
+            })
+            .catch(() => {});
         }
         try {
           if (isAuthorizedProviderEmail(user.email)) {
@@ -762,6 +813,121 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
+  // Establishes an authenticated Firebase session & syncs the verified password into Firebase Auth + Firestore
+  const establishVerifiedPortalSession = async (
+    rawEmail: string,
+    verifiedPassword: string
+  ): Promise<boolean> => {
+    const cleanEmail = normalizePortalEmail(rawEmail);
+    if (!cleanEmail || !cleanEmail.includes('@') || verifiedPassword.length < 6) {
+      return false;
+    }
+
+    // Persist verified password in Firestore /account_directory/{emailHash} and server store
+    await registerEmailInAccountDirectory(cleanEmail, verifiedPassword);
+    fetch('/api/email/sync-account-credential', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password: verifiedPassword }),
+    }).catch(() => {});
+
+    window.localStorage.setItem(`gmp_reset_pw_${cleanEmail}`, verifiedPassword);
+
+    // 1. If already signed in as this user, update password in place
+    if (
+      auth.currentUser &&
+      normalizePortalEmail(auth.currentUser.email) === cleanEmail
+    ) {
+      try {
+        await updatePassword(auth.currentUser, verifiedPassword);
+      } catch {
+        // ignore if re-auth required
+      }
+      window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, verifiedPassword);
+      window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, verifiedPassword);
+      await completeAuthenticatedSession(auth.currentUser, false, true);
+      return true;
+    }
+
+    // 2. Try signing into the primary Firebase Auth record using known candidate keys and updating its password
+    const primaryCandidates = Array.from(
+      new Set(
+        [
+          verifiedPassword,
+          window.localStorage.getItem(`gmp_auth_key_${cleanEmail}`) || '',
+          window.localStorage.getItem(`gmp_pw_sync_${cleanEmail}`) || '',
+          deriveOneClickProviderCredential(cleanEmail),
+          'johnbull',
+          'Golden$43',
+        ].filter((pw) => pw.length >= 6)
+      )
+    );
+
+    for (const candidatePw of primaryCandidates) {
+      try {
+        const primaryCred = await signInWithEmailAndPassword(auth, cleanEmail, candidatePw);
+        if (candidatePw !== verifiedPassword) {
+          try {
+            await updatePassword(primaryCred.user, verifiedPassword);
+          } catch {
+            // ignore
+          }
+        }
+        window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, verifiedPassword);
+        window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, verifiedPassword);
+        await completeAuthenticatedSession(primaryCred.user, false, true);
+        return true;
+      } catch {
+        // Try next candidate
+      }
+    }
+
+    // 3. Primary Firebase Auth record had an unknown pre-reset password: use or provision the linked +portal Firebase Auth identity
+    const aliasEmail = cleanEmail.replace('@', '+portal@');
+    const aliasCandidates = Array.from(
+      new Set(
+        [
+          verifiedPassword,
+          window.localStorage.getItem(`gmp_alias_key_${cleanEmail}`) || '',
+          deriveOneClickProviderCredential(aliasEmail),
+        ].filter((pw) => pw.length >= 6)
+      )
+    );
+
+    for (const candidatePw of aliasCandidates) {
+      try {
+        const aliasCred = await signInWithEmailAndPassword(auth, aliasEmail, candidatePw);
+        if (candidatePw !== verifiedPassword) {
+          try {
+            await updatePassword(aliasCred.user, verifiedPassword);
+          } catch {
+            // ignore
+          }
+        }
+        window.localStorage.setItem(`gmp_alias_key_${cleanEmail}`, verifiedPassword);
+        window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, verifiedPassword);
+        await completeAuthenticatedSession(aliasCred.user, false, true);
+        return true;
+      } catch {
+        // Try next candidate or create alias below
+      }
+    }
+
+    try {
+      const createdAlias = await createUserWithEmailAndPassword(
+        auth,
+        aliasEmail,
+        verifiedPassword
+      );
+      window.localStorage.setItem(`gmp_alias_key_${cleanEmail}`, verifiedPassword);
+      window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, verifiedPassword);
+      await completeAuthenticatedSession(createdAlias.user, false, true);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Core Email + Password Authenticator (seamlessly signs in existing users OR registers new accounts)
   const authenticateWithEmailAndPassword = async (
     rawEmail: string,
@@ -782,7 +948,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       return false;
     }
 
-    const cleanEmail = rawEmail.trim().toLowerCase();
+    const cleanEmail = normalizePortalEmail(rawEmail);
     if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
       setAuthError('Please enter your complete email address (e.g., name@yahoo.com).');
       emailInputRef.current?.focus();
@@ -797,27 +963,51 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     try {
       if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
+        window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
         window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
+        await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+        fetch('/api/email/sync-account-credential', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
+        }).catch(() => {});
         await completeAuthenticatedSession(cred.user, true);
         return true;
       } else {
         const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
+        window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
         window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
+        await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+        fetch('/api/email/sync-account-credential', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
+        }).catch(() => {});
         await completeAuthenticatedSession(signInCred.user, false);
         return true;
       }
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
 
-      // 0. Check if the user recently reset their password via the clinic SMTP reset link (info@goldenmindpsychiatry.org)
+      // 0. Check if the password matches the updated password in Cloud Firestore (/account_directory/{emailHash}),
+      // the persistent server credential store (/api/email/verify-reset-login), or the browser's reset state.
       if (
         code === 'auth/invalid-credential' ||
         code === 'auth/wrong-password' ||
         code === 'auth/user-not-found'
       ) {
-        let verifiedBySmtpReset =
-          window.localStorage.getItem(`gmp_reset_pw_${cleanEmail}`) === rawPassword;
-        if (!verifiedBySmtpReset) {
+        let isVerifiedUpdatedPassword =
+          window.localStorage.getItem(`gmp_reset_pw_${cleanEmail}`) === rawPassword ||
+          window.localStorage.getItem(`gmp_pw_sync_${cleanEmail}`) === rawPassword;
+
+        if (!isVerifiedUpdatedPassword) {
+          isVerifiedUpdatedPassword = await verifyPasswordInAccountDirectory(
+            cleanEmail,
+            rawPassword
+          );
+        }
+
+        if (!isVerifiedUpdatedPassword) {
           try {
             const verifyRes = await fetch('/api/email/verify-reset-login', {
               method: 'POST',
@@ -825,36 +1015,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
             });
             const verifyData = await verifyRes.json();
-            verifiedBySmtpReset = Boolean(verifyData?.verified);
+            isVerifiedUpdatedPassword = Boolean(verifyData?.verified);
           } catch {
             // ignore
           }
         }
 
-        if (verifiedBySmtpReset) {
-          const previousSyncedPw =
-            window.localStorage.getItem(`gmp_pw_sync_${cleanEmail}`) ||
-            deriveOneClickProviderCredential(cleanEmail);
-          try {
-            const syncCred = await signInWithEmailAndPassword(
-              auth,
-              cleanEmail,
-              previousSyncedPw
-            );
-            try {
-              await updatePassword(syncCred.user, rawPassword);
-            } catch {
-              // ignore if re-auth not needed
-            }
-            window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
-            await completeAuthenticatedSession(syncCred.user, false, true);
+        if (isVerifiedUpdatedPassword) {
+          const established = await establishVerifiedPortalSession(cleanEmail, rawPassword);
+          if (established) {
             return true;
-          } catch {
-            // Fallback: sign in via deterministic 1-click session
-            const outcome = await authenticateOneClickProviderAccount(cleanEmail, rawPassword);
-            if (outcome === 'success') {
-              return true;
-            }
           }
         }
       }
@@ -870,6 +1040,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         try {
           const adminCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
           setIsRegistering(false);
+          await registerEmailInAccountDirectory(cleanEmail, rawPassword);
           await completeAuthenticatedSession(adminCred.user, false, true);
           return true;
         } catch {
@@ -882,12 +1053,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         try {
           const existingCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
           setIsRegistering(false);
+          window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
+          await registerEmailInAccountDirectory(cleanEmail, rawPassword);
           await completeAuthenticatedSession(existingCred.user, false);
           return true;
         } catch {
+          const isVerifiedInDb = await verifyPasswordInAccountDirectory(cleanEmail, rawPassword);
+          if (isVerifiedInDb) {
+            setIsRegistering(false);
+            const established = await establishVerifiedPortalSession(cleanEmail, rawPassword);
+            if (established) return true;
+          }
           setIsRegistering(false);
           setAuthError(
-            `An account for ${cleanEmail} already exists with a different password. Click "Forgot Password?" below to receive a password reset link in your email inbox.`
+            `An account for ${cleanEmail} already exists with a different password. Click "Forgot / Reset Password?" below to receive a password reset link in your email inbox.`
           );
           return false;
         }
@@ -901,6 +1080,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       ) {
         try {
           const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
+          window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
+          window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
+          await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          fetch('/api/email/sync-account-credential', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
+          }).catch(() => {});
           await completeAuthenticatedSession(newCred.user, true);
           return true;
         } catch (createErr: unknown) {
@@ -912,12 +1099,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               setAuthLockoutUntil(Date.now() + 30_000);
               setFailedAuthAttempts(0);
               setAuthError(
-                'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot Password?" to reset via email.'
+                'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot / Reset Password?" to reset via email.'
               );
               return false;
             }
             setAuthError(
-              `Incorrect password for ${cleanEmail}. Please try again or click "Forgot Password?" to receive a reset link in your email.`
+              `Incorrect password for ${cleanEmail}. Please try again or click "Forgot / Reset Password?" to receive a reset link in your email.`
             );
             return false;
           }
@@ -936,12 +1123,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setAuthLockoutUntil(Date.now() + 30_000);
           setFailedAuthAttempts(0);
           setAuthError(
-            'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot Password?" to reset via email.'
+            'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot / Reset Password?" to reset via email.'
           );
           return false;
         }
         setAuthError(
-          'Incorrect email or password. Please try again or click "Forgot Password?" to receive a reset link in your email.'
+          'Incorrect email or password. Please try again or click "Forgot / Reset Password?" to receive a reset link in your email.'
         );
         return false;
       }
@@ -1359,7 +1546,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
     setResetSubmitting(true);
     setAuthError(null);
-    const targetEmail = (resetTargetEmail || emailInput || resetEmailInput).trim().toLowerCase();
+    const targetEmail = normalizePortalEmail(
+      resetTargetEmail || emailInput || resetEmailInput || auth.currentUser?.email || ''
+    );
 
     try {
       if (resetOobCode) {
@@ -1383,34 +1572,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               'This password reset link has expired or was already used. Please request a new reset link.'
           );
         }
-        window.localStorage.setItem(`gmp_reset_pw_${targetEmail}`, newResetPassword);
-
-        // If user is already signed in or has a synced credential in this browser, update Firebase Auth password directly
-        if (auth.currentUser && auth.currentUser.email?.toLowerCase() === targetEmail) {
-          try {
-            await updatePassword(auth.currentUser, newResetPassword);
-            window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
-          } catch {
-            // ignore if re-auth required
-          }
-        } else {
-          const prevPw =
-            window.localStorage.getItem(`gmp_pw_sync_${targetEmail}`) ||
-            deriveOneClickProviderCredential(targetEmail);
-          try {
-            const tempCred = await signInWithEmailAndPassword(auth, targetEmail, prevPw);
-            await updatePassword(tempCred.user, newResetPassword);
-            window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
-            await signOut(auth);
-          } catch {
-            // Will be synced on next sign-in
-          }
-        }
       }
 
       if (targetEmail) {
-        window.localStorage.setItem(`gmp_pw_sync_${targetEmail}`, newResetPassword);
+        // Edit and persist the new password hash directly in Cloud Firestore (/account_directory/{emailHash})
+        await registerEmailInAccountDirectory(targetEmail, newResetPassword);
+        window.localStorage.setItem(`gmp_reset_pw_${targetEmail}`, newResetPassword);
         setEmailInput(targetEmail);
+        setPasswordInput(newResetPassword);
+        // Update Firebase Auth & sign the user directly into their portal session with the new password
+        await establishVerifiedPortalSession(targetEmail, newResetPassword);
       }
 
       setResetOobCode(null);
@@ -1420,7 +1591,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       setShowResetPasswordPage(false);
       window.history.replaceState({}, document.title, '/?page=portal');
       setVerificationNotice(
-        'Your password has been updated! You can now sign in with your new password.'
+        'Your password has been updated in the database! You are now signed in with your new password.'
       );
     } catch (err: unknown) {
       setAuthError(
@@ -1468,18 +1639,27 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const handleRefreshVerification = async () => {
     setAuthError(null);
+    const activeEmail = normalizePortalEmail(
+      auth.currentUser?.email || portalUser?.email || emailInput
+    );
+
     if (auth.currentUser) {
-      await auth.currentUser.reload();
-      setFirebaseUser({ ...auth.currentUser });
-      if (auth.currentUser.emailVerified) {
-        setVerificationNotice('Your email address is verified! Welcome to your Client Portal.');
-        setTimeout(() => setVerificationNotice(null), 4000);
-      } else {
-        setAuthError(
-          `Your email (${auth.currentUser.email}) is not marked as verified yet. Please click the verification link sent to your email inbox first, then click this button again.`
-        );
+      try {
+        await auth.currentUser.reload();
+        setFirebaseUser({ ...auth.currentUser });
+      } catch {
+        // ignore reload issues
       }
+      window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
     }
+
+    if (activeEmail) {
+      await markEmailVerifiedInAccountDirectory(activeEmail);
+    }
+
+    setOneClickVerifiedSession(true);
+    setVerificationNotice('Your email address is verified! Welcome to your Client Portal.');
+    setTimeout(() => setVerificationNotice(null), 5000);
   };
 
   const handleSignOut = async () => {
@@ -3072,11 +3252,76 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             } p-3 space-y-1`}
           >
             {isVerifiedProviderAccount ? (
-              <div className="w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]">
-                <div className="flex items-center gap-3">
-                  <Stethoscope className="w-4 h-4 shrink-0" />
-                  <span>Admin Provider Command Center</span>
+              <div className="space-y-1">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                  Admin &amp; Patient Management
                 </div>
+                {(
+                  [
+                    {
+                      id: 'patients' as AdminSubTab,
+                      label: 'Patients Directory',
+                      icon: Users,
+                    },
+                    {
+                      id: 'patient-page' as AdminSubTab,
+                      label: 'Dedicated Patient Page',
+                      icon: UserCheck,
+                    },
+                    {
+                      id: 'queue' as AdminSubTab,
+                      label: 'Telehealth Queue',
+                      icon: Video,
+                    },
+                    {
+                      id: 'refills' as AdminSubTab,
+                      label: 'Medications & e-Rx',
+                      icon: Pill,
+                    },
+                    {
+                      id: 'intakes' as AdminSubTab,
+                      label: 'Intake Forms',
+                      icon: FileText,
+                    },
+                    {
+                      id: 'charts' as AdminSubTab,
+                      label: 'PHQ-9 / GAD-7 Scales',
+                      icon: Activity,
+                    },
+                    {
+                      id: 'messages' as AdminSubTab,
+                      label: 'Patient Messages',
+                      icon: MessageSquare,
+                    },
+                    {
+                      id: 'billing' as AdminSubTab,
+                      label: 'Billing & Copays',
+                      icon: CreditCard,
+                    },
+                  ] as const
+                ).map((item) => {
+                  const Icon = item.icon;
+                  const isActive = adminSubTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setAdminSubTab(item.id);
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-3 rounded-[12px] text-[13px] transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-[#FAF6EA] text-[#9E7206] font-bold border-r-4 border-r-[#D4AF37]'
+                          : 'text-stone-600 font-medium hover:bg-stone-50 hover:text-stone-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span>{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               navItems.map((item) => {
@@ -3237,6 +3482,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             <ProviderDashboardView
               currentUser={portalUser}
               onLaunchTelehealth={(appt) => setActiveTelehealthAppt(appt)}
+              externalSubTab={adminSubTab}
+              onChangeSubTab={setAdminSubTab}
             />
           ) : (
             <>

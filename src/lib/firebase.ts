@@ -16,11 +16,23 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with the named database from config and reliable long-polling for iframe/proxy compatibility
+// Initialize Firestore with the named database from config, routed through same-origin proxy
+// with short 5-second long-polling cycles to prevent iframe/browser 10-second OnlineStateTracker timeouts
+const isBrowser = typeof window !== 'undefined' && Boolean(window.location?.host);
+
 export const db = initializeFirestore(
   app,
   {
+    ...(isBrowser
+      ? {
+          host: window.location.host,
+          ssl: window.location.protocol === 'https:',
+        }
+      : {}),
     experimentalForceLongPolling: true,
+    experimentalLongPollingOptions: {
+      timeoutSeconds: 5,
+    },
   },
   firebaseConfig.firestoreDatabaseId
 );

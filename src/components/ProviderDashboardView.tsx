@@ -3,6 +3,7 @@ import {
   collection,
   onSnapshot,
   doc,
+  setDoc,
   updateDoc,
   addDoc,
   deleteDoc,
@@ -32,6 +33,7 @@ import {
   Edit3,
   Trash2,
   ClipboardCheck,
+  UserCheck,
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
@@ -55,9 +57,21 @@ import {
   registerEmailInAccountDirectory,
 } from '../services/clinicalAutomation';
 
+export type AdminSubTab =
+  | 'patients'
+  | 'patient-page'
+  | 'queue'
+  | 'charts'
+  | 'refills'
+  | 'intakes'
+  | 'messages'
+  | 'billing';
+
 interface ProviderDashboardViewProps {
   currentUser: PortalUser;
   onLaunchTelehealth: (appt: AppointmentRecord) => void;
+  externalSubTab?: AdminSubTab;
+  onChangeSubTab?: (tab: AdminSubTab) => void;
 }
 
 /**
@@ -89,6 +103,8 @@ export function renderTextWithClickableLinks(text: string): React.ReactNode {
 export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   currentUser,
   onLaunchTelehealth,
+  externalSubTab,
+  onChangeSubTab,
 }) => {
   const [patients, setPatients] = useState<PortalUser[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
@@ -101,11 +117,77 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [selectedPatientId, setSelectedPatientId] = useState<string>('ALL');
   const [activeChartPatientId, setActiveChartPatientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeSubTab, setActiveSubTab] = useState<
-    'patients' | 'queue' | 'charts' | 'refills' | 'intakes' | 'messages' | 'billing'
-  >('patients');
+  const [activeSubTab, setActiveSubTabState] = useState<AdminSubTab>(externalSubTab || 'patients');
+  const [patientPageSection, setPatientPageSection] = useState<
+    | 'all'
+    | 'demographics'
+    | 'careplan'
+    | 'medications'
+    | 'appointments'
+    | 'intakes'
+    | 'messages'
+    | 'billing'
+  >('all');
+
+  const setActiveSubTab = (tab: AdminSubTab) => {
+    setActiveSubTabState(tab);
+    if (onChangeSubTab) {
+      onChangeSubTab(tab);
+    }
+    if (tab === 'patient-page' && !activeChartPatientId && patients.length > 0) {
+      setActiveChartPatientId(patients[0].uid);
+    } else if (tab !== 'patient-page') {
+      setActiveChartPatientId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (externalSubTab && externalSubTab !== activeSubTab) {
+      setActiveSubTabState(externalSubTab);
+      if (externalSubTab === 'patient-page' && !activeChartPatientId && patients.length > 0) {
+        setActiveChartPatientId(patients[0].uid);
+      } else if (externalSubTab !== 'patient-page') {
+        setActiveChartPatientId(null);
+      }
+    }
+  }, [externalSubTab, patients]);
 
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+
+  // Patient Demographics Inline Editor State (for Dedicated Patient Page)
+  const [isEditingDemographics, setIsEditingDemographics] = useState(false);
+  const [demoFullName, setDemoFullName] = useState('');
+  const [demoEmail, setDemoEmail] = useState('');
+  const [demoPhone, setDemoPhone] = useState('');
+  const [demoDob, setDemoDob] = useState('');
+  const [demoSex, setDemoSex] = useState('Female');
+  const [demoAddress, setDemoAddress] = useState('');
+  const [demoEmergencyContact, setDemoEmergencyContact] = useState('');
+  const [demoInsurance, setDemoInsurance] = useState('Blue Cross Blue Shield (BCBS)');
+  const [demoMemberId, setDemoMemberId] = useState('');
+  const [demoGroupNumber, setDemoGroupNumber] = useState('');
+  const [demoPharmacy, setDemoPharmacy] = useState('');
+  const [demoPrimaryConcern, setDemoPrimaryConcern] = useState('');
+
+  // Add New Patient Modal State (for Admin Portal)
+  const [showAddPatientModal, setShowAddPatientModal] = useState(false);
+  const [newPatFullName, setNewPatFullName] = useState('');
+  const [newPatEmail, setNewPatEmail] = useState('');
+  const [newPatPhone, setNewPatPhone] = useState('');
+  const [newPatDob, setNewPatDob] = useState('');
+  const [newPatSex, setNewPatSex] = useState('Female');
+  const [newPatAddress, setNewPatAddress] = useState('');
+  const [newPatInsurance, setNewPatInsurance] = useState('Blue Cross Blue Shield (BCBS)');
+  const [newPatPharmacy, setNewPatPharmacy] = useState('');
+  const [newPatDiagnosis, setNewPatDiagnosis] = useState('');
+
+  // Schedule Follow-Up Appointment for Dedicated Patient State
+  const [apptServiceType, setApptServiceType] = useState(
+    'Follow-Up Telehealth Medication & Therapy Session'
+  );
+  const [apptReason, setApptReason] = useState('Psychiatric Follow-Up & Medication Management');
+  const [apptDate, setApptDate] = useState('');
+  const [apptTime, setApptTime] = useState('Mon–Thu Morning (9:00 AM - 12:00 PM)');
 
   // New Medication form state (Provider prescribing)
   const [rxPatientId, setRxPatientId] = useState('');
@@ -248,8 +330,10 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     };
   }, []);
 
-  // Synchronize care plan fields when opening an individual patient chart
-  const activeChartPatient = patients.find((p) => p.uid === activeChartPatientId) || null;
+  // Synchronize care plan & demographic fields when opening an individual patient chart
+  const activeChartPatient =
+    patients.find((p) => p.uid === activeChartPatientId) ||
+    (activeSubTab === 'patient-page' && patients.length > 0 ? patients[0] : null);
 
   useEffect(() => {
     if (activeChartPatient) {
@@ -261,9 +345,25 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       setReplyPatientId(activeChartPatient.uid);
       setInvPatientId(activeChartPatient.uid);
       setRxPharmacy(activeChartPatient.preferredPharmacy || '');
+
+      // Sync demographic edit fields
+      setDemoFullName(activeChartPatient.fullName || '');
+      setDemoEmail(activeChartPatient.email || '');
+      setDemoPhone(activeChartPatient.phone || '');
+      setDemoDob(activeChartPatient.dateOfBirth || '');
+      setDemoSex(activeChartPatient.biologicalSex || 'Female');
+      setDemoAddress(activeChartPatient.address || '');
+      setDemoEmergencyContact(activeChartPatient.emergencyContact || '');
+      setDemoInsurance(activeChartPatient.insuranceProvider || 'Blue Cross Blue Shield (BCBS)');
+      setDemoMemberId(activeChartPatient.insuranceMemberId || '');
+      setDemoGroupNumber(activeChartPatient.insuranceGroupNumber || '');
+      setDemoPharmacy(activeChartPatient.preferredPharmacy || '');
+      setDemoPrimaryConcern(
+        activeChartPatient.primaryConcern || 'Comprehensive Psychiatric Evaluation'
+      );
     }
   }, [
-    activeChartPatientId,
+    activeChartPatient?.uid,
     activeChartPatient?.diagnosis,
     activeChartPatient?.clinicalRecommendations,
     activeChartPatient?.treatmentPlanNotes,
@@ -272,9 +372,113 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
 
   const openPatientChart = (patientId: string) => {
     setActiveChartPatientId(patientId);
+    setActiveSubTabState('patient-page');
+    if (onChangeSubTab) {
+      onChangeSubTab('patient-page');
+    }
     setRxPatientId(patientId);
     setReplyPatientId(patientId);
     setInvPatientId(patientId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSavePatientDemographics = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChartPatient) return;
+    const now = new Date().toISOString();
+    try {
+      await updateDoc(doc(db, 'users', activeChartPatient.uid), {
+        fullName: sanitizeClinicalInput(demoFullName.trim(), 140),
+        phone: sanitizeClinicalInput(demoPhone.trim(), 40),
+        dateOfBirth: sanitizeClinicalInput(demoDob.trim(), 30),
+        biologicalSex: sanitizeClinicalInput(demoSex.trim(), 40),
+        address: sanitizeClinicalInput(demoAddress.trim(), 250),
+        emergencyContact: sanitizeClinicalInput(demoEmergencyContact.trim(), 200),
+        insuranceProvider: sanitizeClinicalInput(demoInsurance.trim(), 140),
+        insuranceMemberId: sanitizeClinicalInput(demoMemberId.trim(), 80),
+        insuranceGroupNumber: sanitizeClinicalInput(demoGroupNumber.trim(), 80),
+        preferredPharmacy: sanitizeClinicalInput(demoPharmacy.trim(), 200),
+        primaryConcern: sanitizeClinicalInput(demoPrimaryConcern.trim(), 200),
+        registrationCompleted: true,
+        updatedAt: now,
+      });
+      setIsEditingDemographics(false);
+      showBanner(`Updated ${demoFullName.trim()}'s demographic & insurance profile in real time!`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${activeChartPatient.uid}`);
+    }
+  };
+
+  const handleCreateNewPatientRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPatFullName.trim() || !newPatEmail.trim()) return;
+    const now = new Date().toISOString();
+    const cleanEmail = newPatEmail.trim().toLowerCase();
+    const generatedUid = `pat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    try {
+      await setDoc(doc(db, 'users', generatedUid), {
+        uid: generatedUid,
+        email: cleanEmail,
+        fullName: sanitizeClinicalInput(newPatFullName.trim(), 140),
+        phone: sanitizeClinicalInput(newPatPhone.trim(), 40),
+        dateOfBirth: sanitizeClinicalInput(newPatDob.trim(), 30),
+        biologicalSex: sanitizeClinicalInput(newPatSex.trim(), 40),
+        address: sanitizeClinicalInput(newPatAddress.trim() || 'Texas (Telehealth)', 240),
+        insuranceProvider: sanitizeClinicalInput(newPatInsurance.trim(), 140),
+        preferredPharmacy: sanitizeClinicalInput(newPatPharmacy.trim(), 200),
+        diagnosis: sanitizeClinicalInput(newPatDiagnosis.trim(), 250),
+        role: 'patient',
+        registrationCompleted: Boolean(newPatDob.trim() && newPatPhone.trim()),
+        onboardingCompleted: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await registerEmailInAccountDirectory(cleanEmail, undefined, true);
+      setShowAddPatientModal(false);
+      setNewPatFullName('');
+      setNewPatEmail('');
+      setNewPatPhone('');
+      setNewPatDob('');
+      setNewPatAddress('');
+      setNewPatPharmacy('');
+      setNewPatDiagnosis('');
+      openPatientChart(generatedUid);
+      showBanner(`Created dedicated patient record for ${newPatFullName.trim()}!`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `users/${generatedUid}`);
+    }
+  };
+
+  const handleSchedulePatientAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChartPatient || !apptDate.trim()) return;
+    const now = new Date().toISOString();
+    const roomUrl = generateTelehealthRoomUrl(activeChartPatient.fullName);
+    try {
+      await addDoc(collection(db, 'appointments'), {
+        patientId: activeChartPatient.uid,
+        patientName: activeChartPatient.fullName,
+        patientEmail: activeChartPatient.email,
+        patientPhone: activeChartPatient.phone || '',
+        dateOfBirth: activeChartPatient.dateOfBirth || '',
+        serviceType: sanitizeClinicalInput(apptServiceType, 180),
+        conditionReason: sanitizeClinicalInput(apptReason, 180),
+        preferredDate: sanitizeClinicalInput(apptDate, 40),
+        preferredTime: sanitizeClinicalInput(apptTime, 90),
+        insuranceProvider: activeChartPatient.insuranceProvider || 'Verified on File',
+        status: 'confirmed',
+        telehealthUrl: roomUrl,
+        preVisitScreenerCompleted: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setApptDate('');
+      showBanner(
+        `Scheduled confirmed telehealth visit for ${activeChartPatient.fullName} and synced to their Client Portal!`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'appointments');
+    }
   };
 
   const matchesFilter = (patientId: string, patientName: string, email?: string) => {
@@ -579,10 +783,220 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   };
 
   // ============================================================================
-  // ISOLATED INDIVIDUAL PATIENT CHART WORKSPACE (When Admin Enters a Specific Patient)
+  // ADD NEW PATIENT MODAL (Accessible from Patients Directory & Dedicated Patient Page)
   // ============================================================================
-  if (activeChartPatient) {
-    const patientAppts = appointments.filter((a) => a.patientId === activeChartPatient.uid);
+  const renderAddPatientModal = () =>
+    showAddPatientModal ? (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="bg-white border border-stone-200 rounded-[28px] max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                Admin Clinical Registry
+              </span>
+              <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                Add / Register New Patient to Database
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddPatientModal(false)}
+              className="px-3 py-1.5 rounded-[10px] bg-stone-100 hover:bg-stone-200 text-xs font-bold text-stone-700 cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateNewPatientRecord} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Full Legal Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Sarah Jenkins"
+                  value={newPatFullName}
+                  onChange={(e) => setNewPatFullName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Patient Email Address *
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="patient@example.com"
+                  value={newPatEmail}
+                  onChange={(e) => setNewPatEmail(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Mobile Phone Number
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(432) 555-0199"
+                  value={newPatPhone}
+                  onChange={(e) => setNewPatPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Date of Birth
+                </label>
+                <input
+                  type="date"
+                  value={newPatDob}
+                  onChange={(e) => setNewPatDob(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Biological Sex
+                </label>
+                <select
+                  value={newPatSex}
+                  onChange={(e) => setNewPatSex(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                >
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Non-Binary">Non-Binary</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Primary Insurance
+                </label>
+                <select
+                  value={newPatInsurance}
+                  onChange={(e) => setNewPatInsurance(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                >
+                  <option value="Blue Cross Blue Shield (BCBS)">
+                    Blue Cross Blue Shield (BCBS)
+                  </option>
+                  <option value="Aetna">Aetna</option>
+                  <option value="Cigna / Evernorth">Cigna / Evernorth</option>
+                  <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
+                  <option value="Medicare">Medicare</option>
+                  <option value="Medicaid">Medicaid</option>
+                  <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Preferred Texas Pharmacy
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., H-E-B / Walgreens / CVS (Texas)"
+                  value={newPatPharmacy}
+                  onChange={(e) => setNewPatPharmacy(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Initial Diagnosis / Clinical Focus
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., GAD, ADHD, MDD"
+                  value={newPatDiagnosis}
+                  onChange={(e) => setNewPatDiagnosis(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Residential Address (Texas Telehealth Location)
+              </label>
+              <input
+                type="text"
+                placeholder="Street Address, City, TX ZIP"
+                value={newPatAddress}
+                onChange={(e) => setNewPatAddress(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddPatientModal(false)}
+                className="px-4 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-xs"
+              >
+                Create Patient &amp; Open Dedicated Page →
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    ) : null;
+
+  // ============================================================================
+  // DEDICATED INDIVIDUAL PATIENT PAGE (Full-Screen Admin Patient Command Center)
+  // ============================================================================
+  if (activeChartPatient || activeSubTab === 'patient-page') {
+    if (!activeChartPatient) {
+      return (
+        <div className="space-y-6 font-portal-body">
+          {renderAddPatientModal()}
+          <div className="bg-white portal-card p-8 text-center space-y-4">
+            <h2 className="text-xl font-bold font-portal-heading text-stone-900">
+              Dedicated Patient Page
+            </h2>
+            <p className="text-xs text-stone-600 max-w-md mx-auto">
+              Select a registered patient or create a new patient chart to open their dedicated
+              clinical workspace.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAddPatientModal(true)}
+                className="px-5 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+              >
+                + Add / Register New Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('patients')}
+                className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+              >
+                View All Patients Directory
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const patientEmailLower = (activeChartPatient.email || '').toLowerCase();
+    const patientAppts = appointments.filter(
+      (a) =>
+        a.patientId === activeChartPatient.uid ||
+        (patientEmailLower && (a.patientEmail || '').toLowerCase() === patientEmailLower)
+    );
     const patientMeds = medications.filter((m) => m.patientId === activeChartPatient.uid);
     const patientMsgs = messages.filter((m) => m.patientId === activeChartPatient.uid);
     const patientIntakes = intakes.filter((i) => i.patientId === activeChartPatient.uid);
@@ -591,8 +1005,35 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     const patientRoomUrl =
       patientAppts[0]?.telehealthUrl || generateTelehealthRoomUrl(activeChartPatient.fullName);
 
+    const handleLaunchDedicatedPatientVideo = () => {
+      if (patientAppts[0]) {
+        onLaunchTelehealth(patientAppts[0]);
+      } else {
+        const now = new Date().toISOString();
+        onLaunchTelehealth({
+          id: `instant_${activeChartPatient.uid}`,
+          patientId: activeChartPatient.uid,
+          patientName: activeChartPatient.fullName,
+          patientEmail: activeChartPatient.email,
+          patientPhone: activeChartPatient.phone || '',
+          serviceType: '100% Telehealth Video Consultation',
+          conditionReason: activeChartPatient.diagnosis || 'Psychiatric Evaluation & Follow-Up',
+          preferredDate: now.split('T')[0],
+          preferredTime: 'Live Instant Session',
+          insuranceProvider: activeChartPatient.insuranceProvider || 'Verified',
+          status: 'confirmed',
+          telehealthUrl: patientRoomUrl,
+          preVisitScreenerCompleted: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    };
+
     return (
       <div className="space-y-6 font-portal-body">
+        {renderAddPatientModal()}
+
         {statusFeedback && (
           <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -608,710 +1049,1201 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
           </div>
         )}
 
-        {/* Top Patient Chart Header & Breadcrumb */}
-        <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 sm:p-8 border border-[#D4AF37]/40 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-2">
+        {/* Top Dedicated Patient Page Header & Quick Patient Switcher */}
+        <div className="bg-[#0A0A0A] text-white rounded-[32px] p-6 sm:p-8 border border-[#D4AF37]/40 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
             <button
-              onClick={() => setActiveChartPatientId(null)}
+              type="button"
+              onClick={() => {
+                setActiveChartPatientId(null);
+                setActiveSubTab('patients');
+              }}
               className="inline-flex items-center gap-2 text-xs font-bold text-[#D4AF37] hover:underline cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to All Patients Database</span>
+              <span>Back to All Patients Directory</span>
             </button>
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-2xl font-bold font-portal-heading text-white">
-                {activeChartPatient.fullName}
-              </h2>
-              <span className="px-3 py-1 rounded-[12px] bg-[#D4AF37]/20 border border-[#D4AF37]/50 text-[#D4AF37] text-xs font-bold">
-                Isolated Patient Chart
-              </span>
-              {activeChartPatient.diagnosis && (
-                <span className="px-3 py-1 rounded-[12px] bg-white/10 text-white text-xs font-semibold">
-                  Dx: {activeChartPatient.diagnosis}
-                </span>
-              )}
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
+                Switch Patient:
+              </label>
+              <select
+                value={activeChartPatient.uid}
+                onChange={(e) => openPatientChart(e.target.value)}
+                className="px-3.5 py-2 rounded-[12px] bg-white/10 border border-[#D4AF37]/50 text-xs font-bold text-white focus:outline-none focus:border-[#D4AF37]"
+              >
+                {patients.map((p) => (
+                  <option key={p.uid} value={p.uid} className="text-stone-900 bg-white">
+                    {p.fullName} ({p.email})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setShowAddPatientModal(true)}
+                className="px-3 py-2 rounded-[12px] bg-white/10 hover:bg-white/15 border border-white/20 text-xs font-bold text-[#D4AF37] inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Patient</span>
+              </button>
             </div>
-            <p className="text-xs text-stone-300 leading-relaxed">
-              DOB: <strong className="text-[#D4AF37]">{activeChartPatient.dateOfBirth || 'Pending'}</strong>{' '}
-              {activeChartPatient.biologicalSex ? (
-                <>
-                  · Sex: <strong className="text-white">{activeChartPatient.biologicalSex}</strong>{' '}
-                </>
-              ) : null}
-              · Phone: <strong className="text-white">{activeChartPatient.phone || 'Not listed'}</strong>{' '}
-              · Email: <strong className="text-white">{activeChartPatient.email}</strong>
-              <br />
-              Address:{' '}
-              <strong className="text-white">
-                {activeChartPatient.address || 'Texas (Telehealth)'}
-              </strong>{' '}
-              · Emergency Contact:{' '}
-              <strong className="text-white">
-                {activeChartPatient.emergencyContact || 'Not listed'}
-              </strong>
-              <br />
-              Insurance:{' '}
-              <strong className="text-[#D4AF37]">
-                {activeChartPatient.insuranceProvider || 'Self-Pay / Unspecified'}
-                {activeChartPatient.insuranceMemberId
-                  ? ` (Member ID: ${activeChartPatient.insuranceMemberId}${
-                      activeChartPatient.insuranceGroupNumber
-                        ? `, Grp: ${activeChartPatient.insuranceGroupNumber}`
-                        : ''
-                    })`
-                  : ''}
-              </strong>{' '}
-              · Pharmacy:{' '}
-              <strong className="text-white">
-                {activeChartPatient.preferredPharmacy || 'Not set'}
-              </strong>
-              {activeChartPatient.primaryConcern ? (
-                <>
-                  {' '}
-                  · Chief Concern:{' '}
-                  <strong className="text-[#D4AF37]">{activeChartPatient.primaryConcern}</strong>
-                </>
-              ) : null}
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {patientAppts[0] && (
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="px-3 py-1 rounded-[12px] bg-[#D4AF37] text-[#1C1917] text-[11px] font-bold uppercase tracking-wider">
+                  Dedicated Patient Page
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold font-portal-heading text-white">
+                  {activeChartPatient.fullName}
+                </h2>
+                {activeChartPatient.diagnosis && (
+                  <span className="px-3 py-1 rounded-[12px] bg-[#D4AF37]/20 border border-[#D4AF37]/50 text-[#D4AF37] text-xs font-bold">
+                    Dx: {activeChartPatient.diagnosis}
+                  </span>
+                )}
+                <span className="px-2.5 py-1 rounded-[10px] bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-semibold">
+                  {activeChartPatient.registrationCompleted
+                    ? 'Full Profile Verified'
+                    : 'Active Portal Account'}
+                </span>
+              </div>
+
+              <p className="text-xs text-stone-300 leading-relaxed">
+                DOB:{' '}
+                <strong className="text-[#D4AF37]">
+                  {activeChartPatient.dateOfBirth || 'Not entered yet'}
+                </strong>{' '}
+                {activeChartPatient.biologicalSex ? (
+                  <>
+                    · Sex: <strong className="text-white">{activeChartPatient.biologicalSex}</strong>{' '}
+                  </>
+                ) : null}
+                · Phone:{' '}
+                <strong className="text-white">{activeChartPatient.phone || 'Not listed'}</strong> ·
+                Email: <strong className="text-white">{activeChartPatient.email}</strong>
+                <br />
+                Address:{' '}
+                <strong className="text-white">
+                  {activeChartPatient.address || 'Texas (Telehealth)'}
+                </strong>{' '}
+                · Emergency Contact:{' '}
+                <strong className="text-white">
+                  {activeChartPatient.emergencyContact || 'Not listed'}
+                </strong>
+                <br />
+                Insurance:{' '}
+                <strong className="text-[#D4AF37]">
+                  {activeChartPatient.insuranceProvider || 'Self-Pay / Unspecified'}
+                  {activeChartPatient.insuranceMemberId
+                    ? ` (Member ID: ${activeChartPatient.insuranceMemberId}${
+                        activeChartPatient.insuranceGroupNumber
+                          ? `, Grp: ${activeChartPatient.insuranceGroupNumber}`
+                          : ''
+                      })`
+                    : ''}
+                </strong>{' '}
+                · Pharmacy:{' '}
+                <strong className="text-white">
+                  {activeChartPatient.preferredPharmacy || 'Not set'}
+                </strong>
+                {activeChartPatient.primaryConcern ? (
+                  <>
+                    {' '}
+                    · Chief Concern:{' '}
+                    <strong className="text-[#D4AF37]">{activeChartPatient.primaryConcern}</strong>
+                  </>
+                ) : null}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <button
-                onClick={() => onLaunchTelehealth(patientAppts[0])}
-                className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-2 cursor-pointer"
+                type="button"
+                onClick={() => setIsEditingDemographics(!isEditingDemographics)}
+                className="px-4 py-2.5 rounded-[12px] bg-white/10 hover:bg-white/15 border border-[#D4AF37]/40 text-[#D4AF37] font-bold text-xs inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>
+                  {isEditingDemographics ? 'Close Profile Editor' : 'Edit Patient Demographics'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLaunchDedicatedPatientVideo}
+                className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
               >
                 <Video className="w-4 h-4" />
                 <span>Launch Patient Video Room</span>
               </button>
-            )}
+            </div>
+          </div>
+
+          {/* Quick Patient KPI Summary Strip inside Dedicated Page Header */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+            <div className="p-3 rounded-[16px] bg-white/5 border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Active Medications
+              </p>
+              <p className="text-lg font-bold font-portal-heading tabular-nums text-[#D4AF37] mt-0.5">
+                {patientMeds.length} Rx
+              </p>
+            </div>
+            <div className="p-3 rounded-[16px] bg-white/5 border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Telehealth Visits
+              </p>
+              <p className="text-lg font-bold font-portal-heading tabular-nums text-white mt-0.5">
+                {patientAppts.length} Visit(s)
+              </p>
+            </div>
+            <div className="p-3 rounded-[16px] bg-white/5 border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Signed Intakes
+              </p>
+              <p className="text-lg font-bold font-portal-heading tabular-nums text-white mt-0.5">
+                {patientIntakes.filter((i) => i.status === 'completed').length} /{' '}
+                {patientIntakes.length}
+              </p>
+            </div>
+            <div className="p-3 rounded-[16px] bg-white/5 border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                PHQ-9 / GAD-7 Logs
+              </p>
+              <p className="text-lg font-bold font-portal-heading tabular-nums text-white mt-0.5">
+                {patientAssessments.length} Submitted
+              </p>
+            </div>
+            <div className="p-3 rounded-[16px] bg-white/5 border border-white/10 col-span-2 sm:col-span-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Direct Messages
+              </p>
+              <p className="text-lg font-bold font-portal-heading tabular-nums text-[#D4AF37] mt-0.5">
+                {patientMsgs.length} Thread(s)
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Two-Column Patient Chart Workspace */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-          {/* Left Column (7 cols): Care Plan & Recommended Drugs + Active Medications CRUD */}
-          <div className="xl:col-span-7 space-y-6">
-            {/* 1. Care Plan, Diagnosis, Drug Recommendations & Shared Links (Reflects on Client Portal) */}
-            <form
-              onSubmit={handleSavePatientCarePlan}
-              className="bg-white portal-card p-6 space-y-4 border border-[#D4AF37]/40"
+        {/* Dedicated Patient Page Section Sub-Navigation Bar */}
+        <div className="bg-white portal-card p-3.5 flex flex-wrap items-center gap-2">
+          {[
+            { id: 'all', label: 'Complete Patient Overview (All-in-One)' },
+            { id: 'demographics', label: 'Demographics & Insurance' },
+            { id: 'careplan', label: 'Care Plan & Portal Links' },
+            { id: 'medications', label: `Medications (${patientMeds.length})` },
+            { id: 'appointments', label: `Visits & Telehealth (${patientAppts.length})` },
+            {
+              id: 'intakes',
+              label: `Intakes & Scales (${patientIntakes.length + patientAssessments.length})`,
+            },
+            { id: 'messages', label: `1-on-1 Messages (${patientMsgs.length})` },
+            { id: 'billing', label: `Billing (${patientInvoices.length})` },
+          ].map((sec) => (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => {
+                setPatientPageSection(sec.id as typeof patientPageSection);
+                if (sec.id === 'demographics') {
+                  setIsEditingDemographics(true);
+                }
+              }}
+              className={`px-3.5 py-2 rounded-[12px] text-xs font-bold transition-all cursor-pointer ${
+                patientPageSection === sec.id
+                  ? 'bg-[#0A0A0A] text-[#D4AF37] border border-[#D4AF37]/50 shadow-xs'
+                  : 'bg-[#FAF9F5] text-stone-700 border border-stone-200 hover:bg-stone-100'
+              }`}
             >
-              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-[#9E7206]" />
-                  <div>
-                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Patient Care Plan, Recommended Drugs & Portal Links
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Everything saved here reflects immediately on {activeChartPatient.fullName}'s
-                      Client Portal Overview & Medications tabs
-                    </p>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-[10px]">
-                  Live Client Sync
-                </span>
-              </div>
+              {sec.label}
+            </button>
+          ))}
+        </div>
 
+        {/* Editable Patient Demographics & Insurance Record Panel */}
+        {(isEditingDemographics || patientPageSection === 'demographics') && (
+          <form
+            onSubmit={handleSavePatientDemographics}
+            className="bg-white portal-card p-6 space-y-4 border border-[#D4AF37]"
+          >
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                  Patient Registration Record
+                </span>
+                <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                  Edit {activeChartPatient.fullName}'s Demographics, Insurance &amp; Pharmacy
+                </h3>
+              </div>
+              {patientPageSection !== 'demographics' && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDemographics(false)}
+                  className="text-xs font-semibold text-stone-500 hover:text-stone-800 cursor-pointer"
+                >
+                  Close Editor
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Clinical Diagnosis / Primary Focus
+                  Full Legal Name *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g., Generalized Anxiety Disorder (GAD), ADHD Combined Type, Major Depressive Disorder"
-                  value={careDiagnosis}
-                  onChange={(e) => setCareDiagnosis(e.target.value)}
+                  required
+                  value={demoFullName}
+                  onChange={(e) => setDemoFullName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
                 />
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Recommended Medications & Dosing Regimen Summary (Visible on Client Portal)
+                  Date of Birth
                 </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g., Continue Sertraline 50mg every morning with food. Optional Hydroxyzine 25mg as needed for acute evening anxiety."
-                  value={careRecommendations}
-                  onChange={(e) => setCareRecommendations(e.target.value)}
+                <input
+                  type="date"
+                  value={demoDob}
+                  onChange={(e) => setDemoDob(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
                 />
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Treatment Plan Notes, Therapy Goals & Follow-Up Instructions
+                  Biological Sex
                 </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g., Complete PHQ-9 & GAD-7 weekly, maintain 7.5 hours sleep hygiene, schedule 4-week telehealth follow-up."
-                  value={careTreatmentNotes}
-                  onChange={(e) => setCareTreatmentNotes(e.target.value)}
+                <select
+                  value={demoSex}
+                  onChange={(e) => setDemoSex(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                >
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Non-Binary">Non-Binary</option>
+                  <option value="Prefer to Discuss with Provider">
+                    Prefer to Discuss with Provider
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={demoPhone}
+                  onChange={(e) => setDemoPhone(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
                 />
               </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Email Address (Account ID)
+                </label>
+                <input
+                  type="email"
+                  disabled
+                  value={demoEmail}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-stone-100 border border-stone-200 text-xs text-stone-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Emergency Contact (Name &amp; Phone)
+                </label>
+                <input
+                  type="text"
+                  value={demoEmergencyContact}
+                  onChange={(e) => setDemoEmergencyContact(e.target.value)}
+                  placeholder="Name (Relationship) - Phone"
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+            </div>
 
-              {/* Pinned Links / Resources for this Client */}
-              <div className="p-4 rounded-[20px] bg-[#FAF9F5] border border-stone-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
-                    <Link2 className="w-3.5 h-3.5 text-[#9E7206]" />
-                    <span>Pinned Links on {activeChartPatient.fullName}'s Portal</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Residential Address (Texas Telehealth Location)
+                </label>
+                <input
+                  type="text"
+                  value={demoAddress}
+                  onChange={(e) => setDemoAddress(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Preferred Texas Pharmacy
+                </label>
+                <input
+                  type="text"
+                  value={demoPharmacy}
+                  onChange={(e) => setDemoPharmacy(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Primary Insurance Carrier
+                </label>
+                <input
+                  type="text"
+                  value={demoInsurance}
+                  onChange={(e) => setDemoInsurance(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Member / Policy ID
+                </label>
+                <input
+                  type="text"
+                  value={demoMemberId}
+                  onChange={(e) => setDemoMemberId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Group Number
+                </label>
+                <input
+                  type="text"
+                  value={demoGroupNumber}
+                  onChange={(e) => setDemoGroupNumber(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">
+                  Primary Clinical Concern
+                </label>
+                <input
+                  type="text"
+                  value={demoPrimaryConcern}
+                  onChange={(e) => setDemoPrimaryConcern(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-xs"
+              >
+                Save Patient Demographics &amp; Insurance Record
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Two-Column Patient Chart Workspace */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* Left Column (7 cols): Care Plan, Medications, Visits, Intakes & Billing */}
+          <div className="xl:col-span-7 space-y-6">
+            {/* 1. Care Plan, Diagnosis, Drug Recommendations & Shared Links (Reflects on Client Portal) */}
+            {(patientPageSection === 'all' || patientPageSection === 'careplan') && (
+              <form
+                onSubmit={handleSavePatientCarePlan}
+                className="bg-white portal-card p-6 space-y-4 border border-[#D4AF37]/40"
+              >
+                <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#9E7206]" />
+                    <div>
+                      <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                        Patient Care Plan, Recommended Drugs &amp; Portal Links
+                      </h3>
+                      <p className="text-xs text-stone-500">
+                        Everything saved here reflects immediately on {activeChartPatient.fullName}'s
+                        Client Portal Overview &amp; Medications tabs
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-[10px]">
+                    Live Client Sync
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Clinical Diagnosis / Primary Focus
                   </label>
-                  <div className="flex flex-wrap gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="e.g., Generalized Anxiety Disorder (GAD), ADHD Combined Type, Major Depressive Disorder"
+                    value={careDiagnosis}
+                    onChange={(e) => setCareDiagnosis(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Recommended Medications &amp; Dosing Regimen Summary (Visible on Client Portal)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g., Continue Sertraline 50mg every morning with food. Optional Hydroxyzine 25mg as needed for acute evening anxiety."
+                    value={careRecommendations}
+                    onChange={(e) => setCareRecommendations(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">
+                    Treatment Plan Notes, Therapy Goals &amp; Follow-Up Instructions
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g., Complete PHQ-9 & GAD-7 weekly, maintain 7.5 hours sleep hygiene, schedule 4-week telehealth follow-up."
+                    value={careTreatmentNotes}
+                    onChange={(e) => setCareTreatmentNotes(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                </div>
+
+                {/* Pinned Links / Resources for this Client */}
+                <div className="p-4 rounded-[20px] bg-[#FAF9F5] border border-stone-200 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-[#9E7206]" />
+                      <span>Pinned Links on {activeChartPatient.fullName}'s Portal</span>
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewResourceTitle('Join HIPAA Telehealth Video Room');
+                          setNewResourceUrl(patientRoomUrl);
+                        }}
+                        className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[10px] font-semibold text-[#9E7206] hover:border-[#D4AF37] cursor-pointer"
+                      >
+                        + Preset: Video Room Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewResourceTitle('Schedule Next Telehealth Follow-Up');
+                          setNewResourceUrl('https://goldenmindpsychiatry.org/?page=telehealth');
+                        }}
+                        className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[10px] font-semibold text-[#9E7206] hover:border-[#D4AF37] cursor-pointer"
+                      >
+                        + Preset: Booking Link
+                      </button>
+                    </div>
+                  </div>
+
+                  {careResources.length > 0 && (
+                    <div className="space-y-2">
+                      {careResources.map((res, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-[12px] border border-stone-200 text-xs"
+                        >
+                          <div className="min-w-0 truncate">
+                            <span className="font-bold text-stone-900">{res.title}: </span>
+                            <a
+                              href={res.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#9E7206] underline"
+                            >
+                              {res.url}
+                            </a>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSharedResource(idx)}
+                            className="text-red-600 hover:text-red-800 text-[11px] font-semibold shrink-0 cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Link Title (e.g., Telehealth Video Room or Lab Order)"
+                      value={newResourceTitle}
+                      onChange={(e) => setNewResourceTitle(e.target.value)}
+                      className="sm:col-span-5 px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={newResourceUrl}
+                      onChange={(e) => setNewResourceUrl(e.target.value)}
+                      className="sm:col-span-5 px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                    />
                     <button
                       type="button"
-                      onClick={() => {
-                        setNewResourceTitle('Join HIPAA Telehealth Video Room');
-                        setNewResourceUrl(patientRoomUrl);
-                      }}
-                      className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[10px] font-semibold text-[#9E7206] hover:border-[#D4AF37] cursor-pointer"
+                      onClick={handleAddSharedResourceToPlan}
+                      className="sm:col-span-2 py-2 px-3 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
                     >
-                      + Preset: Video Room Link
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewResourceTitle('Schedule Next Telehealth Follow-Up');
-                        setNewResourceUrl('https://goldenmindpsychiatry.org/?page=telehealth');
-                      }}
-                      className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[10px] font-semibold text-[#9E7206] hover:border-[#D4AF37] cursor-pointer"
-                    >
-                      + Preset: Booking Link
+                      Add Link
                     </button>
                   </div>
                 </div>
 
-                {careResources.length > 0 && (
-                  <div className="space-y-2">
-                    {careResources.map((res, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-[12px] border border-stone-200 text-xs"
-                      >
-                        <div className="min-w-0 truncate">
-                          <span className="font-bold text-stone-900">{res.title}: </span>
-                          <a
-                            href={res.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#9E7206] underline"
-                          >
-                            {res.url}
-                          </a>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSharedResource(idx)}
-                          className="text-red-600 hover:text-red-800 text-[11px] font-semibold shrink-0 cursor-pointer"
-                        >
-                          Remove
-                        </button>
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-xs"
+                >
+                  Save &amp; Publish Care Plan to {activeChartPatient.fullName}'s Portal
+                </button>
+              </form>
+            )}
+
+            {/* 2. Patient's Recommended Medications & Prescriptions (Add, Edit, Approve, Discontinue) */}
+            {(patientPageSection === 'all' || patientPageSection === 'medications') && (
+              <div className="bg-white portal-card p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      {activeChartPatient.fullName}'s Medications &amp; Prescriptions (
+                      {patientMeds.length})
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Add, edit dosage/instructions, approve refills, or discontinue drugs in real
+                      time
+                    </p>
+                  </div>
+                </div>
+
+                {patientMeds.length === 0 ? (
+                  <p className="text-xs text-stone-500 py-2">
+                    No medications on {activeChartPatient.fullName}'s chart yet. Use the form below
+                    to add a recommended medication.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200">
+                    {patientMeds.map((med) => (
+                      <div key={med.id} className="py-4 space-y-3">
+                        {editingMedId === med.id ? (
+                          <div className="p-4 rounded-[16px] bg-[#FAF9F5] border border-[#D4AF37] space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Drug Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editMedName}
+                                  onChange={(e) => setEditMedName(e.target.value)}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Dosage
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editMedDosage}
+                                  onChange={(e) => setEditMedDosage(e.target.value)}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs font-portal-heading tabular-nums"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Frequency
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editMedFrequency}
+                                  onChange={(e) => setEditMedFrequency(e.target.value)}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Pharmacy
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editMedPharmacy}
+                                  onChange={(e) => setEditMedPharmacy(e.target.value)}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Refills Remaining
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={99}
+                                  value={editMedRefills}
+                                  onChange={(e) => setEditMedRefills(Number(e.target.value))}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs font-portal-heading tabular-nums"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                  Status
+                                </label>
+                                <select
+                                  value={editMedStatus}
+                                  onChange={(e) => setEditMedStatus(e.target.value as RefillStatus)}
+                                  className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                                >
+                                  <option value="active">Active</option>
+                                  <option value="approved_sent">Approved &amp; Sent to Pharmacy</option>
+                                  <option value="refill_requested">Refill Requested</option>
+                                  <option value="denied">Follow-Up Required</option>
+                                  <option value="discontinued">Discontinued</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                Patient Instructions
+                              </label>
+                              <input
+                                type="text"
+                                value={editMedInstructions}
+                                onChange={(e) => setEditMedInstructions(e.target.value)}
+                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEditedMedication(med.id)}
+                                className="px-4 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                              >
+                                Save Changes to Portal
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingMedId(null)}
+                                className="px-3 py-2 rounded-[10px] border border-stone-300 text-stone-600 text-xs cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-sm font-portal-heading text-stone-900">
+                                  {med.medicationName} ({med.dosage})
+                                </span>
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-[10px] text-[10px] font-bold uppercase ${
+                                    med.refillStatus === 'approved_sent'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : med.refillStatus === 'refill_requested'
+                                      ? 'bg-[#FAF6EA] text-[#9E7206]'
+                                      : med.refillStatus === 'discontinued' ||
+                                        med.refillStatus === 'denied'
+                                      ? 'bg-red-50 text-red-700'
+                                      : 'bg-stone-100 text-stone-700'
+                                  }`}
+                                >
+                                  {med.refillStatus.replace('_', ' ')}
+                                </span>
+                              </div>
+                              <p className="text-xs text-stone-600">
+                                {med.frequency} · Pharmacy: {med.pharmacy || 'On File'} ·{' '}
+                                <span className="font-portal-heading tabular-nums font-semibold">
+                                  {med.refillsRemaining} refills remaining
+                                </span>
+                              </p>
+                              {med.instructions && (
+                                <p className="text-[11px] text-stone-500 italic">
+                                  {med.instructions}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => startEditingMedication(med)}
+                                className="px-3 py-1.5 rounded-[10px] border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Edit Drug / Dose</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  providerProcessRefill({
+                                    medicationId: med.id,
+                                    patientId: med.patientId,
+                                    patientName: med.patientName,
+                                    medicationName: med.medicationName,
+                                    dosage: med.dosage,
+                                    pharmacy: med.pharmacy,
+                                    currentRefills: med.refillsRemaining,
+                                    decision: 'approved_sent',
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Approve Refill</span>
+                              </button>
+                              {med.refillStatus !== 'discontinued' && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDiscontinueOrDeleteMedication(med, 'discontinue')
+                                  }
+                                  className="px-2.5 py-1.5 rounded-[10px] border border-amber-300 text-amber-800 hover:bg-amber-50 text-xs font-semibold cursor-pointer"
+                                >
+                                  Discontinue
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleDiscontinueOrDeleteMedication(med, 'delete')}
+                                className="p-1.5 rounded-[10px] border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                                title="Remove medication from chart"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Link Title (e.g., Telehealth Video Room or Lab Order)"
-                    value={newResourceTitle}
-                    onChange={(e) => setNewResourceTitle(e.target.value)}
-                    className="sm:col-span-5 px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="https://..."
-                    value={newResourceUrl}
-                    onChange={(e) => setNewResourceUrl(e.target.value)}
-                    className="sm:col-span-5 px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddSharedResourceToPlan}
-                    className="sm:col-span-2 py-2 px-3 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                  >
-                    Add Link
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-xs"
-              >
-                Save & Publish Care Plan to {activeChartPatient.fullName}'s Portal
-              </button>
-            </form>
-
-            {/* 2. Patient's Recommended Medications & Prescriptions (Add, Edit, Approve, Discontinue) */}
-            <div className="bg-white portal-card p-6 space-y-5">
-              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                <div>
-                  <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                    {activeChartPatient.fullName}'s Medications & Prescriptions ({patientMeds.length})
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Add, edit dosage/instructions, approve refills, or discontinue drugs in real time
-                  </p>
-                </div>
-              </div>
-
-              {patientMeds.length === 0 ? (
-                <p className="text-xs text-stone-500 py-2">
-                  No medications on {activeChartPatient.fullName}'s chart yet. Use the form below to
-                  add a recommended medication.
-                </p>
-              ) : (
-                <div className="divide-y divide-stone-200">
-                  {patientMeds.map((med) => (
-                    <div key={med.id} className="py-4 space-y-3">
-                      {editingMedId === med.id ? (
-                        <div className="p-4 rounded-[16px] bg-[#FAF9F5] border border-[#D4AF37] space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Drug Name
-                              </label>
-                              <input
-                                type="text"
-                                value={editMedName}
-                                onChange={(e) => setEditMedName(e.target.value)}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Dosage
-                              </label>
-                              <input
-                                type="text"
-                                value={editMedDosage}
-                                onChange={(e) => setEditMedDosage(e.target.value)}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs font-portal-heading tabular-nums"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Frequency
-                              </label>
-                              <input
-                                type="text"
-                                value={editMedFrequency}
-                                onChange={(e) => setEditMedFrequency(e.target.value)}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Pharmacy
-                              </label>
-                              <input
-                                type="text"
-                                value={editMedPharmacy}
-                                onChange={(e) => setEditMedPharmacy(e.target.value)}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Refills Remaining
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                max={99}
-                                value={editMedRefills}
-                                onChange={(e) => setEditMedRefills(Number(e.target.value))}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs font-portal-heading tabular-nums"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                Status
-                              </label>
-                              <select
-                                value={editMedStatus}
-                                onChange={(e) => setEditMedStatus(e.target.value as RefillStatus)}
-                                className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                              >
-                                <option value="active">Active</option>
-                                <option value="approved_sent">Approved & Sent to Pharmacy</option>
-                                <option value="refill_requested">Refill Requested</option>
-                                <option value="denied">Follow-Up Required</option>
-                                <option value="discontinued">Discontinued</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                              Patient Instructions
-                            </label>
-                            <input
-                              type="text"
-                              value={editMedInstructions}
-                              onChange={(e) => setEditMedInstructions(e.target.value)}
-                              className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs"
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleSaveEditedMedication(med.id)}
-                              className="px-4 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                            >
-                              Save Changes to Portal
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingMedId(null)}
-                              className="px-3 py-2 rounded-[10px] border border-stone-300 text-stone-600 text-xs cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-bold text-sm font-portal-heading text-stone-900">
-                                {med.medicationName} ({med.dosage})
-                              </span>
-                              <span
-                                className={`px-2.5 py-0.5 rounded-[10px] text-[10px] font-bold uppercase ${
-                                  med.refillStatus === 'approved_sent'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : med.refillStatus === 'refill_requested'
-                                    ? 'bg-[#FAF6EA] text-[#9E7206]'
-                                    : med.refillStatus === 'discontinued' ||
-                                      med.refillStatus === 'denied'
-                                    ? 'bg-red-50 text-red-700'
-                                    : 'bg-stone-100 text-stone-700'
-                                }`}
-                              >
-                                {med.refillStatus.replace('_', ' ')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-stone-600">
-                              {med.frequency} · Pharmacy: {med.pharmacy || 'On File'} ·{' '}
-                              <span className="font-portal-heading tabular-nums font-semibold">
-                                {med.refillsRemaining} refills remaining
-                              </span>
-                            </p>
-                            {med.instructions && (
-                              <p className="text-[11px] text-stone-500 italic">
-                                {med.instructions}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => startEditingMedication(med)}
-                              className="px-3 py-1.5 rounded-[10px] border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit Drug / Dose</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                providerProcessRefill({
-                                  medicationId: med.id,
-                                  patientId: med.patientId,
-                                  patientName: med.patientName,
-                                  medicationName: med.medicationName,
-                                  dosage: med.dosage,
-                                  pharmacy: med.pharmacy,
-                                  currentRefills: med.refillsRemaining,
-                                  decision: 'approved_sent',
-                                })
-                              }
-                              className="px-3 py-1.5 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Approve Refill</span>
-                            </button>
-                            {med.refillStatus !== 'discontinued' && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDiscontinueOrDeleteMedication(med, 'discontinue')
-                                }
-                                className="px-2.5 py-1.5 rounded-[10px] border border-amber-300 text-amber-800 hover:bg-amber-50 text-xs font-semibold cursor-pointer"
-                              >
-                                Discontinue
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleDiscontinueOrDeleteMedication(med, 'delete')}
-                              className="p-1.5 rounded-[10px] border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
-                              title="Remove medication from chart"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add New Recommended Medication directly to this patient's chart */}
-              <form
-                onSubmit={(e) => handlePrescribeMedication(e, activeChartPatient.uid)}
-                className="pt-4 border-t border-stone-200 space-y-3"
-              >
-                <p className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                  <Plus className="w-3.5 h-3.5 text-[#9E7206]" />
-                  <span>Add / Recommend New Medication for {activeChartPatient.fullName}</span>
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Drug Name (e.g. Sertraline)"
-                    value={rxName}
-                    onChange={(e) => setRxName(e.target.value)}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Dosage (e.g. 50 mg)"
-                    value={rxDosage}
-                    onChange={(e) => setRxDosage(e.target.value)}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Frequency (e.g. Once daily)"
-                    value={rxFrequency}
-                    onChange={(e) => setRxFrequency(e.target.value)}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <input
-                    type="text"
-                    placeholder="Pharmacy (e.g. Walgreens / CVS)"
-                    value={rxPharmacy}
-                    onChange={(e) => setRxPharmacy(e.target.value)}
-                    className="sm:col-span-2 px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={12}
-                    placeholder="Refills"
-                    value={rxRefills}
-                    onChange={(e) => setRxRefills(Number(e.target.value))}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                  />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Clinical dosing & safety instructions"
-                  value={rxInstructions}
-                  onChange={(e) => setRxInstructions(e.target.value)}
-                  className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                {/* Add New Recommended Medication directly to this patient's chart */}
+                <form
+                  onSubmit={(e) => handlePrescribeMedication(e, activeChartPatient.uid)}
+                  className="pt-4 border-t border-stone-200 space-y-3"
                 >
-                  Add Medication to {activeChartPatient.fullName}'s Portal
-                </button>
-              </form>
-            </div>
-
-            {/* 3. Appointments, Intake Forms & Billing Controls for this Patient */}
-            <div className="bg-white portal-card p-6 space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
-                <div>
-                  <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                    Intake Forms, PHQ-9/GAD-7 & Billing ({activeChartPatient.fullName})
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Assign intake questionnaires or post a copay statement to this patient's portal
+                  <p className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5 text-[#9E7206]" />
+                    <span>Add / Recommend New Medication for {activeChartPatient.fullName}</span>
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAssignIntakeForm(
-                        activeChartPatient,
-                        'comprehensive-psychiatric-intake'
-                      )
-                    }
-                    className="px-2.5 py-1.5 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[11px] cursor-pointer"
-                  >
-                    + Assign Psychiatric Intake
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAssignIntakeForm(activeChartPatient, 'telehealth-consent')
-                    }
-                    className="px-2.5 py-1.5 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[11px] cursor-pointer"
-                  >
-                    + Assign Telehealth Consent
-                  </button>
-                </div>
-              </div>
-
-              {/* Intakes Summary */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-stone-800">
-                  Assigned Intake Forms ({patientIntakes.length})
-                </p>
-                {patientIntakes.map((intake) => (
-                  <div
-                    key={intake.id}
-                    className="p-3 rounded-[14px] bg-[#FAF9F5] border border-stone-200 text-xs space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-stone-900">{intake.title}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-[8px] text-[10px] font-bold uppercase ${
-                          intake.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-[#FAF6EA] text-[#9E7206]'
-                        }`}
-                      >
-                        {intake.status}
-                      </span>
-                    </div>
-                    {intake.responses && Object.keys(intake.responses).length > 0 && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-stone-600">
-                        {Object.entries(intake.responses).map(([k, v]) => (
-                          <div key={k}>
-                            <strong className="text-stone-800 capitalize">
-                              {k.replace(/([A-Z])/g, ' $1')}:{' '}
-                            </strong>
-                            <span>{v}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Drug Name (e.g. Sertraline)"
+                      value={rxName}
+                      onChange={(e) => setRxName(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Dosage (e.g. 50 mg)"
+                      value={rxDosage}
+                      onChange={(e) => setRxDosage(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Frequency (e.g. Once daily)"
+                      value={rxFrequency}
+                      onChange={(e) => setRxFrequency(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
                   </div>
-                ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <input
+                      type="text"
+                      placeholder="Pharmacy (e.g. Walgreens / CVS)"
+                      value={rxPharmacy}
+                      onChange={(e) => setRxPharmacy(e.target.value)}
+                      className="sm:col-span-2 px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={12}
+                      placeholder="Refills"
+                      value={rxRefills}
+                      onChange={(e) => setRxRefills(Number(e.target.value))}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Clinical dosing & safety instructions"
+                    value={rxInstructions}
+                    onChange={(e) => setRxInstructions(e.target.value)}
+                    className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                  >
+                    Add Medication to {activeChartPatient.fullName}'s Portal
+                  </button>
+                </form>
               </div>
+            )}
 
-              {/* Recent PHQ-9 / GAD-7 Assessments */}
-              {patientAssessments.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-stone-200">
-                  <p className="text-xs font-bold text-stone-800">
-                    Submitted PHQ-9 / GAD-7 & Mood Logs ({patientAssessments.length})
+            {/* 3. Dedicated Patient Telehealth Visits & Appointment Scheduler */}
+            {(patientPageSection === 'all' || patientPageSection === 'appointments') && (
+              <div className="bg-white portal-card p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Telehealth Visits &amp; Appointment Scheduler ({patientAppts.length})
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Manage {activeChartPatient.fullName}'s visits or schedule a new telehealth
+                      session
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLaunchDedicatedPatientVideo}
+                    className="px-3.5 py-2 rounded-[10px] bg-gold-gradient text-[#1C1917] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Launch Video Room</span>
+                  </button>
+                </div>
+
+                {patientAppts.length === 0 ? (
+                  <p className="text-xs text-stone-500">
+                    No appointments scheduled yet for {activeChartPatient.fullName}. Use the form
+                    below to schedule a session.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {patientAssessments.slice(0, 4).map((a) => (
+                ) : (
+                  <div className="space-y-3">
+                    {patientAppts.map((appt) => (
                       <div
-                        key={a.id}
-                        className="p-3 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs flex items-center justify-between"
+                        key={appt.id}
+                        className="p-4 rounded-[16px] bg-[#FAF9F5] border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                       >
-                        <div>
-                          <span className="font-bold text-stone-900">{a.type}</span>
-                          <span className="text-[#9E7206] font-semibold ml-1.5">
-                            ({a.severity})
-                          </span>
-                          <p className="text-[10px] text-stone-500">{a.createdAt.split('T')[0]}</p>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-xs font-portal-heading text-stone-900">
+                              {appt.serviceType}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-[8px] text-[10px] font-bold uppercase ${
+                                appt.status === 'confirmed'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : appt.status === 'completed'
+                                  ? 'bg-stone-200 text-stone-700'
+                                  : 'bg-[#FAF6EA] text-[#9E7206]'
+                              }`}
+                            >
+                              {appt.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-600 font-portal-heading tabular-nums">
+                            {appt.preferredDate} · {appt.preferredTime} · Focus:{' '}
+                            {appt.conditionReason}
+                          </p>
                         </div>
-                        <span className="font-portal-heading tabular-nums font-bold text-sm text-stone-900">
-                          {a.totalScore} pts
-                        </span>
+
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onLaunchTelehealth(appt)}
+                            className="px-3 py-1.5 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            <span>Join Video</span>
+                          </button>
+                          {appt.status !== 'confirmed' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateAppointmentStatus(appt.id, 'confirmed')}
+                              className="px-2.5 py-1.5 rounded-[10px] border border-emerald-300 text-emerald-700 text-xs font-semibold cursor-pointer"
+                            >
+                              Confirm
+                            </button>
+                          )}
+                          {appt.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateAppointmentStatus(appt.id, 'completed')}
+                              className="px-2.5 py-1.5 rounded-[10px] border border-stone-300 text-stone-700 text-xs font-semibold cursor-pointer"
+                            >
+                              Complete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Quick Billing Statement Form for this Patient */}
-              <form
-                onSubmit={(e) => handleCreateInvoice(e, activeChartPatient.uid)}
-                className="pt-3 border-t border-stone-200 space-y-3"
-              >
-                <p className="text-xs font-bold text-stone-800">
-                  Issue Copay / Billing Statement to {activeChartPatient.fullName}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Service Description (e.g. Follow-Up)"
-                    value={invDesc}
-                    onChange={(e) => setInvDesc(e.target.value)}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Total Charge ($)"
-                    value={invTotal || ''}
-                    onChange={(e) => setInvTotal(Number(e.target.value))}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Insurance Covered ($)"
-                    value={invCovered || ''}
-                    onChange={(e) => setInvCovered(Number(e.target.value))}
-                    className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                <form
+                  onSubmit={handleSchedulePatientAppointment}
+                  className="pt-3 border-t border-stone-200 space-y-3"
                 >
-                  Post Statement to {activeChartPatient.fullName}'s Portal
-                </button>
-              </form>
-
-              {patientInvoices.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  {patientInvoices.map((inv) => (
-                    <div
-                      key={inv.id}
-                      className="flex items-center justify-between text-xs p-2.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200"
+                  <p className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#9E7206]" />
+                    <span>Schedule New Telehealth Visit for {activeChartPatient.fullName}</span>
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <select
+                      value={apptServiceType}
+                      onChange={(e) => setApptServiceType(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
                     >
-                      <div>
-                        <span className="font-bold text-stone-900">{inv.description}</span>
-                        <span className="text-stone-500 ml-2 font-portal-heading tabular-nums">
-                          Copay: ${inv.patientResponsibility.toFixed(2)}
+                      <option value="Follow-Up Telehealth Medication & Therapy Session">
+                        Follow-Up Telehealth Medication &amp; Therapy Session
+                      </option>
+                      <option value="Comprehensive Psychiatric Evaluation (60 Min)">
+                        Comprehensive Psychiatric Evaluation (60 Min)
+                      </option>
+                      <option value="ADHD Clinical Evaluation & Treatment Review">
+                        ADHD Clinical Evaluation &amp; Treatment Review
+                      </option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Clinical Focus"
+                      value={apptReason}
+                      onChange={(e) => setApptReason(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                    <input
+                      type="date"
+                      required
+                      value={apptDate}
+                      onChange={(e) => setApptDate(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                    <select
+                      value={apptTime}
+                      onChange={(e) => setApptTime(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    >
+                      <option value="Mon–Thu Morning (9:00 AM - 12:00 PM)">
+                        Mon–Thu Morning (9:00 AM - 12:00 PM)
+                      </option>
+                      <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
+                        Mon–Thu Afternoon (12:00 PM - 4:00 PM)
+                      </option>
+                      <option value="Friday Morning (9:00 AM - 1:00 PM)">
+                        Friday Morning (9:00 AM - 1:00 PM)
+                      </option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                  >
+                    Confirm &amp; Publish Visit to {activeChartPatient.fullName}'s Portal
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* 4. Intake Forms, PHQ-9/GAD-7 & Billing Controls for this Patient */}
+            {(patientPageSection === 'all' ||
+              patientPageSection === 'intakes' ||
+              patientPageSection === 'billing') && (
+              <div className="bg-white portal-card p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Intake Forms, PHQ-9/GAD-7 &amp; Billing ({activeChartPatient.fullName})
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Assign intake questionnaires or post a copay statement to this patient's portal
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleAssignIntakeForm(
+                          activeChartPatient,
+                          'comprehensive-psychiatric-intake'
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[11px] cursor-pointer"
+                    >
+                      + Assign Psychiatric Intake
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleAssignIntakeForm(activeChartPatient, 'telehealth-consent')
+                      }
+                      className="px-2.5 py-1.5 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[11px] cursor-pointer"
+                    >
+                      + Assign Telehealth Consent
+                    </button>
+                  </div>
+                </div>
+
+                {/* Intakes Summary */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-stone-800">
+                    Assigned Intake Forms ({patientIntakes.length})
+                  </p>
+                  {patientIntakes.map((intake) => (
+                    <div
+                      key={intake.id}
+                      className="p-3 rounded-[14px] bg-[#FAF9F5] border border-stone-200 text-xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-stone-900">{intake.title}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-[8px] text-[10px] font-bold uppercase ${
+                            intake.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-[#FAF6EA] text-[#9E7206]'
+                          }`}
+                        >
+                          {intake.status}
                         </span>
                       </div>
-                      {inv.status === 'paid' ? (
-                        <span className="text-emerald-700 font-bold text-[11px] uppercase">
-                          Paid
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkInvoicePaid(inv.id)}
-                          className="px-2.5 py-1 rounded-[8px] bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
-                        >
-                          Mark Paid
-                        </button>
+                      {intake.responses && Object.keys(intake.responses).length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-stone-600">
+                          {Object.entries(intake.responses).map(([k, v]) => (
+                            <div key={k}>
+                              <strong className="text-stone-800 capitalize">
+                                {k.replace(/([A-Z])/g, ' $1')}:{' '}
+                              </strong>
+                              <span>{v}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+
+                {/* Recent PHQ-9 / GAD-7 Assessments */}
+                {patientAssessments.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-stone-200">
+                    <p className="text-xs font-bold text-stone-800">
+                      Submitted PHQ-9 / GAD-7 &amp; Mood Logs ({patientAssessments.length})
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {patientAssessments.map((a) => (
+                        <div
+                          key={a.id}
+                          className="p-3 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs flex items-center justify-between"
+                        >
+                          <div>
+                            <span className="font-bold text-stone-900">{a.type}</span>
+                            <span className="text-[#9E7206] font-semibold ml-1.5">
+                              ({a.severity})
+                            </span>
+                            <p className="text-[10px] text-stone-500">
+                              {a.createdAt.split('T')[0]}
+                            </p>
+                          </div>
+                          <span className="font-portal-heading tabular-nums font-bold text-sm text-stone-900">
+                            {a.totalScore} pts
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Billing Statement Form for this Patient */}
+                <form
+                  onSubmit={(e) => handleCreateInvoice(e, activeChartPatient.uid)}
+                  className="pt-3 border-t border-stone-200 space-y-3"
+                >
+                  <p className="text-xs font-bold text-stone-800">
+                    Issue Copay / Billing Statement to {activeChartPatient.fullName}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Service Description (e.g. Follow-Up)"
+                      value={invDesc}
+                      onChange={(e) => setInvDesc(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Total Charge ($)"
+                      value={invTotal || ''}
+                      onChange={(e) => setInvTotal(Number(e.target.value))}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Insurance Covered ($)"
+                      value={invCovered || ''}
+                      onChange={(e) => setInvCovered(Number(e.target.value))}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                  >
+                    Post Statement to {activeChartPatient.fullName}'s Portal
+                  </button>
+                </form>
+
+                {patientInvoices.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    {patientInvoices.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex items-center justify-between text-xs p-2.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200"
+                      >
+                        <div>
+                          <span className="font-bold text-stone-900">{inv.description}</span>
+                          <span className="text-stone-500 ml-2 font-portal-heading tabular-nums">
+                            Copay: ${inv.patientResponsibility.toFixed(2)}
+                          </span>
+                        </div>
+                        {inv.status === 'paid' ? (
+                          <span className="text-emerald-700 font-bold text-[11px] uppercase">
+                            Paid
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkInvoicePaid(inv.id)}
+                            className="px-2.5 py-1 rounded-[8px] bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
+                          >
+                            Mark Paid
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Column (5 cols): Direct 1-on-1 Patient Messaging & Link Sender */}
@@ -1414,7 +2346,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
 
                 <div>
                   <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Message & Clinical Links *
+                    Message &amp; Clinical Links *
                   </label>
                   <textarea
                     rows={4}
@@ -1431,7 +2363,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                   className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Send to {activeChartPatient.fullName}'s Portal & Email</span>
+                  <span>Send to {activeChartPatient.fullName}'s Portal &amp; Email</span>
                 </button>
               </form>
 
@@ -1480,6 +2412,8 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
 
   return (
     <div className="space-y-6 font-portal-body">
+      {renderAddPatientModal()}
+
       {statusFeedback && (
         <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -1499,20 +2433,20 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Primary Dark Bento Card with Decorative Circle */}
         <div
-          onClick={() => setActiveSubTab('patients')}
+          onClick={() => setActiveSubTab('patient-page')}
           className="bg-[#0A0A0A] text-white rounded-[32px] p-6 border border-[#D4AF37]/40 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer"
         >
           <div className="w-24 h-24 bg-white/5 absolute -right-4 -bottom-4 rounded-full pointer-events-none" />
           <div className="w-16 h-16 bg-[#D4AF37]/10 absolute right-8 -top-6 rounded-full pointer-events-none" />
           <p className="text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
-            All Patients Database
+            Dedicated Patient Pages
           </p>
           <p className="text-[24px] font-bold font-portal-heading tabular-nums text-white mt-2">
             {patients.length} Registered
           </p>
           <div className="flex items-center gap-1.5 text-[12px] text-[#D4AF37] mt-3 font-medium">
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>Click any patient to enter isolated chart →</span>
+            <span>Open Dedicated Patient Page →</span>
           </div>
         </div>
 
@@ -1522,7 +2456,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
           className="bg-white portal-card p-6 cursor-pointer"
         >
           <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
-            Rx & Refill Approvals
+            Rx &amp; Refill Approvals
           </p>
           <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
             {pendingRefillsCount} Pending
@@ -1538,7 +2472,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
           className="bg-white portal-card p-6 cursor-pointer"
         >
           <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
-            Completed Intakes & Scales
+            Completed Intakes &amp; Scales
           </p>
           <p className="text-[24px] font-bold font-portal-heading tabular-nums text-stone-900 mt-2">
             {completedIntakesCount} / {intakes.length}
@@ -1569,7 +2503,8 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       <div className="bg-white portal-card p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: 'patients', label: `All Patients Database (${patients.length})`, icon: Users },
+            { id: 'patients', label: `Patients Directory (${patients.length})`, icon: Users },
+            { id: 'patient-page', label: 'Dedicated Patient Page', icon: UserCheck },
             { id: 'queue', label: 'Telehealth Queue', icon: Calendar },
             { id: 'refills', label: `Rx & Drugs (${medications.length})`, icon: Pill },
             { id: 'messages', label: `Messages & Links (${messages.length})`, icon: MessageSquare },
@@ -1617,17 +2552,27 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                 setRxPatientId(val);
                 setReplyPatientId(val);
                 setInvPatientId(val);
+                openPatientChart(val);
               }
             }}
             className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs text-stone-800 focus:outline-none focus:border-[#D4AF37]"
           >
-            <option value="ALL">All Patients ({patients.length})</option>
+            <option value="ALL">Jump to Patient Dedicated Page ({patients.length})</option>
             {patients.map((p) => (
               <option key={p.uid} value={p.uid}>
                 {p.fullName} ({p.email})
               </option>
             ))}
           </select>
+
+          <button
+            type="button"
+            onClick={() => setShowAddPatientModal(true)}
+            className="px-3.5 py-2 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Patient</span>
+          </button>
         </div>
       </div>
 
@@ -1641,27 +2586,53 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
               <div className="px-6 py-5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-bold font-portal-heading text-stone-900">
-                    All Registered Patients Database
+                    All Registered Patients Directory &amp; Dedicated Pages
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Every patient has a separate, isolated chart. Click "Enter Patient Chart" to
-                    modify recommended drugs, treatment notes, or send links to that client's portal.
+                    Every patient has a dedicated, isolated clinical page. Click "Open Dedicated
+                    Patient Page" to manage their demographics, diagnosis, medications, visits, and
+                    messages.
                   </p>
                 </div>
-                <span className="px-3 py-1 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] text-xs font-bold">
-                  {filteredPatients.length} Account(s)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] text-xs font-bold">
+                    {filteredPatients.length} Patient(s)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPatientModal(true)}
+                    className="px-3.5 py-1.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Patient</span>
+                  </button>
+                </div>
               </div>
 
               {filteredPatients.length === 0 ? (
-                <div className="p-8 text-center text-xs text-stone-500">
-                  No patient records match your current search filter.
+                <div className="p-8 text-center space-y-3">
+                  <p className="text-xs text-stone-500">
+                    No patient records match your current search filter.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPatientModal(true)}
+                    className="px-4 py-2 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                  >
+                    + Register New Patient Record
+                  </button>
                 </div>
               ) : (
                 <div className="divide-y divide-stone-200">
                   {filteredPatients.map((patient) => {
                     const pMeds = medications.filter((m) => m.patientId === patient.uid);
-                    const pAppts = appointments.filter((a) => a.patientId === patient.uid);
+                    const pAppts = appointments.filter(
+                      (a) =>
+                        a.patientId === patient.uid ||
+                        (a.patientEmail &&
+                          patient.email &&
+                          a.patientEmail.toLowerCase() === patient.email.toLowerCase())
+                    );
                     const pMsgs = messages.filter((m) => m.patientId === patient.uid);
                     const pIntakes = intakes.filter((i) => i.patientId === patient.uid);
                     const initials = (patient.fullName || 'P')
@@ -1731,7 +2702,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                             className="px-4 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs inline-flex items-center gap-1.5 hover:bg-stone-800 cursor-pointer shadow-xs"
                           >
                             <ClipboardCheck className="w-3.5 h-3.5" />
-                            <span>Enter Patient Chart →</span>
+                            <span>Open Dedicated Patient Page →</span>
                           </button>
                         </div>
                       </div>
