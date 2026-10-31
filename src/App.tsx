@@ -124,10 +124,25 @@ export default function App() {
         }
       }
 
-      // Check query string parameters used by sitemap.xml (?page=... or ?condition=...)
+      // Check query string parameters used by sitemap.xml (?page=... or ?condition=...) or Firebase Custom Action URLs (?mode=...&oobCode=...)
       const searchParams = new URLSearchParams(window.location.search);
       const queryCondition = (searchParams.get('condition') || '').replace(/[^a-zA-Z0-9-]/g, '');
       const queryPage = (searchParams.get('page') || '').replace(/[^a-zA-Z0-9-]/g, '');
+      const authMode = searchParams.get('mode') || '';
+      const oobCode = searchParams.get('oobCode') || '';
+
+      if (
+        oobCode ||
+        authMode === 'verifyEmail' ||
+        authMode === 'resetPassword' ||
+        authMode === 'signIn' ||
+        authMode === 'recoverEmail' ||
+        queryPage === 'reset-password' ||
+        searchParams.get('view') === 'reset-password'
+      ) {
+        setCurrentPage('portal');
+        return;
+      }
 
       if (queryCondition && conditionsData.some((c) => c.id === queryCondition)) {
         setCurrentPage('condition-detail');

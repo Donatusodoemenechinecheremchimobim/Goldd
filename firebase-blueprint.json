@@ -205,6 +205,16 @@
         "status",
         "createdAt"
       ]
+    },
+    "AccountDirectoryEntry": {
+      "title": "AccountDirectoryEntry",
+      "description": "Zero-PII SHA-256 email hash registry to verify whether an email address is linked to an existing portal account",
+      "type": "object",
+      "properties": {
+        "exists": { "type": "boolean", "description": "Always true for registered accounts" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of registration or sync" }
+      },
+      "required": ["exists", "updatedAt"]
     }
   },
   "firestore": {
@@ -239,6 +249,10 @@
     "/invoices/{invoiceId}": {
       "schema": { "$ref": "#/entities/Invoice" },
       "description": "Insurance & copay billing statements"
+    },
+    "/account_directory/{emailHash}": {
+      "schema": { "$ref": "#/entities/AccountDirectoryEntry" },
+      "description": "Zero-PII SHA-256 email hash directory for password reset verification"
     }
   }
 }

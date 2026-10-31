@@ -111,30 +111,37 @@ function buildBrandedEmailHtml(title: string, bodyHtml: string): string {
  * Pooled Nodemailer SMTP transporter for high-throughput, low-latency email dispatch.
  */
 let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
-function getSmtpTransporter() {
-  if (cachedTransporter) return cachedTransporter;
+function getSmtpTransporter(overridePort?: number) {
+  if (cachedTransporter && !overridePort) return cachedTransporter;
 
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
+  const host = process.env.SMTP_HOST?.trim();
+  const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS;
-  const port = Number(process.env.SMTP_PORT || 465);
-  const secure = process.env.SMTP_SECURE !== 'false' && port === 465;
+  const port = overridePort || Number(process.env.SMTP_PORT || 465);
+  const secure = port === 465;
 
   if (!host || !user || !pass) {
     return null;
   }
 
-  cachedTransporter = nodemailer.createTransport({
-    pool: true,
+  const transport = nodemailer.createTransport({
+    pool: !overridePort,
     maxConnections: 5,
     maxMessages: 100,
     host,
     port,
     secure,
+    requireTLS: port === 587,
     auth: { user, pass },
+    tls: {
+      minVersion: 'TLSv1.2',
+    },
   });
 
-  return cachedTransporter;
+  if (!overridePort) {
+    cachedTransporter = transport;
+  }
+  return transport;
 }
 
 async function sendClinicEmail(opts: {
@@ -148,14 +155,26 @@ async function sendClinicEmail(opts: {
     process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`;
 
   if (transporter) {
-    await transporter.sendMail({
+    const mailPayload = {
       from: fromAddress,
       to: opts.to,
       replyTo: opts.replyTo || CLINIC_EMAIL,
       subject: opts.subject.replace(/[\r\n]/g, ' ').slice(0, 240),
       html: opts.html,
-    });
-    return { deliveredViaSmtp: true };
+    };
+    try {
+      await transporter.sendMail(mailPayload);
+      return { deliveredViaSmtp: true };
+    } catch {
+      // Automatic fallback between SSL (465) and STARTTLS (587) for Northwest / custom domain SMTP
+      const configuredPort = Number(process.env.SMTP_PORT || 465);
+      const fallbackPort = configuredPort === 465 ? 587 : 465;
+      const fallbackTransport = getSmtpTransporter(fallbackPort);
+      if (fallbackTransport) {
+        await fallbackTransport.sendMail(mailPayload);
+        return { deliveredViaSmtp: true };
+      }
+    }
   }
 
   return { deliveredViaSmtp: false };
@@ -169,8 +188,29 @@ async function startServer() {
   // Strict 64KB JSON body limit to block oversized payload attacks
   app.use(express.json({ limit: '64kb' }));
 
-  // Production security headers, HTTPS HSTS, & OAuth popup compatibility
+  // Production security headers, HTTPS HSTS, anti-clickjacking, dotfile/sourcemap blocking, & OAuth popup compatibility
   app.use((req, res, next) => {
+    const rawUrl = req.originalUrl || req.url || '';
+    const decodedPath = (() => {
+      try {
+        return decodeURIComponent(req.path || '');
+      } catch {
+        return req.path || '';
+      }
+    })();
+
+    // Block path traversal (../), .git folder, .env files, hidden dotfiles, and production source maps (*.map)
+    if (
+      rawUrl.includes('..') ||
+      rawUrl.toLowerCase().includes('%2e%2e') ||
+      decodedPath.includes('..') ||
+      /(^|\/)\.(git|env|htaccess|DS_Store|npmrc|dockerignore)/i.test(decodedPath) ||
+      decodedPath.endsWith('.map')
+    ) {
+      res.status(403).json({ ok: false, error: 'Forbidden' });
+      return;
+    }
+
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -182,13 +222,18 @@ async function startServer() {
       'Permissions-Policy',
       'camera=(self), microphone=(self), geolocation=()'
     );
+    // Anti-Clickjacking frame-ancestors policy (allows same-origin and AI Studio preview iframe only)
+    res.setHeader(
+      'Content-Security-Policy',
+      "frame-ancestors 'self' https://*.google.com https://*.run.app;"
+    );
     // Required so Firebase Google/Yahoo/Microsoft/Apple OAuth popups can communicate back across origins
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 
     // Enforce rate limiting and bot honeypot protection on all /api/email/* routes
     if (req.path.startsWith('/api/email/')) {
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-      if (!checkRateLimit(clientIp, 15, 60_000)) {
+      if (!checkRateLimit(clientIp, 12, 60_000)) {
         res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
         return;
       }
@@ -329,30 +374,42 @@ async function startServer() {
     }
   });
 
-  // 3. Branded Welcome & Verification Notification Email via SMTP
+  // 3. Branded Welcome & Verification Notification Email with Official Logo via SMTP
   app.post('/api/email/welcome-verify', async (req, res) => {
     try {
       const fullName = escapeHtml(req.body?.fullName, 160);
       const email = sanitizeEmailAddress(req.body?.email);
       const phone = escapeHtml(req.body?.phone, 40);
+      const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
 
       if (email) {
         const clientHtml = buildBrandedEmailHtml(
-          'Verify Your Client Portal Account — Golden Mind Psychiatry PLLC',
+          'Welcome to Golden Mind Psychiatry PLLC — Your Client Portal Account',
           `
-          <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Welcome to Golden Mind Psychiatry PLLC, ${fullName || 'Valued Patient'}!</h2>
-          <p style="margin:0 0 16px 0;">Thank you for creating your HIPAA-encrypted Client Portal account associated with <strong>${email}</strong>.</p>
-          <p style="margin:0 0 16px 0;">Please click the verification link sent to your inbox to confirm your email address, then open your Client Portal to complete your assigned Psychiatric Intake Forms:</p>
+          <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Welcome to Golden Mind Psychiatry PLLC, ${fullName || 'Valued Client'}!</h2>
+          <p style="margin:0 0 16px 0;">Thank you for creating your HIPAA-encrypted Client Portal account associated with <strong>${email}</strong>. At Golden Mind Psychiatry PLLC, <em>“Where Every Mind Is Golden,”</em> we are honored to partner with you on your mental wellness journey.</p>
+          <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:16px;padding:18px 20px;margin:0 0 20px 0;">
+            <div style="font-size:12px;font-weight:700;color:#9E7206;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;">
+              What You Can Do Inside Your Client Portal
+            </div>
+            <ul style="margin:0;padding-left:18px;font-size:13px;color:#44403C;line-height:1.7;">
+              <li><strong>Complete Your Digital Intake Forms:</strong> Fill out your Psychiatric Intake &amp; Consent prior to your session.</li>
+              <li><strong>Join 100% Telehealth Video Visits:</strong> Connect with Brenda Hobyani, MSN, APRN, PMHNP-BC from anywhere in Texas or New Mexico.</li>
+              <li><strong>Track Progress &amp; Refills:</strong> Submit PHQ-9 / GAD-7 check-ins and request prescription refills with 1 click.</li>
+              <li><strong>Direct Provider Messaging:</strong> Message your provider directly inside your encrypted portal.</li>
+            </ul>
+          </div>
+          <p style="margin:0 0 16px 0;">If you received a separate email verification link, please click it to verify your address, or click below to access your Client Portal right now:</p>
           <div style="text-align:center;margin:24px 0;">
             <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
-              Open Golden Mind Client Portal
+              Access Your Golden Mind Client Portal
             </a>
           </div>
           `
         );
         await sendClinicEmail({
           to: email,
-          subject: 'Welcome to Golden Mind Psychiatry PLLC — Verify Your Portal Account',
+          subject: 'Welcome to Golden Mind Psychiatry PLLC — Your Client Portal Account',
           html: clientHtml,
         });
       }
@@ -361,7 +418,7 @@ async function startServer() {
         `New Client Portal Registration: ${fullName || email}`,
         `
         <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Portal Registration</h2>
-        <p><strong>${fullName || 'New Patient'}</strong> (${email} · ${phone || 'No phone provided'}) has registered for a Client Portal account and was sent an email verification link.</p>
+        <p><strong>${fullName || 'New Patient'}</strong> (${email} · ${phone || 'No phone provided'}${insuranceProvider ? ` · Insurance: ${insuranceProvider}` : ''}) has registered for a Client Portal account and was sent a Welcome &amp; Verification email.</p>
         `
       );
       const result = await sendClinicEmail({
@@ -373,6 +430,43 @@ async function startServer() {
       res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
     } catch (error) {
       console.error('Welcome email dispatch error:', error);
+      res.status(200).json({ ok: true, deliveredViaSmtp: false });
+    }
+  });
+
+  // 3B. Branded Password Reset Notification Email with Official Logo via SMTP (mailserver.businessidentity.llc)
+  app.post('/api/email/password-reset', async (req, res) => {
+    try {
+      const email = sanitizeEmailAddress(req.body?.email);
+      if (!email) {
+        res.status(400).json({ ok: false, deliveredViaSmtp: false });
+        return;
+      }
+
+      const resetHtml = buildBrandedEmailHtml(
+        'Reset Your Client Portal Password — Golden Mind Psychiatry PLLC',
+        `
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Client Portal Password Reset Request</h2>
+        <p style="margin:0 0 16px 0;">We received a request to reset the password for your <strong>Golden Mind Psychiatry PLLC</strong> Client Portal account associated with <strong>${email}</strong>.</p>
+        <p style="margin:0 0 16px 0;">Please click the password reset link dispatched to your inbox, or click the button below to access your Client Portal recovery page:</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
+            Open Golden Mind Client Portal
+          </a>
+        </div>
+        <p style="margin:0;font-size:12px;color:#57534E;">If you did not request a password reset, you can safely ignore this email.</p>
+        `
+      );
+
+      const result = await sendClinicEmail({
+        to: email,
+        subject: 'Reset Your Client Portal Password — Golden Mind Psychiatry PLLC',
+        html: resetHtml,
+      });
+
+      res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
+    } catch (error) {
+      console.error('Password reset SMTP dispatch error:', error);
       res.status(200).json({ ok: true, deliveredViaSmtp: false });
     }
   });
@@ -466,11 +560,13 @@ async function startServer() {
       express.static(path.join(distPath, 'assets'), {
         maxAge: '365d',
         immutable: true,
+        dotfiles: 'deny',
       })
     );
     app.use(
       express.static(distPath, {
         maxAge: '1h',
+        dotfiles: 'deny',
       })
     );
     app.get('*', (_req, res) => {

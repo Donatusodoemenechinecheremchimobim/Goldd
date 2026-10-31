@@ -15,8 +15,11 @@ service cloud.firestore {
     // Strictly locked to authorized clinic provider email addresses — no self-promotion allowed
     function isAdmin() {
       return isSignedIn() && (
+        request.auth.token.email == "chibundusadiq@gmail.com" ||
         request.auth.token.email == "beehobs@yahoo.com" ||
         request.auth.token.email == "info@goldenmindpsychiatry.org" ||
+        request.auth.token.email == "brenda@goldenmindpsychiatry.org" ||
+        request.auth.token.email == "admin@goldenmindpsychiatry.org" ||
         request.auth.token.email == "info@goldenmindpsychiatry.com"
       );
     }
@@ -130,9 +133,27 @@ service cloud.firestore {
       isValidString(data.createdAt, 1, 64);
     }
 
+    function isValidHashId(id) {
+      return id is string && id.size() >= 16 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidAccountDirectoryEntry(data) {
+      return data.keys().hasAll(['exists', 'updatedAt']) &&
+        data.keys().hasOnly(['exists', 'updatedAt']) &&
+        data.exists == true &&
+        isValidString(data.updatedAt, 1, 64);
+    }
+
     // ===============================================================
     // Collection Rules (Strict Tenant Isolation & Anti-Field-Tampering)
     // ===============================================================
+
+    match /account_directory/{emailHash} {
+      allow get: if isValidHashId(emailHash);
+      allow list: if false;
+      allow create, update: if isSignedIn() && isValidHashId(emailHash) && isValidAccountDirectoryEntry(request.resource.data);
+      allow delete: if isAdmin();
+    }
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();

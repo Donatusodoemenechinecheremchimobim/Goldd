@@ -6,14 +6,24 @@ import {
   FacebookAuthProvider,
   TwitterAuthProvider,
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with the named database from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with the named database from config and reliable long-polling for iframe/proxy compatibility
+export const db = initializeFirestore(
+  app,
+  {
+    experimentalForceLongPolling: true,
+  },
+  firebaseConfig.firestoreDatabaseId
+);
 
 // Initialize Firebase Auth & US Identity Providers (Google, Yahoo, Microsoft, Apple, Facebook, X/Twitter)
 export const auth = getAuth(app);

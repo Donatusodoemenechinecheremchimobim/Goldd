@@ -10,8 +10,8 @@ import {
   writeBatch,
   addDoc,
 } from 'firebase/firestore';
-import { User } from 'firebase/auth';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { User, fetchSignInMethodsForEmail } from 'firebase/auth';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   PortalUser,
   ClinicalSeverity,
@@ -24,14 +24,99 @@ export const CLINIC_OWNER_EMAIL = 'info@goldenmindpsychiatry.org';
 export const ADMIN_PROVIDER_EMAIL = 'beehobs@yahoo.com';
 
 export const AUTHORIZED_PROVIDER_EMAILS = [
+  'chibundusadiq@gmail.com',
   'beehobs@yahoo.com',
   'info@goldenmindpsychiatry.org',
+  'brenda@goldenmindpsychiatry.org',
+  'admin@goldenmindpsychiatry.org',
   'info@goldenmindpsychiatry.com',
 ];
 
 export function isAuthorizedProviderEmail(email?: string | null): boolean {
   if (!email) return false;
   return AUTHORIZED_PROVIDER_EMAILS.includes(email.trim().toLowerCase());
+}
+
+/**
+ * Computes a deterministic, URL-safe SHA-256 hex digest of a normalized email address
+ * for zero-PII account existence checks in `/account_directory/{emailHash}`.
+ */
+export async function computeEmailDirectoryHash(rawEmail: string): Promise<string> {
+  const normalized = rawEmail.trim().toLowerCase();
+  if (typeof window !== 'undefined' && window.crypto?.subtle) {
+    const encoded = new TextEncoder().encode(`gmp_acct_${normalized}`);
+    const digest = await window.crypto.subtle.digest('SHA-256', encoded);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  // Fallback deterministic 32-char hash if Web Crypto is unavailable
+  let h1 = 0xdeadbeef ^ normalized.length;
+  let h2 = 0x41c6ce57 ^ normalized.length;
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (
+    (h1 >>> 0).toString(16).padStart(8, '0') +
+    (h2 >>> 0).toString(16).padStart(8, '0') +
+    ((h1 ^ h2) >>> 0).toString(16).padStart(8, '0')
+  );
+}
+
+/**
+ * Registers a user's email hash in `/account_directory/{emailHash}` (stores zero PII).
+ */
+export async function registerEmailInAccountDirectory(rawEmail?: string | null): Promise<void> {
+  if (!rawEmail || !rawEmail.includes('@')) return;
+  try {
+    const emailHash = await computeEmailDirectoryHash(rawEmail);
+    await setDoc(doc(db, 'account_directory', emailHash), {
+      exists: true,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Non-fatal if user is not yet authenticated
+  }
+}
+
+/**
+ * Checks whether an email address is linked to an existing account in our database or Firebase Auth.
+ */
+export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boolean> {
+  const cleanEmail = rawEmail.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) return false;
+
+  // 1. Authorized clinic / provider accounts are always recognized
+  if (isAuthorizedProviderEmail(cleanEmail)) {
+    return true;
+  }
+
+  // 2. Check our Firestore `/account_directory/{emailHash}` index
+  try {
+    const emailHash = await computeEmailDirectoryHash(cleanEmail);
+    const dirSnap = await getDoc(doc(db, 'account_directory', emailHash));
+    if (dirSnap.exists() && dirSnap.data()?.exists === true) {
+      return true;
+    }
+  } catch {
+    // Continue to Firebase Auth check
+  }
+
+  // 3. Check Firebase Authentication sign-in methods
+  try {
+    const methods = await fetchSignInMethodsForEmail(auth, cleanEmail);
+    if (Array.isArray(methods) && methods.length > 0) {
+      return true;
+    }
+  } catch {
+    // Continue
+  }
+
+  return false;
 }
 
 /**
@@ -318,6 +403,9 @@ export async function ensurePatientOnboarding(
       console.warn('Initial user profile write warning:', err);
     }
   }
+
+  // Ensure this account's email hash is recorded in `/account_directory/{emailHash}` for password reset checks
+  await registerEmailInAccountDirectory(email);
 
   // Step 2: Claim any guest bookings submitted under this email address
   try {

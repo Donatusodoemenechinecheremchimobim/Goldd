@@ -53,6 +53,7 @@ import {
   generateTelehealthRoomUrl,
   sanitizeClinicalInput,
   isAuthorizedProviderEmail,
+  registerEmailInAccountDirectory,
 } from '../services/clinicalAutomation';
 
 interface ProviderDashboardViewProps {
@@ -157,9 +158,13 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
-        const list = snap.docs
-          .map((d) => d.data() as PortalUser)
-          .filter((u) => !isAuthorizedProviderEmail(u.email));
+        const allUsers = snap.docs.map((d) => d.data() as PortalUser);
+        allUsers.forEach((u) => {
+          if (u.email) {
+            registerEmailInAccountDirectory(u.email);
+          }
+        });
+        const list = allUsers.filter((u) => !isAuthorizedProviderEmail(u.email));
         // Order patient accounts by most recently updated
         list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
         setPatients(list);

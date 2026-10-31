@@ -88,6 +88,8 @@ import {
   calculateMoodSeverity,
   submitClinicalAssessment,
   requestMedicationRefill,
+  checkEmailLinkedToAccount,
+  registerEmailInAccountDirectory,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
 import {
@@ -172,6 +174,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [confirmResetPassword, setConfirmResetPassword] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
 
+  // Dedicated Reset Password Page State (When User Clicks "Forgot / Reset Password?")
+  const [showResetPasswordPage, setShowResetPasswordPage] = useState(false);
+  const [resetEmailInput, setResetEmailInput] = useState('');
+  const [resetRequestSubmitting, setResetRequestSubmitting] = useState(false);
+  const [resetRequestSentTo, setResetRequestSentTo] = useState<string | null>(null);
+
   // Navigation, Search & Mode State
   const [activeTab, setActiveTab] = useState<PortalTab>('overview');
   const [workspaceMode, setWorkspaceMode] = useState<'patient' | 'provider'>('patient');
@@ -240,8 +248,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const modeParam = params.get('mode');
     const oobParam = params.get('oobCode');
     const emailParam = params.get('email');
+    const viewParam = params.get('view') || params.get('page');
     if (emailParam) {
       setEmailInput(emailParam);
+      setResetEmailInput(emailParam);
+    }
+    if (viewParam === 'reset-password') {
+      setShowResetPasswordPage(true);
     }
 
     if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -489,29 +502,70 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     };
   }, [firebaseUser]);
 
-  // Guaranteed Firebase verification email helper (falls back to default continueUrl if custom domain isn't whitelisted)
-  const safeSendVerificationEmail = async (user: FirebaseUser) => {
+  // Strict allowlist of trusted origins to prevent Password Reset Poisoning (Video Item #16)
+  const getTrustedActionCodeSettings = () => {
+    const trustedOrigins = [
+      'https://goldenmindpsychiatry.org',
+      'https://www.goldenmindpsychiatry.org',
+      'https://golden-mind-psychiatry.firebaseapp.com',
+    ];
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+    const safeOrigin = trustedOrigins.includes(currentOrigin)
+      ? currentOrigin
+      : 'https://goldenmindpsychiatry.org';
+    return {
+      url: `${safeOrigin}/?page=portal`,
+    };
+  };
+
+  const formatFirebaseEmailError = (err: unknown, actionLabel: string): string => {
+    const code = (err as { code?: string })?.code || '';
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    if (code === 'auth/internal-error' || rawMsg.includes('auth/internal-error')) {
+      return `SMTP Mail Server Connection Error (auth/internal-error): Firebase could not send the ${actionLabel} email using the Custom SMTP settings in Firebase Console (Authentication → Templates → SMTP settings). To fix this immediately: go to Firebase Console → Authentication → Templates → SMTP settings and either switch Port to 587 with STARTTLS (or verify your Northwest SMTP host/password), or toggle Custom SMTP OFF so Firebase sends the email immediately.`;
+    }
+    if (code === 'auth/too-many-requests') {
+      return `An email was just sent recently. Please wait 60 seconds before requesting another ${actionLabel} email, and check your Spam/Promotions folder.`;
+    }
+    if (code === 'auth/user-not-found') {
+      return 'This email address is not linked to any account in our database.';
+    }
+    return rawMsg || `Could not send ${actionLabel} email.`;
+  };
+
+  // Guaranteed Firebase verification email helper (returns diagnostic error string if SMTP fails)
+  const safeSendVerificationEmail = async (user: FirebaseUser): Promise<string | null> => {
     try {
-      await sendEmailVerification(user, {
-        url: `${window.location.origin}/?page=portal`,
-      });
-    } catch {
+      await sendEmailVerification(user);
+      return null;
+    } catch (firstErr: unknown) {
+      const code = (firstErr as { code?: string })?.code || '';
+      if (code === 'auth/internal-error') {
+        return formatFirebaseEmailError(firstErr, 'account verification');
+      }
       try {
-        await sendEmailVerification(user);
-      } catch {
-        // Non-fatal if verification email was just dispatched
+        await sendEmailVerification(user, getTrustedActionCodeSettings());
+        return null;
+      } catch (secondErr: unknown) {
+        return formatFirebaseEmailError(secondErr, 'account verification');
       }
     }
   };
 
-  // Guaranteed Firebase password reset / email action link helper
-  const safeSendPasswordResetEmail = async (email: string) => {
+  // Guaranteed Firebase password reset helper (prevents Reset Poisoning & surfaces SMTP errors)
+  const safeSendPasswordResetEmail = async (email: string): Promise<void> => {
     try {
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/?page=portal`,
-      });
-    } catch {
       await sendPasswordResetEmail(auth, email);
+    } catch (firstErr: unknown) {
+      const code = (firstErr as { code?: string })?.code || '';
+      if (code === 'auth/internal-error' || code === 'auth/user-not-found') {
+        throw new Error(formatFirebaseEmailError(firstErr, 'password reset'));
+      }
+      try {
+        await sendPasswordResetEmail(auth, email, getTrustedActionCodeSettings());
+      } catch (secondErr: unknown) {
+        throw new Error(formatFirebaseEmailError(secondErr, 'password reset'));
+      }
     }
   };
 
@@ -522,6 +576,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     isOneClick = false
   ) => {
     const isProvider = isAuthorizedProviderEmail(user.email);
+    if (user.email) {
+      registerEmailInAccountDirectory(user.email);
+    }
     if (isOneClick) {
       window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
       setOneClickVerifiedSession(true);
@@ -529,10 +586,25 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (isProvider) {
       setWorkspaceMode('provider');
     } else if (isNewAccount || !user.emailVerified) {
-      await safeSendVerificationEmail(user);
-      if (!isOneClick) {
+      const verifyErr = await safeSendVerificationEmail(user);
+      if (isNewAccount && user.email) {
+        fetch('/api/email/welcome-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: fullNameInput || user.displayName || 'Valued Client',
+            email: user.email,
+            phone: phoneInput || '',
+            dateOfBirth: dobInput || '',
+            insuranceProvider: insuranceInput || '',
+          }),
+        }).catch(() => {});
+      }
+      if (verifyErr) {
+        setAuthError(verifyErr);
+      } else if (!isOneClick) {
         setVerificationNotice(
-          `A verification email has been sent to ${user.email}. Please open your inbox and click the verification link to unlock your Client Portal.`
+          `Welcome! A verification & welcome email has been sent to ${user.email}. Please open your inbox and click the verification link to confirm your email.`
         );
       }
     }
@@ -1079,26 +1151,71 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     await authenticateWithEmailAndPassword(emailInput, passwordInput);
   };
 
-  const handleForgotPassword = async () => {
-    const cleanEmail = emailInput.trim().toLowerCase();
+  // Opens the dedicated Reset Password page so the user can enter their email and request a reset link
+  const handleForgotPassword = () => {
+    setAuthError(null);
+    setVerificationNotice(null);
+    setResetRequestSentTo(null);
+    if (emailInput.trim()) {
+      setResetEmailInput(emailInput.trim());
+    }
+    setShowResetPasswordPage(true);
+    window.history.pushState({}, document.title, '/?page=portal&view=reset-password');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCloseResetPasswordPage = () => {
+    setShowResetPasswordPage(false);
+    setAuthError(null);
+    setResetRequestSentTo(null);
+    window.history.pushState({}, document.title, '/?page=portal');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmitResetPasswordPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = resetEmailInput.trim().toLowerCase();
     setAuthError(null);
     setVerificationNotice(null);
     if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.startsWith('@')) {
-      setAuthError('Please enter your email address first so we can send your password reset link.');
-      emailInputRef.current?.focus();
+      setAuthError('Please enter a valid email address (for example, name@gmail.com or name@yahoo.com).');
       return;
     }
+
+    setResetRequestSubmitting(true);
     try {
+      // 1. Verify if this email address is linked to an existing account in our database
+      const isLinked = await checkEmailLinkedToAccount(cleanEmail);
+      if (!isLinked) {
+        setAuthError(
+          `The email address "${cleanEmail}" is not linked to any account in our database. Please check the spelling of your email or click "Create a New Account" below.`
+        );
+        setResetRequestSubmitting(false);
+        return;
+      }
+
+      // 2. Dispatch the branded HTML password reset email via verified clinic SMTP (mailserver.businessidentity.llc)
+      fetch('/api/email/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      }).catch(() => {});
+
+      // 3. Dispatch the password reset action link via Firebase Auth
       await safeSendPasswordResetEmail(cleanEmail);
+      setEmailInput(cleanEmail);
+      setResetRequestSentTo(cleanEmail);
       setVerificationNotice(
-        `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) to set your new password.`
+        `A password reset link has been sent to ${cleanEmail}. Please check your email inbox (and Spam/Promotions folder) and click the link to set your new password.`
       );
     } catch (err: unknown) {
       setAuthError(
         err instanceof Error
           ? err.message
-          : 'Could not send password reset email. Please verify your email address.'
+          : 'Could not send password reset email. Please check the email address and try again.'
       );
+    } finally {
+      setResetRequestSubmitting(false);
     }
   };
 
@@ -1138,16 +1255,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const handleResendVerification = async () => {
     setAuthError(null);
     if (auth.currentUser) {
-      try {
-        await safeSendVerificationEmail(auth.currentUser);
+      const verifyErr = await safeSendVerificationEmail(auth.currentUser);
+      if (verifyErr) {
+        setAuthError(verifyErr);
+      } else {
         setVerificationNotice(
           `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click the link to verify your account.`
-        );
-      } catch (err: unknown) {
-        setAuthError(
-          err instanceof Error
-            ? err.message
-            : 'Verification email was recently sent. Please wait a moment and check your inbox.'
         );
       }
     }
@@ -1473,6 +1586,181 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               {resetSubmitting ? 'Updating Password...' : 'Save New Password & Return to Sign In'}
             </button>
           </form>
+        </div>
+      </section>
+    );
+  }
+
+  // ============================================================================
+  // 0B. DEDICATED RESET PASSWORD PAGE (Where User Enters Email to Receive Reset Link)
+  // ============================================================================
+  if (showResetPasswordPage && (!firebaseUser || !portalUser)) {
+    return (
+      <section className="min-h-[84vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center font-portal-body">
+        <div className="max-w-xl w-full bg-white border border-stone-200 rounded-[32px] overflow-hidden shadow-xl">
+          {/* Top Luxury Obsidian & Champagne Gold Header */}
+          <div className="bg-[#0A0A0A] text-white p-6 sm:p-8 border-b border-[#D4AF37]/40 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
+                <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
+                <span>Client Portal Account Recovery</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseResetPasswordPage}
+                className="px-3.5 py-1.5 rounded-[10px] bg-white/10 hover:bg-white/20 text-xs font-bold text-[#D4AF37] transition-colors cursor-pointer"
+              >
+                ← Back to Sign In
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3.5">
+              <img
+                src="/golden_mind_card.webp"
+                alt="Golden Mind Psychiatry PLLC"
+                className="w-14 h-auto rounded-xl border border-[#D4AF37]/40 shrink-0"
+              />
+              <div>
+                <h1 className="text-2xl font-bold font-portal-heading text-white">
+                  Reset Your Portal Password
+                </h1>
+                <p className="text-xs text-stone-300 mt-1">
+                  Enter your email address below and we will send an instant password reset link to your inbox.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Body Content */}
+          <div className="p-6 sm:p-8 space-y-5">
+            {authError && (
+              <div className="p-4 rounded-[16px] bg-red-50 border border-red-200 text-xs text-red-700 space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed font-medium">{authError}</span>
+                </div>
+                {authError.includes('not linked to any account') && (
+                  <div className="pt-1 pl-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailInput(resetEmailInput.trim().toLowerCase());
+                        setIsRegistering(true);
+                        setShowResetPasswordPage(false);
+                        setAuthError(null);
+                        window.history.pushState({}, document.title, '/?page=portal');
+                      }}
+                      className="px-3.5 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:opacity-95"
+                    >
+                      Create a New Account with {resetEmailInput.trim() || 'This Email'} →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {resetRequestSentTo ? (
+              <div className="space-y-5">
+                <div className="p-5 rounded-[20px] bg-emerald-50 border border-emerald-200 space-y-2.5">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                    <MailCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>Password Reset Email Sent!</span>
+                  </div>
+                  <p className="text-xs text-emerald-900 leading-relaxed">
+                    We just dispatched a secure password reset link to{' '}
+                    <strong>{resetRequestSentTo}</strong>.
+                  </p>
+                  <ul className="list-disc pl-5 text-xs text-emerald-800 space-y-1">
+                    <li>Open your email inbox and click the reset link in the message.</li>
+                    <li>If you do not see it within 60 seconds, check your Spam or Promotions folder.</li>
+                  </ul>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setResetRequestSentTo(null)}
+                    className="py-3 px-4 rounded-[12px] bg-[#FAF9F5] hover:bg-stone-100 border border-stone-300 text-stone-800 font-bold text-xs cursor-pointer"
+                  >
+                    Send to a Different Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseResetPasswordPage}
+                    className="py-3 px-4 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
+                  >
+                    Return to Client Portal Sign In →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitResetPasswordPage} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1.5">
+                    Your Registered Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    placeholder="Enter your email address (e.g., name@gmail.com, name@yahoo.com)"
+                    value={resetEmailInput}
+                    onChange={(e) => setResetEmailInput(e.target.value)}
+                    className="w-full px-4 py-3 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-xs sm:text-sm focus:outline-none focus:border-[#D4AF37]"
+                  />
+
+                  {/* Quick US Email Provider Domain Selector */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 mr-1">
+                      Quick Email Domain:
+                    </span>
+                    {[
+                      '@gmail.com',
+                      '@yahoo.com',
+                      '@outlook.com',
+                      '@hotmail.com',
+                      '@icloud.com',
+                      '@aol.com',
+                      '@att.net',
+                    ].map((domain) => (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => {
+                          const current = resetEmailInput.trim();
+                          const localPart = current.includes('@') ? current.split('@')[0] : current;
+                          setResetEmailInput(`${localPart}${domain}`);
+                        }}
+                        className="px-2.5 py-1 rounded-[8px] bg-[#FAF9F5] hover:bg-[#FAF6EA] border border-stone-200 hover:border-[#D4AF37] text-[10px] font-semibold text-stone-600 hover:text-[#9E7206] transition-colors cursor-pointer"
+                      >
+                        {domain}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetRequestSubmitting}
+                  className="w-full py-3.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity disabled:opacity-60"
+                >
+                  {resetRequestSubmitting
+                    ? 'Sending Password Reset Link...'
+                    : 'Send Password Reset Link to My Email'}
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={handleCloseResetPasswordPage}
+                    className="text-xs font-semibold text-stone-600 hover:text-[#9E7206] cursor-pointer"
+                  >
+                    Remembered your password? Return to Sign In
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </section>
     );
@@ -1851,9 +2139,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     <button
                       type="button"
                       onClick={handleForgotPassword}
-                      className="text-[11px] font-semibold text-[#9E7206] hover:underline cursor-pointer"
+                      className="text-[11px] font-bold text-[#9E7206] hover:underline cursor-pointer"
                     >
-                      Forgot Password?
+                      Reset Password?
                     </button>
                   </div>
                   <input
@@ -1904,6 +2192,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   ? 'Create Account & Continue to Registration'
                   : 'Sign In / Continue to Client Portal'}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-xs font-bold text-[#9E7206] hover:underline cursor-pointer"
+                >
+                  Forgot or need to reset your password? Go to Reset Password Page →
+                </button>
+              </div>
             </form>
           </div>
         </div>
