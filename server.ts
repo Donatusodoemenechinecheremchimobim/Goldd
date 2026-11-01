@@ -2423,13 +2423,21 @@ async function startServer() {
 
   app.get('/api/standalone/oauth/start/:provider', (req, res) => {
     const provider = String(req.params.provider || '').toLowerCase();
-    const baseOrigin = getSafeClientOrigin(req.query.origin as string | undefined);
-    const redirectUri = `${baseOrigin}/api/standalone/oauth/callback/${provider}`;
-    const state = Buffer.from(JSON.stringify({ origin: baseOrigin, provider, ts: Date.now() })).toString('base64url');
+    const rawOrigin = String(req.query.origin || '').trim().replace(/\/+$/, '');
+    const clientOrigin = getSafeClientOrigin(rawOrigin);
+    // Always use HTTPS on goldenmindpsychiatry.org for OAuth provider redirect_uri matching
+    const oauthBaseOrigin =
+      clientOrigin.includes('goldenmindpsychiatry.org')
+        ? 'https://goldenmindpsychiatry.org'
+        : clientOrigin;
+    const redirectUri = `${oauthBaseOrigin}/api/standalone/oauth/callback/${provider}`;
+    const state = Buffer.from(
+      JSON.stringify({ origin: clientOrigin, oauthBaseOrigin, provider, ts: Date.now() })
+    ).toString('base64url');
 
-    if (provider === 'google' && process.env.GOOGLE_CLIENT_ID?.trim()) {
+    if (provider === 'google' && isRealOAuthEnv(process.env.GOOGLE_CLIENT_ID)) {
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID.trim());
+      url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID!.trim());
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', 'openid email profile');
@@ -2439,20 +2447,21 @@ async function startServer() {
       return;
     }
 
-    if (provider === 'yahoo' && process.env.YAHOO_CLIENT_ID?.trim()) {
+    if (provider === 'yahoo' && isRealOAuthEnv(process.env.YAHOO_CLIENT_ID)) {
       const url = new URL('https://api.login.yahoo.com/oauth2/request_auth');
-      url.searchParams.set('client_id', process.env.YAHOO_CLIENT_ID.trim());
+      url.searchParams.set('client_id', process.env.YAHOO_CLIENT_ID!.trim());
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
-      url.searchParams.set('scope', 'openid email profile');
+      url.searchParams.set('scope', process.env.YAHOO_OAUTH_SCOPE?.trim() || 'openid');
+      url.searchParams.set('nonce', crypto.randomBytes(16).toString('hex'));
       url.searchParams.set('state', state);
       res.redirect(url.toString());
       return;
     }
 
-    if (provider === 'microsoft' && process.env.MICROSOFT_CLIENT_ID?.trim()) {
+    if (provider === 'microsoft' && isRealOAuthEnv(process.env.MICROSOFT_CLIENT_ID)) {
       const url = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
-      url.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID.trim());
+      url.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID!.trim());
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', 'openid email profile User.Read');
@@ -2461,9 +2470,9 @@ async function startServer() {
       return;
     }
 
-    if (provider === 'facebook' && process.env.FACEBOOK_CLIENT_ID?.trim()) {
+    if (provider === 'facebook' && isRealOAuthEnv(process.env.FACEBOOK_CLIENT_ID)) {
       const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
-      url.searchParams.set('client_id', process.env.FACEBOOK_CLIENT_ID.trim());
+      url.searchParams.set('client_id', process.env.FACEBOOK_CLIENT_ID!.trim());
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', 'email,public_profile');
@@ -2472,17 +2481,19 @@ async function startServer() {
       return;
     }
 
-    res.redirect(`${baseOrigin}/?page=portal`);
+    res.redirect(`${clientOrigin}/?page=portal`);
   });
 
   app.get('/api/standalone/oauth/callback/:provider', async (req, res) => {
     const provider = String(req.params.provider || '').toLowerCase();
     const code = String(req.query.code || '').trim();
     let baseOrigin = getSafeClientOrigin(undefined);
+    let oauthBaseOrigin = 'https://goldenmindpsychiatry.org';
     try {
       if (typeof req.query.state === 'string' && req.query.state) {
         const parsed = JSON.parse(Buffer.from(req.query.state, 'base64url').toString('utf8'));
         if (parsed?.origin) baseOrigin = getSafeClientOrigin(parsed.origin);
+        if (parsed?.oauthBaseOrigin) oauthBaseOrigin = getSafeClientOrigin(parsed.oauthBaseOrigin);
       }
     } catch {
       // ignore state decode error
@@ -2493,7 +2504,7 @@ async function startServer() {
       return;
     }
 
-    const redirectUri = `${baseOrigin}/api/standalone/oauth/callback/${provider}`;
+    const redirectUri = `${oauthBaseOrigin}/api/standalone/oauth/callback/${provider}`;
     let email = '';
     let fullName = '';
 
@@ -2535,14 +2546,38 @@ async function startServer() {
             grant_type: 'authorization_code',
           }),
         });
-        const tokenData = (await tokenRes.json()) as { access_token?: string };
-        if (tokenData.access_token) {
+        const tokenData = (await tokenRes.json()) as {
+          access_token?: string;
+          id_token?: string;
+        };
+        if (tokenData.id_token) {
+          try {
+            const payloadPart = tokenData.id_token.split('.')[1];
+            if (payloadPart) {
+              const idClaims = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8')) as {
+                email?: string;
+                name?: string;
+                given_name?: string;
+                family_name?: string;
+              };
+              if (idClaims.email) email = String(idClaims.email).trim().toLowerCase();
+              if (idClaims.name) {
+                fullName = String(idClaims.name).trim();
+              } else if (idClaims.given_name || idClaims.family_name) {
+                fullName = `${idClaims.given_name || ''} ${idClaims.family_name || ''}`.trim();
+              }
+            }
+          } catch {
+            // ignore id_token parse error
+          }
+        }
+        if (tokenData.access_token && (!email || !fullName)) {
           const userRes = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
             headers: { Authorization: `Bearer ${tokenData.access_token}` },
           });
           const userData = (await userRes.json()) as { email?: string; name?: string };
-          email = String(userData.email || '').trim().toLowerCase();
-          fullName = String(userData.name || '').trim();
+          if (!email && userData.email) email = String(userData.email).trim().toLowerCase();
+          if (!fullName && userData.name) fullName = String(userData.name).trim();
         }
       } else if (provider === 'microsoft') {
         const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {

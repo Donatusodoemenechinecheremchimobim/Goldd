@@ -1293,21 +1293,24 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }[providerType];
 
     try {
-      // 1. Check if direct Server OAuth (.env Client ID & Secret) is configured on the Ubuntu server
-      try {
-        const cfgRes = await fetch('/api/standalone/oauth/config');
-        if (cfgRes.ok) {
-          const cfgData = (await cfgRes.json()) as {
-            ok?: boolean;
-            providers?: Record<string, boolean>;
-          };
-          if (cfgData.providers?.[providerType]) {
-            window.location.href = `/api/standalone/oauth/start/${providerType}?origin=${encodeURIComponent(window.location.origin)}`;
-            return;
+      // 1. Check if direct Server OAuth (.env Client ID & Secret) is configured AND user is on a valid domain (not a raw IP, which Yahoo/Google reject)
+      const isRawIpHost = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+      if (!isRawIpHost) {
+        try {
+          const cfgRes = await fetch('/api/standalone/oauth/config');
+          if (cfgRes.ok) {
+            const cfgData = (await cfgRes.json()) as {
+              ok?: boolean;
+              providers?: Record<string, boolean>;
+            };
+            if (cfgData.providers?.[providerType]) {
+              window.location.href = `/api/standalone/oauth/start/${providerType}?origin=${encodeURIComponent(window.location.origin)}`;
+              return;
+            }
           }
+        } catch {
+          // Proceed to instant on-page 1-Click Identity Modal
         }
-      } catch {
-        // Proceed to instant on-page 1-Click Identity Modal
       }
 
       // 2. Otherwise use the instant on-page 1-Click Identity Modal on your own server (zero firebaseapp.com URL)
