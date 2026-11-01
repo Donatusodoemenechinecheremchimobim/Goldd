@@ -276,6 +276,43 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       setOneClickVerifiedSession(true);
       setAuthError(null);
       window.history.replaceState({}, document.title, '/?page=portal');
+      signOut(auth).catch(() => {});
+      fetch('/api/standalone/auth/session', {
+        headers: { Authorization: `Bearer ${standaloneTokenParam}` },
+      })
+        .then((r) => r.json())
+        .then(async (sData) => {
+          if (sData?.ok && sData?.user) {
+            const pUser = sData.user as PortalUser;
+            setFirebaseUser({
+              uid: pUser.uid,
+              email: pUser.email,
+              displayName: pUser.fullName,
+              emailVerified: true,
+            } as FirebaseUser);
+            setPortalUser(pUser);
+            if (isAuthorizedProviderEmail(pUser.email)) {
+              setWorkspaceMode('provider');
+            }
+            const bootRes = await fetch(
+              `/api/standalone/db/bootstrap?uid=${encodeURIComponent(
+                pUser.uid
+              )}&role=${encodeURIComponent(pUser.role || 'patient')}`
+            );
+            const bootData = await bootRes.json();
+            if (bootData?.ok) {
+              setAppointments(bootData.appointments || []);
+              setIntakes(bootData.intakes || []);
+              setAssessments(bootData.assessments || []);
+              setMedications(bootData.medications || []);
+              setMessages(bootData.messages || []);
+              setInvoices(bootData.invoices || []);
+            }
+            setAuthLoading(false);
+          }
+        })
+        .catch(() => {});
+      return;
     }
     if (emailParam) {
       setEmailInput(emailParam);

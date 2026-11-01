@@ -2454,6 +2454,7 @@ async function startServer() {
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', process.env.YAHOO_OAUTH_SCOPE?.trim() || 'openid');
       url.searchParams.set('nonce', crypto.randomBytes(16).toString('hex'));
+      url.searchParams.set('prompt', 'login');
       url.searchParams.set('state', state);
       res.redirect(url.toString());
       return;
@@ -2465,6 +2466,7 @@ async function startServer() {
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', 'openid email profile User.Read');
+      url.searchParams.set('prompt', 'select_account');
       url.searchParams.set('state', state);
       res.redirect(url.toString());
       return;
