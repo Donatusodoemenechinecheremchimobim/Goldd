@@ -775,6 +775,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (isOneClick) {
       window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
       setOneClickVerifiedSession(true);
+    } else if (isNewAccount) {
+      // Brand-new email/password account MUST verify via email link before accessing the portal
+      const cleanNewEmail = normalizePortalEmail(user.email || '');
+      if (cleanNewEmail) {
+        window.localStorage.removeItem(`gmp_verified_email_${cleanNewEmail}`);
+        window.sessionStorage.removeItem(`gmp_verified_email_${cleanNewEmail}`);
+      }
+      window.sessionStorage.removeItem(`gmp_oneclick_${user.uid}`);
+      setOneClickVerifiedSession(false);
     }
     if (isProvider) {
       setWorkspaceMode('provider');
@@ -1746,53 +1755,81 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const handleResendVerification = async () => {
     setAuthError(null);
+    setVerificationNotice(null);
+    const targetEmail = normalizePortalEmail(
+      auth.currentUser?.email || firebaseUser?.email || portalUser?.email || emailInput
+    );
+    if (!targetEmail) return;
+
+    let smtpDelivered = false;
+    try {
+      const resp = await fetch('/api/email/welcome-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: portalUser?.fullName || firebaseUser?.displayName || 'Valued Client',
+          email: targetEmail,
+          resendOnly: true,
+          clientOrigin: window.location.origin,
+        }),
+      });
+      const data = await resp.json();
+      smtpDelivered = Boolean(data?.deliveredViaSmtp);
+    } catch {
+      // ignore
+    }
+
+    let verifyErr: string | null = null;
     if (auth.currentUser) {
-      let smtpDelivered = false;
-      if (auth.currentUser.email) {
-        try {
-          const resp = await fetch('/api/email/welcome-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fullName: portalUser?.fullName || auth.currentUser.displayName || 'Valued Client',
-              email: auth.currentUser.email,
-              resendOnly: true,
-              clientOrigin: window.location.origin,
-            }),
-          });
-          const data = await resp.json();
-          smtpDelivered = Boolean(data?.deliveredViaSmtp);
-        } catch {
-          // ignore
-        }
-      }
-      const verifyErr = await safeSendVerificationEmail(auth.currentUser);
-      if (verifyErr && !smtpDelivered) {
-        setAuthError(verifyErr);
-      } else {
-        setVerificationNotice(
-          `A fresh verification link has been sent to ${auth.currentUser.email}. Please check your inbox and click "Verify My Email & Enter Client Portal" to verify your account.`
-        );
-      }
+      verifyErr = await safeSendVerificationEmail(auth.currentUser);
+    }
+    if (verifyErr && !smtpDelivered) {
+      setAuthError(verifyErr);
+    } else {
+      setVerificationNotice(
+        `A fresh verification link has been sent to ${targetEmail}. Please check your inbox (and Spam/Junk folder) and click "Verify My Email & Enter Client Portal" to verify your account.`
+      );
     }
   };
 
   const handleRefreshVerification = async () => {
     setAuthError(null);
+    setVerificationNotice(null);
     const activeEmail = normalizePortalEmail(
-      auth.currentUser?.email || portalUser?.email || emailInput
+      auth.currentUser?.email || firebaseUser?.email || portalUser?.email || emailInput
     );
+
+    let isNowVerified = false;
 
     if (auth.currentUser) {
       try {
         await auth.currentUser.reload();
-        setFirebaseUser({ ...auth.currentUser });
+        if (auth.currentUser.emailVerified) {
+          isNowVerified = true;
+          setFirebaseUser({ ...auth.currentUser });
+        }
       } catch {
         // ignore reload issues
       }
-      window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
     }
 
+    if (!isNowVerified && activeEmail) {
+      const verifiedInDir = await checkEmailVerifiedInAccountDirectory(activeEmail);
+      if (verifiedInDir) {
+        isNowVerified = true;
+      }
+    }
+
+    if (!isNowVerified) {
+      setAuthError(
+        `Your email address (${activeEmail}) has not been verified yet. Please open the verification email sent to ${activeEmail} (check your Inbox and Spam/Junk folder) and click "Verify My Email & Enter Client Portal" first.`
+      );
+      return;
+    }
+
+    if (auth.currentUser) {
+      window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+    }
     if (activeEmail) {
       await markEmailVerifiedInAccountDirectory(activeEmail);
     }
@@ -2974,15 +3011,87 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   // Federated OAuth providers (Google, Yahoo, Microsoft, Apple, Facebook, Twitter) or 1-Click Provider Sessions
   const isFederatedOAuthProvider =
     oneClickVerifiedSession ||
-    firebaseUser.providerData.some((p) =>
+    (firebaseUser.providerData || []).some((p) =>
       ['google.com', 'yahoo.com', 'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com'].includes(
         p.providerId
       )
     );
 
   // ============================================================================
-  // 2. MANDATORY CLIENT REGISTRATION & DEMOGRAPHIC RECORD GATE
-  //    (Runs for ALL Clients — Including After 1-Click Login with Google, Yahoo, Apple, or Outlook!)
+  // 2. STRICT EMAIL VERIFICATION GATE (Runs FIRST for All Email/Password Accounts!)
+  //    Blocks access until the verification link sent to the user's email is clicked.
+  // ============================================================================
+  if (!firebaseUser.emailVerified && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
+    return (
+      <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
+        <div className="max-w-lg w-full bg-white border border-stone-200 rounded-[32px] p-8 sm:p-10 shadow-xl space-y-6 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-[#FAF6EA] border border-[#D4AF37] flex items-center justify-center text-[#9E7206]">
+            <MailCheck className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
+              Step 1 of 2 · Email Verification Required
+            </span>
+            <h1 className="text-2xl font-bold font-portal-heading text-stone-900">
+              Verify Your Email Address
+            </h1>
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              We have sent a verification email to{' '}
+              <strong className="text-stone-900">{firebaseUser.email || portalUser.email}</strong>.
+              For your HIPAA privacy and security, you cannot access your Client Portal until you
+              open your email inbox and click the verification link.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 text-left flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          {verificationNotice && (
+            <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 text-left flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              <span>{verificationNotice}</span>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={handleRefreshVerification}
+              className="w-full py-3.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>I Have Clicked the Link in My Email — Enter Portal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              className="w-full py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs cursor-pointer hover:bg-[#f3ebd3] transition-colors"
+            >
+              Resend Verification Email to {firebaseUser.email || portalUser.email}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full py-2.5 px-4 rounded-[12px] text-xs font-semibold text-stone-500 hover:text-red-600 cursor-pointer"
+            >
+              Sign Out / Use a Different Email Address
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // ============================================================================
+  // 3. MANDATORY CLIENT REGISTRATION & DEMOGRAPHIC RECORD GATE
+  //    (Runs after Email Verification or 1-Click Login with Google, Yahoo, Apple, or Outlook!)
   // ============================================================================
   if (!isVerifiedProviderAccount && !isPatientRegistrationComplete(portalUser)) {
     return (
@@ -3234,77 +3343,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </button>
             </div>
           </form>
-        </div>
-      </section>
-    );
-  }
-
-  // ============================================================================
-  // 3. STRICT EMAIL VERIFICATION GATE (For Standard Email/Password Accounts)
-  // ============================================================================
-  if (!firebaseUser.emailVerified && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
-    return (
-      <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
-        <div className="max-w-lg w-full bg-white border border-stone-200 rounded-[32px] p-8 sm:p-10 shadow-xl space-y-6 text-center">
-          <div className="w-16 h-16 mx-auto rounded-full bg-[#FAF6EA] border border-[#D4AF37] flex items-center justify-center text-[#9E7206]">
-            <MailCheck className="w-8 h-8" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
-              Email Verification Required
-            </span>
-            <h1 className="text-2xl font-bold font-portal-heading text-stone-900">
-              Verify Your Email Address
-            </h1>
-            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-              We have sent a verification email to{' '}
-              <strong className="text-stone-900">{firebaseUser.email}</strong>. For your HIPAA
-              privacy and security, please open your email inbox and click the verification link
-              before accessing your Client Portal chart.
-            </p>
-          </div>
-
-          {authError && (
-            <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 text-left flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{authError}</span>
-            </div>
-          )}
-
-          {verificationNotice && (
-            <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 text-left flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-              <span>{verificationNotice}</span>
-            </div>
-          )}
-
-          <div className="space-y-3 pt-2">
-            <button
-              type="button"
-              onClick={handleRefreshVerification}
-              className="w-full py-3.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>I Have Clicked the Link in My Email — Enter Portal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleResendVerification}
-              className="w-full py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs cursor-pointer hover:bg-[#f3ebd3] transition-colors"
-            >
-              Resend Verification Email to {firebaseUser.email}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="w-full py-2.5 px-4 rounded-[12px] text-xs font-semibold text-stone-500 hover:text-red-600 cursor-pointer"
-            >
-              Sign Out / Use a Different Email Address
-            </button>
-          </div>
         </div>
       </section>
     );

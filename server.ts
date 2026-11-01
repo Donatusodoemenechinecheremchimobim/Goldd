@@ -587,6 +587,20 @@ async function upsertClinicalRecordToPostgres(
   return false;
 }
 
+function persistPasswordHashOnly(email: string, pwHash: string): void {
+  const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+  verifiedResetPasswords.set(clean, pwHash);
+  accountLockouts.delete(clean);
+  saveCredentialsStoreToDisk();
+  void syncAccountToPostgres({
+    email: clean,
+    passwordHash: pwHash,
+    emailVerified: verifiedEmailAddresses.has(clean),
+    failedAttempts: 0,
+    lockedUntil: null,
+  });
+}
+
 function persistResetPasswordHash(email: string, pwHash: string): void {
   const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
   verifiedResetPasswords.set(clean, pwHash);
@@ -613,7 +627,11 @@ function persistEmailVerified(email: string): void {
   });
 }
 
-async function syncPasswordHashToFirestoreRest(email: string, rawPassword: string): Promise<void> {
+async function syncPasswordHashToFirestoreRest(
+  email: string,
+  rawPassword: string,
+  markVerified = false
+): Promise<void> {
   try {
     const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
     const emailHash = crypto.createHash('sha256').update(`gmp_acct_${clean}`).digest('hex');
@@ -622,18 +640,19 @@ async function syncPasswordHashToFirestoreRest(email: string, rawPassword: strin
       .update(`gmp_pw_v1_${clean}:${rawPassword}`)
       .digest('hex');
     const now = new Date().toISOString();
+    const fields: Record<string, unknown> = {
+      exists: { booleanValue: true },
+      passwordHash: { stringValue: passwordHash },
+      updatedAt: { stringValue: now },
+    };
+    if (markVerified || verifiedEmailAddresses.has(clean)) {
+      fields.emailVerified = { booleanValue: true };
+    }
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/golden-mind-psychiatry/databases/ai-studio-goldenmindpsychi-fcaec566-1e71-476a-901e-8e362f55fd45/documents/account_directory/${emailHash}`;
     await fetch(firestoreUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields: {
-          exists: { booleanValue: true },
-          passwordHash: { stringValue: passwordHash },
-          emailVerified: { booleanValue: true },
-          updatedAt: { stringValue: now },
-        },
-      }),
+      body: JSON.stringify({ fields }),
     });
   } catch {
     // non-fatal
@@ -802,40 +821,38 @@ function buildBrandedEmailHtml(title: string, bodyHtml: string): string {
 }
 
 /**
- * Pooled Nodemailer SMTP transporter for high-throughput, low-latency email dispatch.
+/**
+ * Nodemailer SMTP transporter with automatic port 587 (STARTTLS) & 465 (SSL) fallback
+ * and certificate tolerance for mailserver.businessidentity.llc.
  */
-let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 function getSmtpTransporter(overridePort?: number) {
-  if (cachedTransporter && !overridePort) return cachedTransporter;
-
-  const host = process.env.SMTP_HOST?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS;
-  const port = overridePort || Number(process.env.SMTP_PORT || 465);
+  const host = process.env.SMTP_HOST?.trim() || 'mailserver.businessidentity.llc';
+  const user = process.env.SMTP_USER?.trim() || 'info@goldenmindpsychiatry.org';
+  const pass =
+    process.env.SMTP_PASS?.trim() ||
+    process.env.DB_PASSWORD?.trim() ||
+    'Golden$43';
+  const port = overridePort || Number(process.env.SMTP_PORT || 587);
   const secure = port === 465;
 
   if (!host || !user || !pass) {
     return null;
   }
 
-  const transport = nodemailer.createTransport({
-    pool: !overridePort,
-    maxConnections: 5,
-    maxMessages: 100,
+  return nodemailer.createTransport({
     host,
     port,
     secure,
     requireTLS: port === 587,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: { user, pass },
     tls: {
       minVersion: 'TLSv1.2',
+      rejectUnauthorized: false,
     },
   });
-
-  if (!overridePort) {
-    cachedTransporter = transport;
-  }
-  return transport;
 }
 
 async function sendClinicEmail(opts: {
@@ -843,44 +860,44 @@ async function sendClinicEmail(opts: {
   subject: string;
   html: string;
   replyTo?: string;
-}): Promise<{ deliveredViaSmtp: boolean }> {
-  const transporter = getSmtpTransporter();
+}): Promise<{ deliveredViaSmtp: boolean; smtpError?: string }> {
+  const configuredPort = Number(process.env.SMTP_PORT || 587);
+  const fallbackPort = configuredPort === 465 ? 587 : 465;
   const fromAddress =
     process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`;
 
-  if (transporter) {
-    const mailPayload = {
-      from: fromAddress,
-      to: opts.to,
-      replyTo: opts.replyTo || CLINIC_EMAIL,
-      subject: opts.subject.replace(/[\r\n]/g, ' ').slice(0, 240),
-      html: opts.html,
-      attachments: HAS_LOCAL_LOGO_PNG
-        ? [
-            {
-              filename: 'golden-mind-logo.png',
-              path: LOGO_PNG_PATH,
-              cid: 'goldenmindlogo',
-            },
-          ]
-        : undefined,
-    };
+  const mailPayload = {
+    from: fromAddress,
+    to: opts.to,
+    replyTo: opts.replyTo || CLINIC_EMAIL,
+    subject: opts.subject.replace(/[\r\n]/g, ' ').slice(0, 240),
+    html: opts.html,
+    attachments: HAS_LOCAL_LOGO_PNG
+      ? [
+          {
+            filename: 'golden-mind-logo.png',
+            path: LOGO_PNG_PATH,
+            cid: 'goldenmindlogo',
+          },
+        ]
+      : undefined,
+  };
+
+  let lastErrMsg = '';
+  for (const portToTry of [configuredPort, fallbackPort]) {
+    const transporter = getSmtpTransporter(portToTry);
+    if (!transporter) continue;
     try {
       await transporter.sendMail(mailPayload);
+      console.log(`📧 [SMTP] Delivered "${opts.subject}" to ${opts.to} (port ${portToTry})`);
       return { deliveredViaSmtp: true };
-    } catch {
-      // Automatic fallback between SSL (465) and STARTTLS (587) for Northwest / custom domain SMTP
-      const configuredPort = Number(process.env.SMTP_PORT || 465);
-      const fallbackPort = configuredPort === 465 ? 587 : 465;
-      const fallbackTransport = getSmtpTransporter(fallbackPort);
-      if (fallbackTransport) {
-        await fallbackTransport.sendMail(mailPayload);
-        return { deliveredViaSmtp: true };
-      }
+    } catch (err) {
+      lastErrMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ [SMTP] Port ${portToTry} failed for ${opts.to}: ${lastErrMsg}`);
     }
   }
 
-  return { deliveredViaSmtp: false };
+  return { deliveredViaSmtp: false, smtpError: lastErrMsg };
 }
 
 async function startServer() {
@@ -1417,12 +1434,12 @@ async function startServer() {
       .update(`${email}|${newPassword}`)
       .digest('hex');
     persistResetPasswordHash(email, pwHash);
-    await syncPasswordHashToFirestoreRest(email, newPassword);
+    await syncPasswordHashToFirestoreRest(email, newPassword, true);
 
     res.json({ ok: true, updatedInDatabase: true });
   });
 
-  // 3D. Sync Account Credential Hash on Sign-In / Registration
+  // 3D. Sync Account Credential Hash on Sign-In / Registration (Does NOT mark email verified!)
   app.post('/api/email/sync-account-credential', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email);
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -1434,8 +1451,8 @@ async function startServer() {
       .createHmac('sha256', RESET_HMAC_SECRET)
       .update(`${email}|${password}`)
       .digest('hex');
-    persistResetPasswordHash(email, pwHash);
-    await syncPasswordHashToFirestoreRest(email, password);
+    persistPasswordHashOnly(email, pwHash);
+    await syncPasswordHashToFirestoreRest(email, password, false);
     res.json({ ok: true });
   });
 
@@ -2292,8 +2309,8 @@ async function startServer() {
         return;
       }
     } else {
-      // First-time registration or bootstrap: persist password hash to PostgreSQL & disk
-      persistResetPasswordHash(email, candidateHmac);
+      // First-time registration or bootstrap: persist password hash WITHOUT marking email verified!
+      persistPasswordHashOnly(email, candidateHmac);
     }
 
     accountLockouts.delete(email);
