@@ -669,9 +669,12 @@ function getSafeClientOrigin(rawOrigin: unknown): string {
   if (typeof rawOrigin !== 'string') return SITE_URL;
   const trimmed = rawOrigin.trim().replace(/\/+$/, '');
   if (
+    trimmed === SITE_URL ||
     trimmed === 'https://goldenmindpsychiatry.org' ||
     trimmed === 'https://www.goldenmindpsychiatry.org' ||
-    /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(trimmed)
+    /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(trimmed) ||
+    /^https?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{2,5})?$/i.test(trimmed) ||
+    /^https?:\/\/localhost(:\d{2,5})?$/i.test(trimmed)
   ) {
     return trimmed;
   }
@@ -1289,14 +1292,33 @@ async function startServer() {
     res.json({ ok: true, verified: true, email });
   });
 
-  app.post('/api/email/check-email-verified', (req, res) => {
+  app.post('/api/email/check-email-verified', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email);
     if (!email) {
       res.json({ ok: false, verified: false });
       return;
     }
     const clean = email.replace(/\+portal(?=@)/i, '');
-    res.json({ ok: true, verified: verifiedEmailAddresses.has(clean) });
+    if (verifiedEmailAddresses.has(clean)) {
+      res.json({ ok: true, verified: true });
+      return;
+    }
+    if (pgPool && pgConnected) {
+      try {
+        const pgRes = await pgPool.query(
+          'SELECT email_verified FROM account_directory WHERE email = $1 LIMIT 1',
+          [clean]
+        );
+        if (pgRes.rows[0]?.email_verified) {
+          verifiedEmailAddresses.add(clean);
+          res.json({ ok: true, verified: true });
+          return;
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+    res.json({ ok: true, verified: false });
   });
 
   // 3B. Branded Password Reset Notification Email with Official Logo & Direct Reset Link via SMTP (mailserver.businessidentity.llc)
@@ -1389,15 +1411,29 @@ async function startServer() {
     res.json({ ok: true });
   });
 
-  // 3E. Verify Login Using Password Updated via Verified SMTP Reset Link or Database
-  app.post('/api/email/verify-reset-login', (req, res) => {
-    const email = sanitizeEmailAddress(req.body?.email);
+  // 3E. Verify Login Using Password Updated via Verified SMTP Reset Link or PostgreSQL Database
+  app.post('/api/email/verify-reset-login', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     if (!email || !password) {
       res.json({ ok: false, verified: false });
       return;
     }
-    const storedHash = verifiedResetPasswords.get(email);
+    let storedHash = verifiedResetPasswords.get(email);
+    if (!storedHash && pgPool && pgConnected) {
+      try {
+        const pgRes = await pgPool.query(
+          'SELECT password_hash FROM account_directory WHERE email = $1 LIMIT 1',
+          [email]
+        );
+        if (pgRes.rows[0]?.password_hash) {
+          storedHash = String(pgRes.rows[0].password_hash);
+          verifiedResetPasswords.set(email, storedHash);
+        }
+      } catch {
+        // non-fatal
+      }
+    }
     if (!storedHash) {
       res.json({ ok: true, verified: false });
       return;
@@ -1406,9 +1442,15 @@ async function startServer() {
       .createHmac('sha256', RESET_HMAC_SECRET)
       .update(`${email}|${password}`)
       .digest('hex');
+    const sha256DirectoryHash = crypto
+      .createHash('sha256')
+      .update(`gmp_pw_v1_${email}:${password}`)
+      .digest('hex');
     const verified =
-      storedHash.length === candidateHash.length &&
-      crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(candidateHash));
+      (storedHash.length === candidateHash.length &&
+        crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(candidateHash))) ||
+      (storedHash.length === sha256DirectoryHash.length &&
+        crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(sha256DirectoryHash)));
     res.json({ ok: true, verified });
   });
 

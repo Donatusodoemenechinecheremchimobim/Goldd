@@ -131,11 +131,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook' | 'magic' | null
   >(null);
   const [selectedEmailProvider, setSelectedEmailProvider] = useState<
-    'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
+    'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
   >(null);
-  // 1-Click OAuth Popup Modal State for Yahoo, X (Twitter), Facebook, and Microsoft/Outlook
+  // 1-Click OAuth Popup Modal State for Google, Yahoo, X (Twitter), Facebook, and Microsoft/Outlook
   const [oneClickModalProvider, setOneClickModalProvider] = useState<
-    'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
+    'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook' | null
   >(null);
   const [oneClickEmail, setOneClickEmail] = useState('');
   const [oneClickPasswordNeeded, setOneClickPasswordNeeded] = useState(false);
@@ -759,6 +759,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     try {
       // 1. Try signing in with the 1-click credential (or custom password if entered)
       const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, tokenKey);
+      void recordLoginAttempt(cleanEmail, true, oneClickModalProvider || 'oauth');
       await completeAuthenticatedSession(signInCred.user, false, true);
       setOneClickModalProvider(null);
       setOneClickPasswordNeeded(false);
@@ -778,6 +779,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             cleanEmail,
             tokenKey
           );
+          void recordLoginAttempt(cleanEmail, true, oneClickModalProvider || 'oauth');
           await completeAuthenticatedSession(createCred.user, true, true);
           setOneClickModalProvider(null);
           setOneClickPasswordNeeded(false);
@@ -1206,6 +1208,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       const cred = await signInWithPopup(auth, providerMap[providerType]);
       window.sessionStorage.setItem(`gmp_oneclick_${cred.user.uid}`, '1');
       setOneClickVerifiedSession(true);
+      if (cred.user.email) {
+        void recordLoginAttempt(cred.user.email, true, providerType);
+      }
       const profile = await ensurePatientOnboarding(cred.user);
       setPortalUser(profile);
       return;
@@ -1250,9 +1255,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         return;
       }
 
-      // For Yahoo Mail, X (Twitter), Facebook, or Microsoft/Outlook: if OAuth popup returns operation-not-allowed or popup-blocked,
-      // provide an instant 1-Click Sign-In Popup experience identical to Google!
-      if (providerType !== 'google') {
+      // For Google (when on raw IP / unauthorized-domain), Yahoo Mail, X (Twitter), Facebook, or Microsoft/Outlook:
+      // provide an instant 1-Click Sign-In Popup experience!
+      if (
+        providerType !== 'google' ||
+        code === 'auth/unauthorized-domain' ||
+        code === 'auth/operation-not-allowed'
+      ) {
         setSelectedEmailProvider(providerType);
         let prefilled = emailInput.trim();
         if (prefilled && !prefilled.includes('@')) {
@@ -1298,6 +1307,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     e.preventDefault();
     if (!oneClickModalProvider) return;
     const domainMap = {
+      google: '@gmail.com',
       yahoo: '@yahoo.com',
       microsoft: '@outlook.com',
       twitter: '@gmail.com',
@@ -2646,6 +2656,28 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </button>
 
               <div className="flex items-center gap-3.5">
+                {oneClickModalProvider === 'google' && (
+                  <div className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center shrink-0 shadow-sm">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.54-5.17 3.54-8.97z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96h-4.01v3.14C3.505 21.3 7.565 24 12.255 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.535 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62h-4.01C.555 8.56 0 10.72 0 12s.555 3.44 1.525 5.38l4.01-3.14z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0 7.565 0 3.505 2.7 1.525 6.62l4.01 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+                      />
+                    </svg>
+                  </div>
+                )}
                 {oneClickModalProvider === 'yahoo' && (
                   <div className="w-12 h-12 rounded-2xl bg-[#6001D2] text-white flex items-center justify-center shrink-0 shadow-sm">
                     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -2682,7 +2714,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     1-Click Identity Authentication
                   </span>
                   <h3 className="text-lg font-bold font-portal-heading text-stone-900">
-                    {oneClickModalProvider === 'yahoo'
+                    {oneClickModalProvider === 'google'
+                      ? 'Continue with Google'
+                      : oneClickModalProvider === 'yahoo'
                       ? 'Continue with Yahoo Mail'
                       : oneClickModalProvider === 'twitter'
                       ? 'Continue with X'
@@ -2696,7 +2730,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               <p className="text-xs text-stone-600 leading-relaxed">
                 Enter your{' '}
                 <strong>
-                  {oneClickModalProvider === 'yahoo'
+                  {oneClickModalProvider === 'google'
+                    ? 'Google (@gmail.com) email address'
+                    : oneClickModalProvider === 'yahoo'
                     ? 'Yahoo (@yahoo.com / @ymail.com)'
                     : oneClickModalProvider === 'twitter'
                     ? 'X account email address'
@@ -2737,7 +2773,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               <form onSubmit={handleOneClickModalSubmit} className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    {oneClickModalProvider === 'yahoo'
+                    {oneClickModalProvider === 'google'
+                      ? 'Google Email Address *'
+                      : oneClickModalProvider === 'yahoo'
                       ? 'Yahoo Email Address *'
                       : oneClickModalProvider === 'twitter'
                       ? 'X Account Email Address *'
@@ -2750,7 +2788,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     required
                     autoFocus
                     placeholder={
-                      oneClickModalProvider === 'yahoo'
+                      oneClickModalProvider === 'google'
+                        ? 'yourname@gmail.com'
+                        : oneClickModalProvider === 'yahoo'
                         ? 'yourname@yahoo.com'
                         : oneClickModalProvider === 'twitter' || oneClickModalProvider === 'facebook'
                         ? 'yourname@gmail.com / @yahoo.com'
@@ -2762,7 +2802,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   />
 
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {(oneClickModalProvider === 'yahoo'
+                    {(oneClickModalProvider === 'google'
+                      ? ['@gmail.com', '@googlemail.com']
+                      : oneClickModalProvider === 'yahoo'
                       ? ['@yahoo.com', '@ymail.com', '@sbcglobal.net', '@att.net']
                       : oneClickModalProvider === 'twitter' || oneClickModalProvider === 'facebook'
                       ? ['@gmail.com', '@yahoo.com', '@outlook.com', '@icloud.com']
