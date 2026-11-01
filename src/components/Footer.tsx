@@ -167,6 +167,16 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
                   Contact Our Office
                 </button>
               </li>
+              <li>
+                <button onClick={() => handleLink('privacy')} className="text-[#57534E] hover:text-[#9E7206] transition-colors cursor-pointer">
+                  Privacy Policy (HIPAA &amp; TX HB 300)
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleLink('terms')} className="text-[#57534E] hover:text-[#9E7206] transition-colors cursor-pointer">
+                  Terms of Service &amp; Telehealth Consent
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -177,12 +187,24 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
           <div className="flex flex-wrap items-center justify-center gap-6">
             <span className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-[#B8860B]" />
-              <span>HIPAA Compliant Practice</span>
+              <span>HIPAA &amp; Texas HB 300 Compliant</span>
             </span>
             <span className="flex items-center gap-1.5">
               <Award className="w-3.5 h-3.5 text-[#B8860B]" />
               <span>ANCC Board Certified</span>
             </span>
+            <button
+              onClick={() => handleLink('privacy')}
+              className="text-[#78716C] hover:text-[#9E7206] transition-colors underline underline-offset-2 cursor-pointer"
+            >
+              Privacy Policy
+            </button>
+            <button
+              onClick={() => handleLink('terms')}
+              className="text-[#78716C] hover:text-[#9E7206] transition-colors underline underline-offset-2 cursor-pointer"
+            >
+              Terms of Service
+            </button>
             <a
               href="/sitemap.xml"
               className="text-[#78716C] hover:text-[#9E7206] transition-colors underline underline-offset-2"

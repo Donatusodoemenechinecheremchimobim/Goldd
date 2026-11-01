@@ -2389,6 +2389,231 @@ async function startServer() {
     });
   });
 
+  // 7C-2. Standalone Direct Server OAuth 2.0 Config & Endpoints (Zero firebaseapp.com URLs)
+  app.get('/api/standalone/oauth/config', (_req, res) => {
+    res.json({
+      ok: true,
+      providers: {
+        google: Boolean(
+          process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
+        ),
+        yahoo: Boolean(
+          process.env.YAHOO_CLIENT_ID?.trim() && process.env.YAHOO_CLIENT_SECRET?.trim()
+        ),
+        microsoft: Boolean(
+          process.env.MICROSOFT_CLIENT_ID?.trim() && process.env.MICROSOFT_CLIENT_SECRET?.trim()
+        ),
+        twitter: Boolean(
+          process.env.TWITTER_CLIENT_ID?.trim() && process.env.TWITTER_CLIENT_SECRET?.trim()
+        ),
+        facebook: Boolean(
+          process.env.FACEBOOK_CLIENT_ID?.trim() && process.env.FACEBOOK_CLIENT_SECRET?.trim()
+        ),
+      },
+    });
+  });
+
+  app.get('/api/standalone/oauth/start/:provider', (req, res) => {
+    const provider = String(req.params.provider || '').toLowerCase();
+    const baseOrigin = getSafeClientOrigin(req.query.origin as string | undefined);
+    const redirectUri = `${baseOrigin}/api/standalone/oauth/callback/${provider}`;
+    const state = Buffer.from(JSON.stringify({ origin: baseOrigin, provider, ts: Date.now() })).toString('base64url');
+
+    if (provider === 'google' && process.env.GOOGLE_CLIENT_ID?.trim()) {
+      const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID.trim());
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', 'openid email profile');
+      url.searchParams.set('state', state);
+      url.searchParams.set('prompt', 'select_account');
+      res.redirect(url.toString());
+      return;
+    }
+
+    if (provider === 'yahoo' && process.env.YAHOO_CLIENT_ID?.trim()) {
+      const url = new URL('https://api.login.yahoo.com/oauth2/request_auth');
+      url.searchParams.set('client_id', process.env.YAHOO_CLIENT_ID.trim());
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', 'openid email profile');
+      url.searchParams.set('state', state);
+      res.redirect(url.toString());
+      return;
+    }
+
+    if (provider === 'microsoft' && process.env.MICROSOFT_CLIENT_ID?.trim()) {
+      const url = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+      url.searchParams.set('client_id', process.env.MICROSOFT_CLIENT_ID.trim());
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', 'openid email profile User.Read');
+      url.searchParams.set('state', state);
+      res.redirect(url.toString());
+      return;
+    }
+
+    if (provider === 'facebook' && process.env.FACEBOOK_CLIENT_ID?.trim()) {
+      const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+      url.searchParams.set('client_id', process.env.FACEBOOK_CLIENT_ID.trim());
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', 'email,public_profile');
+      url.searchParams.set('state', state);
+      res.redirect(url.toString());
+      return;
+    }
+
+    res.redirect(`${baseOrigin}/?page=portal`);
+  });
+
+  app.get('/api/standalone/oauth/callback/:provider', async (req, res) => {
+    const provider = String(req.params.provider || '').toLowerCase();
+    const code = String(req.query.code || '').trim();
+    let baseOrigin = getSafeClientOrigin(undefined);
+    try {
+      if (typeof req.query.state === 'string' && req.query.state) {
+        const parsed = JSON.parse(Buffer.from(req.query.state, 'base64url').toString('utf8'));
+        if (parsed?.origin) baseOrigin = getSafeClientOrigin(parsed.origin);
+      }
+    } catch {
+      // ignore state decode error
+    }
+
+    if (!code) {
+      res.redirect(`${baseOrigin}/?page=portal`);
+      return;
+    }
+
+    const redirectUri = `${baseOrigin}/api/standalone/oauth/callback/${provider}`;
+    let email = '';
+    let fullName = '';
+
+    try {
+      if (provider === 'google') {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code,
+            client_id: String(process.env.GOOGLE_CLIENT_ID || '').trim(),
+            client_secret: String(process.env.GOOGLE_CLIENT_SECRET || '').trim(),
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+          }),
+        });
+        const tokenData = (await tokenRes.json()) as { access_token?: string };
+        if (tokenData.access_token) {
+          const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+          });
+          const userData = (await userRes.json()) as { email?: string; name?: string };
+          email = String(userData.email || '').trim().toLowerCase();
+          fullName = String(userData.name || '').trim();
+        }
+      } else if (provider === 'yahoo') {
+        const basicAuth = Buffer.from(
+          `${String(process.env.YAHOO_CLIENT_ID || '').trim()}:${String(process.env.YAHOO_CLIENT_SECRET || '').trim()}`
+        ).toString('base64');
+        const tokenRes = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${basicAuth}`,
+          },
+          body: new URLSearchParams({
+            code,
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+          }),
+        });
+        const tokenData = (await tokenRes.json()) as { access_token?: string };
+        if (tokenData.access_token) {
+          const userRes = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+          });
+          const userData = (await userRes.json()) as { email?: string; name?: string };
+          email = String(userData.email || '').trim().toLowerCase();
+          fullName = String(userData.name || '').trim();
+        }
+      } else if (provider === 'microsoft') {
+        const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code,
+            client_id: String(process.env.MICROSOFT_CLIENT_ID || '').trim(),
+            client_secret: String(process.env.MICROSOFT_CLIENT_SECRET || '').trim(),
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+          }),
+        });
+        const tokenData = (await tokenRes.json()) as { access_token?: string };
+        if (tokenData.access_token) {
+          const userRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+          });
+          const userData = (await userRes.json()) as {
+            mail?: string;
+            userPrincipalName?: string;
+            displayName?: string;
+          };
+          email = String(userData.mail || userData.userPrincipalName || '')
+            .trim()
+            .toLowerCase();
+          fullName = String(userData.displayName || '').trim();
+        }
+      } else if (provider === 'facebook') {
+        const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+        tokenUrl.searchParams.set('client_id', String(process.env.FACEBOOK_CLIENT_ID || '').trim());
+        tokenUrl.searchParams.set('client_secret', String(process.env.FACEBOOK_CLIENT_SECRET || '').trim());
+        tokenUrl.searchParams.set('redirect_uri', redirectUri);
+        tokenUrl.searchParams.set('code', code);
+        const tokenRes = await fetch(tokenUrl.toString());
+        const tokenData = (await tokenRes.json()) as { access_token?: string };
+        if (tokenData.access_token) {
+          const userRes = await fetch(
+            `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(tokenData.access_token)}`
+          );
+          const userData = (await userRes.json()) as { email?: string; name?: string };
+          email = String(userData.email || '').trim().toLowerCase();
+          fullName = String(userData.name || '').trim();
+        }
+      }
+
+      if (email && email.includes('@')) {
+        persistEmailVerified(email);
+        await syncAccountToPostgres({
+          email,
+          authProvider: provider,
+          emailVerified: true,
+          failedAttempts: 0,
+          lockedUntil: null,
+          lastIp: String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+        });
+        const userProfile = await ensureStandalonePostgresUser({
+          email,
+          fullName,
+          authProvider: provider,
+          emailVerified: true,
+        });
+        const jwtToken = signStandaloneJwt({
+          uid: String(userProfile.uid),
+          email,
+          role: String(userProfile.role || 'patient'),
+        });
+        res.redirect(
+          `${baseOrigin}/?page=portal&standaloneToken=${encodeURIComponent(jwtToken)}&verifiedEmail=${encodeURIComponent(email)}`
+        );
+        return;
+      }
+    } catch (err) {
+      console.warn(`Standalone OAuth (${provider}) callback error:`, err);
+    }
+
+    res.redirect(`${baseOrigin}/?page=portal`);
+  });
+
   // 7D. Load All 8 Clinical Tables Directly from Ubuntu PostgreSQL (`goldenmind_db`)
   app.get('/api/standalone/db/bootstrap', async (req, res) => {
     if (!pgConnected) {

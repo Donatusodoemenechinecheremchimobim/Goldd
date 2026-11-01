@@ -17,6 +17,8 @@ import { ResourcesPage } from './pages/ResourcesPage';
 import { ContactPage } from './pages/ContactPage';
 import { ClientPortalPage } from './pages/ClientPortalPage';
 import { SuicidePreventionPage } from './pages/SuicidePreventionPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { AppointmentModal } from './components/AppointmentModal';
 import { conditionsData } from './data/conditions';
 
@@ -32,6 +34,10 @@ const VALID_PAGES = [
   'suicide-prevention',
   'contact',
   'portal',
+  'privacy',
+  'privacy-policy',
+  'terms',
+  'terms-of-service',
   'home',
 ];
 
@@ -95,6 +101,18 @@ const PAGE_SEO_MAP: Record<string, { title: string; description: string; queryPa
     description:
       'Secure HIPAA-compliant patient and provider portal for Golden Mind Psychiatry PLLC. Manage telehealth appointments, intake forms, PHQ-9/GAD-7 check-ins, and refills.',
     queryPath: '/?page=portal',
+  },
+  privacy: {
+    title: 'Privacy Policy & Notice of Privacy Practices (HIPAA & Texas HB 300) | Golden Mind Psychiatry PLLC',
+    description:
+      'Official Notice of Privacy Practices and Website Privacy Policy for Golden Mind Psychiatry PLLC, compliant with Federal HIPAA, Texas HB 300 (Texas Medical Records Privacy Act), and 42 CFR Part 2.',
+    queryPath: '/?page=privacy',
+  },
+  terms: {
+    title: 'Terms of Service & Texas Telehealth Informed Consent | Golden Mind Psychiatry PLLC',
+    description:
+      'Terms of Service, Texas Telehealth Informed Consent (Tex. Occ. Code Ch. 111), and Federal No Surprises Act Notice for Golden Mind Psychiatry PLLC.',
+    queryPath: '/?page=terms',
   },
 };
 
@@ -327,6 +345,20 @@ export default function App() {
           <ClientPortalPage
             onOpenBooking={handleOpenBooking}
             onNavigate={handleNavigate}
+          />
+        )}
+
+        {(currentPage === 'privacy' || currentPage === 'privacy-policy') && (
+          <PrivacyPolicyPage
+            onNavigate={handleNavigate}
+            onOpenBooking={handleOpenBooking}
+          />
+        )}
+
+        {(currentPage === 'terms' || currentPage === 'terms-of-service') && (
+          <TermsOfServicePage
+            onNavigate={handleNavigate}
+            onOpenBooking={handleOpenBooking}
           />
         )}
       </main>

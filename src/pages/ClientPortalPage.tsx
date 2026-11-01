@@ -263,7 +263,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const resetTokenParam = params.get('resetToken');
     const verifyTokenParam = params.get('verifyToken');
     const emailParam = params.get('email');
+    const standaloneTokenParam = params.get('standaloneToken');
+    const verifiedEmailParam = params.get('verifiedEmail');
     const viewParam = params.get('view') || params.get('page');
+    if (standaloneTokenParam) {
+      window.localStorage.setItem('gmp_standalone_jwt', standaloneTokenParam);
+      if (verifiedEmailParam) {
+        const cleanVerified = normalizePortalEmail(verifiedEmailParam);
+        window.localStorage.setItem(`gmp_verified_email_${cleanVerified}`, '1');
+        window.sessionStorage.setItem(`gmp_verified_email_${cleanVerified}`, '1');
+      }
+      setOneClickVerifiedSession(true);
+      setAuthError(null);
+      window.history.replaceState({}, document.title, '/?page=portal');
+    }
     if (emailParam) {
       setEmailInput(emailParam);
       setResetEmailInput(emailParam);
@@ -1263,20 +1276,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   };
 
   // True 1-Click Login Handler for Google, Yahoo Mail, X (Twitter), Facebook, and Outlook/Hotmail (Microsoft)
+  // 100% Standalone: Never opens a firebaseapp.com URL. Uses direct server OAuth (.env) if configured, or instant on-page 1-Click Modal.
   const handleOAuthSignIn = async (
     providerType: 'google' | 'yahoo' | 'microsoft' | 'twitter' | 'facebook'
   ) => {
     setAuthError(null);
     setVerificationNotice(null);
     setOauthLoadingProvider(providerType);
-
-    const providerMap = {
-      google: googleProvider,
-      yahoo: yahooProvider,
-      microsoft: microsoftProvider,
-      twitter: twitterProvider,
-      facebook: facebookProvider,
-    };
 
     const providerMeta = {
       google: { label: 'Google', domain: '@gmail.com' },
@@ -1287,98 +1293,50 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }[providerType];
 
     try {
-      const cred = await signInWithPopup(auth, providerMap[providerType]);
-      window.sessionStorage.setItem(`gmp_oneclick_${cred.user.uid}`, '1');
-      setOneClickVerifiedSession(true);
-      if (cred.user.email) {
-        void recordLoginAttempt(cred.user.email, true, providerType);
-      }
-      const profile = await ensurePatientOnboarding(cred.user);
-      setPortalUser(profile);
-      return;
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-
-      if (code === 'auth/popup-closed-by-user') {
-        setAuthError(null);
-        setOauthLoadingProvider(null);
-        return;
-      }
-
-      if (
-        (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') &&
-        (providerType === 'google' ||
-          providerType === 'yahoo' ||
-          providerType === 'twitter' ||
-          providerType === 'facebook')
-      ) {
-        try {
-          await signInWithRedirect(auth, providerMap[providerType]);
-          return;
-        } catch (redirErr: unknown) {
-          setAuthError(
-            redirErr instanceof Error
-              ? redirErr.message
-              : `Unable to start ${providerMeta.label} Sign-In redirect.`
-          );
-          setOauthLoadingProvider(null);
-          return;
+      // 1. Check if direct Server OAuth (.env Client ID & Secret) is configured on the Ubuntu server
+      try {
+        const cfgRes = await fetch('/api/standalone/oauth/config');
+        if (cfgRes.ok) {
+          const cfgData = (await cfgRes.json()) as {
+            ok?: boolean;
+            providers?: Record<string, boolean>;
+          };
+          if (cfgData.providers?.[providerType]) {
+            window.location.href = `/api/standalone/oauth/start/${providerType}?origin=${encodeURIComponent(window.location.origin)}`;
+            return;
+          }
         }
+      } catch {
+        // Proceed to instant on-page 1-Click Identity Modal
       }
 
-      if (code === 'auth/account-exists-with-different-credential') {
-        const conflictEmail =
-          (err as { customData?: { email?: string } })?.customData?.email || emailInput;
-        if (conflictEmail) setEmailInput(conflictEmail);
-        setAuthError(
-          `An account with ${conflictEmail || 'this email address'} already exists. Please sign in below.`
+      // 2. Otherwise use the instant on-page 1-Click Identity Modal on your own server (zero firebaseapp.com URL)
+      setSelectedEmailProvider(providerType);
+      let prefilled = emailInput.trim();
+      if (prefilled && !prefilled.includes('@')) {
+        prefilled = `${prefilled}${providerMeta.domain}`;
+      }
+
+      // If user already typed their email (and optional password) on the page, sign them in with 1 click immediately!
+      if (prefilled && prefilled.includes('@') && !prefilled.startsWith('@')) {
+        const outcome = await authenticateOneClickProviderAccount(
+          prefilled,
+          passwordInput.length >= 6 ? passwordInput : undefined
         );
         setOauthLoadingProvider(null);
+        if (outcome === 'needs_password') {
+          setOneClickEmail(prefilled);
+          setOneClickModalProvider(providerType);
+        }
         return;
       }
 
-      // For Google (when on raw IP / unauthorized-domain), Yahoo Mail, X (Twitter), Facebook, or Microsoft/Outlook:
-      // provide an instant 1-Click Sign-In Popup experience!
-      if (
-        providerType !== 'google' ||
-        code === 'auth/unauthorized-domain' ||
-        code === 'auth/operation-not-allowed'
-      ) {
-        setSelectedEmailProvider(providerType);
-        let prefilled = emailInput.trim();
-        if (prefilled && !prefilled.includes('@')) {
-          prefilled = `${prefilled}${providerMeta.domain}`;
-        }
-
-        // If user already typed their email (and optional password) on the page, sign them in with 1 click immediately!
-        if (prefilled && prefilled.includes('@') && !prefilled.startsWith('@')) {
-          const outcome = await authenticateOneClickProviderAccount(
-            prefilled,
-            passwordInput.length >= 6 ? passwordInput : undefined
-          );
-          setOauthLoadingProvider(null);
-          if (outcome === 'needs_password') {
-            setOneClickEmail(prefilled);
-            setOneClickModalProvider(providerType);
-          }
-          return;
-        }
-
-        // Otherwise open the sleek 1-Click Provider Popup Window!
-        setOneClickEmail(prefilled || '');
-        setOneClickPassword('');
-        setOneClickPasswordNeeded(false);
-        setOneClickError(null);
-        setOneClickModalProvider(providerType);
-        setOauthLoadingProvider(null);
-        return;
-      }
-
-      setAuthError(
-        err instanceof Error
-          ? err.message
-          : `${providerMeta.label} Sign-In could not complete. Please use your email below.`
-      );
+      // Open the sleek on-page 1-Click Provider Modal Window right on your server!
+      setOneClickEmail(prefilled || '');
+      setOneClickPassword('');
+      setOneClickPasswordNeeded(false);
+      setOneClickError(null);
+      setOneClickModalProvider(providerType);
     } finally {
       setOauthLoadingProvider(null);
     }
