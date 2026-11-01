@@ -1455,6 +1455,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
     setOauthLoadingProvider('magic');
     try {
+      // Send branded 1-Click Verification & Portal Access Link via Clinic SMTP (mailserver.businessidentity.llc)
+      fetch('/api/email/welcome-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: fullNameInput || 'Valued Client',
+          email: cleanEmail,
+          resendOnly: true,
+          clientOrigin: window.location.origin,
+        }),
+      }).catch(() => {});
+
       await sendSignInLinkToEmail(auth, cleanEmail, {
         url: `${window.location.origin}/?page=portal&email=${encodeURIComponent(cleanEmail)}`,
         handleCodeInApp: true,

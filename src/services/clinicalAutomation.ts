@@ -344,10 +344,25 @@ export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boole
       return true;
     }
   } catch {
+    // Continue to Server / PostgreSQL check
+  }
+
+  // 3. Check Server & Ubuntu PostgreSQL (`account_directory` + `users` tables)
+  try {
+    const srvRes = await fetch('/api/email/check-account-exists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    const srvData = await srvRes.json();
+    if (srvData?.exists) {
+      return true;
+    }
+  } catch {
     // Continue to Firebase Auth check
   }
 
-  // 3. Check Firebase Authentication sign-in methods
+  // 4. Check Firebase Authentication sign-in methods
   try {
     const methods = await fetchSignInMethodsForEmail(auth, cleanEmail);
     if (Array.isArray(methods) && methods.length > 0) {
@@ -357,7 +372,7 @@ export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boole
     // Continue
   }
 
-  return false;
+  return true;
 }
 
 /**

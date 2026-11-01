@@ -1321,6 +1321,33 @@ async function startServer() {
     res.json({ ok: true, verified: false });
   });
 
+  app.post('/api/email/check-account-exists', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
+    if (!email) {
+      res.json({ ok: false, exists: false });
+      return;
+    }
+    if (verifiedResetPasswords.has(email) || verifiedEmailAddresses.has(email)) {
+      res.json({ ok: true, exists: true });
+      return;
+    }
+    if (pgPool && pgConnected) {
+      try {
+        const pgRes = await pgPool.query(
+          'SELECT 1 FROM account_directory WHERE email = $1 UNION SELECT 1 FROM users WHERE email = $1 LIMIT 1',
+          [email]
+        );
+        if (pgRes.rows.length > 0) {
+          res.json({ ok: true, exists: true });
+          return;
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+    res.json({ ok: true, exists: false });
+  });
+
   // 3B. Branded Password Reset Notification Email with Official Logo & Direct Reset Link via SMTP (mailserver.businessidentity.llc)
   app.post('/api/email/password-reset', async (req, res) => {
     try {
