@@ -1215,9 +1215,19 @@ async function startServer() {
       const phone = escapeHtml(req.body?.phone, 40);
       const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
       const isResendOnly = Boolean(req.body?.resendOnly);
+      const requireEmailVerification = Boolean(req.body?.requireEmailVerification);
       const targetOrigin = getSafeClientOrigin(req.body?.clientOrigin);
 
       if (email) {
+        const cleanEmail = email.replace(/\+portal(?=@)/i, '');
+        if (requireEmailVerification && !AUTHORIZED_ADMINS.has(cleanEmail)) {
+          verifiedEmailAddresses.delete(cleanEmail);
+          saveCredentialsStoreToDisk();
+          void syncAccountToPostgres({
+            email: cleanEmail,
+            emailVerified: false,
+          });
+        }
         const verifyToken = createSignedResetToken(email);
         const directVerifyUrl = `${targetOrigin}/?page=portal&mode=verifyEmail&email=${encodeURIComponent(
           email
@@ -1282,7 +1292,7 @@ async function startServer() {
 
   // 3A. Verify Email Token from Clinic SMTP Welcome/Verification Email & Persist in Database
   app.post('/api/email/verify-email-token', async (req, res) => {
-    const email = sanitizeEmailAddress(req.body?.email);
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
     const verifyToken = typeof req.body?.verifyToken === 'string' ? req.body.verifyToken.trim() : '';
     if (!email) {
       res.status(400).json({ ok: false, verified: false });
@@ -1291,11 +1301,26 @@ async function startServer() {
     const valid = verifyToken
       ? verifySignedResetToken(email, verifyToken, true) || true
       : true;
+    let token = '';
+    let userProfile: Record<string, unknown> | null = null;
     if (valid) {
       persistEmailVerified(email);
       await syncEmailVerifiedToFirestoreRest(email);
+      try {
+        userProfile = await ensureStandalonePostgresUser({
+          email,
+          emailVerified: true,
+        });
+        token = signStandaloneJwt({
+          uid: String(userProfile.uid),
+          email,
+          role: String(userProfile.role || 'patient'),
+        });
+      } catch {
+        // non-fatal
+      }
     }
-    res.json({ ok: valid, verified: valid, email });
+    res.json({ ok: valid, verified: valid, email, token, user: userProfile });
   });
 
   // 3A-2. Mark or Check Email Verification Status Across Devices/Tabs
@@ -2081,7 +2106,7 @@ async function startServer() {
   const AUTHORIZED_ADMINS = new Set(
     (
       process.env.AUTHORIZED_ADMIN_EMAILS ||
-      'info@goldenmindpsychiatry.org,beehobs@yahoo.com,chibundusadiq@gmail.com,brenda@goldenmindpsychiatry.org'
+      'info@goldenmindpsychiatry.org,beehobs@yahoo.com,brenda@goldenmindpsychiatry.org,admin@goldenmindpsychiatry.org'
     )
       .split(',')
       .map((s) => s.trim().toLowerCase())
@@ -2155,7 +2180,7 @@ async function startServer() {
             uid: r.uid,
             email: r.email,
             fullName: r.full_name,
-            role: isAdmin ? 'provider' : r.role || 'patient',
+            role: isAdmin ? 'provider' : 'patient',
             phone: r.phone || '',
             dateOfBirth: r.date_of_birth || '',
             state: r.state || 'Texas',
@@ -2313,13 +2338,22 @@ async function startServer() {
       persistPasswordHashOnly(email, candidateHmac);
     }
 
+    if (isRegistering && !isPrimaryAdminBootstrap && !AUTHORIZED_ADMINS.has(email)) {
+      verifiedEmailAddresses.delete(email);
+    }
+
+    const isEmailVerifiedNow =
+      isPrimaryAdminBootstrap ||
+      AUTHORIZED_ADMINS.has(email) ||
+      (!isRegistering && Boolean(storedHash) && verifiedEmailAddresses.has(email));
+
     accountLockouts.delete(email);
     saveCredentialsStoreToDisk();
     await syncAccountToPostgres({
       email,
       passwordHash: candidateHmac,
       authProvider: 'password',
-      emailVerified: isPrimaryAdminBootstrap ? true : verifiedEmailAddresses.has(email),
+      emailVerified: isEmailVerifiedNow,
       failedAttempts: 0,
       lockedUntil: null,
       lastIp: clientIp,
@@ -2332,6 +2366,7 @@ async function startServer() {
       dateOfBirth: req.body?.dateOfBirth,
       insuranceProvider: req.body?.insuranceProvider,
       authProvider: 'password',
+      emailVerified: isEmailVerifiedNow,
     });
 
     const token = signStandaloneJwt({
@@ -2344,7 +2379,7 @@ async function startServer() {
       ok: true,
       token,
       user: userProfile,
-      emailVerified: isPrimaryAdminBootstrap || verifiedEmailAddresses.has(email),
+      emailVerified: isEmailVerifiedNow,
     });
   });
 

@@ -24,7 +24,6 @@ export const CLINIC_OWNER_EMAIL = 'info@goldenmindpsychiatry.org';
 export const ADMIN_PROVIDER_EMAIL = 'beehobs@yahoo.com';
 
 export const AUTHORIZED_PROVIDER_EMAILS = [
-  'chibundusadiq@gmail.com',
   'beehobs@yahoo.com',
   'info@goldenmindpsychiatry.org',
   'brenda@goldenmindpsychiatry.org',
@@ -167,6 +166,40 @@ export async function checkEmailVerifiedInAccountDirectory(rawEmail?: string | n
   const cleanEmail = normalizePortalEmail(rawEmail);
   if (!cleanEmail || !cleanEmail.includes('@')) return false;
   try {
+    if (window.sessionStorage.getItem(`gmp_pending_verify_${cleanEmail}`) === '1') {
+      // If awaiting verification link click, check authoritative server status first
+      const resp = await fetch('/api/email/check-email-verified', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const data = await resp.json();
+      if (data?.verified) {
+        window.sessionStorage.removeItem(`gmp_pending_verify_${cleanEmail}`);
+        window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+        window.sessionStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+        return true;
+      }
+      return false;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const resp = await fetch('/api/email/check-email-verified', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    const data = await resp.json();
+    if (data?.verified) {
+      window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
     if (
       window.localStorage.getItem(`gmp_verified_email_${cleanEmail}`) === '1' ||
       window.sessionStorage.getItem(`gmp_verified_email_${cleanEmail}`) === '1'
@@ -180,20 +213,6 @@ export async function checkEmailVerifiedInAccountDirectory(rawEmail?: string | n
     const emailHash = await computeEmailDirectoryHash(cleanEmail);
     const dirSnap = await getDoc(doc(db, 'account_directory', emailHash));
     if (dirSnap.exists() && dirSnap.data()?.emailVerified === true) {
-      window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-  try {
-    const resp = await fetch('/api/email/check-email-verified', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail }),
-    });
-    const data = await resp.json();
-    if (data?.verified) {
       window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
       return true;
     }
@@ -472,7 +491,7 @@ export function generateTelehealthRoomUrl(seed?: string): string {
 
 export function isPatientRegistrationComplete(user?: PortalUser | null): boolean {
   if (!user) return false;
-  if (isAuthorizedProviderEmail(user.email) || user.role === 'provider') return true;
+  if (isAuthorizedProviderEmail(user.email)) return true;
   const hasDob = Boolean(
     user.dateOfBirth &&
       user.dateOfBirth.trim() !== '' &&
@@ -488,7 +507,12 @@ export function isPatientRegistrationComplete(user?: PortalUser | null): boolean
       user.fullName.trim() !== '' &&
       user.fullName.trim().toLowerCase() !== 'patient'
   );
-  return hasDob && hasPhone && hasName;
+  const hasInsurance = Boolean(
+    user.insuranceProvider &&
+      user.insuranceProvider.trim() !== '' &&
+      user.insuranceProvider.trim().toLowerCase() !== 'not provided'
+  );
+  return hasDob && hasPhone && hasName && hasInsurance;
 }
 
 /**

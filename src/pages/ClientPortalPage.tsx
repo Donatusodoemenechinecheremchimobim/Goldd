@@ -23,6 +23,7 @@ import {
   where,
   onSnapshot,
   doc,
+  setDoc,
   updateDoc,
   addDoc,
 } from 'firebase/firestore';
@@ -55,6 +56,8 @@ import {
   Users,
   UserCheck,
   Database,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   auth,
@@ -143,6 +146,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [oneClickError, setOneClickError] = useState<string | null>(null);
   const [oneClickSubmitting, setOneClickSubmitting] = useState(false);
   const [oneClickVerifiedSession, setOneClickVerifiedSession] = useState(false);
+  const [usedOneClickMethod, setUsedOneClickMethod] = useState(false);
+
+  // Password Visibility Eye Toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showOneClickPassword, setShowOneClickPassword] = useState(false);
+  const [showNewResetPassword, setShowNewResetPassword] = useState(false);
+  const [showConfirmResetPassword, setShowConfirmResetPassword] = useState(false);
 
   const [authError, setAuthError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
@@ -270,9 +280,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       window.localStorage.setItem('gmp_standalone_jwt', standaloneTokenParam);
       if (verifiedEmailParam) {
         const cleanVerified = normalizePortalEmail(verifiedEmailParam);
+        window.sessionStorage.removeItem(`gmp_pending_verify_${cleanVerified}`);
         window.localStorage.setItem(`gmp_verified_email_${cleanVerified}`, '1');
         window.sessionStorage.setItem(`gmp_verified_email_${cleanVerified}`, '1');
       }
+      window.sessionStorage.setItem('gmp_used_oneclick', '1');
+      setUsedOneClickMethod(true);
       setOneClickVerifiedSession(true);
       setAuthError(null);
       window.history.replaceState({}, document.title, '/?page=portal');
@@ -291,6 +304,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               emailVerified: true,
             } as FirebaseUser);
             setPortalUser(pUser);
+            setRegFullName((prev) =>
+              prev || (pUser.fullName && pUser.fullName !== 'Patient' ? pUser.fullName : '')
+            );
+            setRegDob((prev) => prev || pUser.dateOfBirth || '');
+            setRegPhone((prev) => prev || pUser.phone || '');
+            setRegInsurance(
+              (prev) => pUser.insuranceProvider || prev || 'Blue Cross Blue Shield (BCBS)'
+            );
             if (isAuthorizedProviderEmail(pUser.email)) {
               setWorkspaceMode('provider');
             }
@@ -403,12 +424,25 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         }),
       })
         .then((r) => r.json())
-        .then(async () => {
+        .then(async (vData) => {
           if (clean) {
+            window.sessionStorage.removeItem(`gmp_pending_verify_${clean}`);
             await markEmailVerifiedInAccountDirectory(clean);
+          }
+          if (vData?.token) {
+            window.localStorage.setItem('gmp_standalone_jwt', vData.token);
           }
           if (auth.currentUser) {
             window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+          } else if (vData?.user) {
+            const pUser = vData.user as PortalUser;
+            setFirebaseUser({
+              uid: pUser.uid,
+              email: pUser.email,
+              displayName: pUser.fullName,
+              emailVerified: true,
+            } as FirebaseUser);
+            setPortalUser(pUser);
           }
           setOneClickVerifiedSession(true);
           setAuthError(null);
@@ -421,6 +455,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         })
         .catch(async () => {
           if (clean) {
+            window.sessionStorage.removeItem(`gmp_pending_verify_${clean}`);
             await markEmailVerifiedInAccountDirectory(clean);
           }
           if (auth.currentUser) {
@@ -459,7 +494,12 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       setFirebaseUser(user);
       if (user) {
         const lowerEmail = normalizePortalEmail(user.email || '');
-        if (
+        if (window.sessionStorage.getItem('gmp_used_oneclick') === '1') {
+          setUsedOneClickMethod(true);
+        }
+        if (window.sessionStorage.getItem(`gmp_pending_verify_${lowerEmail}`) === '1') {
+          setOneClickVerifiedSession(false);
+        } else if (
           window.sessionStorage.getItem(`gmp_oneclick_${user.uid}`) === '1' ||
           (lowerEmail &&
             (window.localStorage.getItem(`gmp_verified_email_${lowerEmail}`) === '1' ||
@@ -469,7 +509,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         } else if (lowerEmail) {
           checkEmailVerifiedInAccountDirectory(lowerEmail)
             .then((verified) => {
-              if (verified) {
+              if (
+                verified &&
+                window.sessionStorage.getItem(`gmp_pending_verify_${lowerEmail}`) !== '1'
+              ) {
                 window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
                 setOneClickVerifiedSession(true);
               }
@@ -528,6 +571,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 emailVerified: Boolean(sData.emailVerified),
               } as FirebaseUser);
               setPortalUser(pUser);
+              setRegFullName((prev) =>
+                prev || (pUser.fullName && pUser.fullName !== 'Patient' ? pUser.fullName : '')
+              );
+              setRegDob((prev) => prev || pUser.dateOfBirth || '');
+              setRegPhone((prev) => prev || pUser.phone || '');
+              setRegInsurance(
+                (prev) => pUser.insuranceProvider || prev || 'Blue Cross Blue Shield (BCBS)'
+              );
+              if (window.sessionStorage.getItem('gmp_used_oneclick') === '1') {
+                setUsedOneClickMethod(true);
+              }
               if (sData.emailVerified) {
                 setOneClickVerifiedSession(true);
               }
@@ -570,6 +624,38 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
     return () => unsubAuth();
   }, []);
+
+  // Automatically detect when the user clicks the email verification link (even on their phone or another tab)
+  useEffect(() => {
+    if (!firebaseUser || oneClickVerifiedSession || firebaseUser.emailVerified) return;
+    const targetEmail = normalizePortalEmail(firebaseUser.email || portalUser?.email || '');
+    if (!targetEmail || isAuthorizedProviderEmail(targetEmail)) return;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch('/api/email/check-email-verified', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: targetEmail }),
+        });
+        const data = await res.json();
+        if (data?.verified) {
+          window.sessionStorage.removeItem(`gmp_pending_verify_${targetEmail}`);
+          window.localStorage.setItem(`gmp_verified_email_${targetEmail}`, '1');
+          window.sessionStorage.setItem(`gmp_verified_email_${targetEmail}`, '1');
+          window.sessionStorage.setItem(`gmp_oneclick_${firebaseUser.uid}`, '1');
+          setOneClickVerifiedSession(true);
+          setAuthError(null);
+          setVerificationNotice('Your email address has been verified! Welcome to your Client Portal.');
+          setTimeout(() => setVerificationNotice(null), 5000);
+        }
+      } catch {
+        // ignore
+      }
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [firebaseUser, oneClickVerifiedSession, portalUser?.email]);
 
   // Real-time Firestore listeners strictly scoped to the authenticated user's UID
   useEffect(() => {
@@ -769,25 +855,38 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     isOneClick = false
   ) => {
     const isProvider = isAuthorizedProviderEmail(user.email);
-    if (user.email) {
-      registerEmailInAccountDirectory(user.email);
-    }
+    const cleanNewEmail = normalizePortalEmail(user.email || '');
     if (isOneClick) {
+      if (cleanNewEmail) {
+        window.sessionStorage.removeItem(`gmp_pending_verify_${cleanNewEmail}`);
+      }
+      window.sessionStorage.setItem('gmp_used_oneclick', '1');
+      setUsedOneClickMethod(true);
       window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
       setOneClickVerifiedSession(true);
-    } else if (isNewAccount) {
+      if (user.email) {
+        void registerEmailInAccountDirectory(user.email, undefined, true);
+      }
+    } else if (isNewAccount && !isProvider) {
       // Brand-new email/password account MUST verify via email link before accessing the portal
-      const cleanNewEmail = normalizePortalEmail(user.email || '');
+      window.sessionStorage.removeItem('gmp_used_oneclick');
+      setUsedOneClickMethod(false);
       if (cleanNewEmail) {
+        window.sessionStorage.setItem(`gmp_pending_verify_${cleanNewEmail}`, '1');
         window.localStorage.removeItem(`gmp_verified_email_${cleanNewEmail}`);
         window.sessionStorage.removeItem(`gmp_verified_email_${cleanNewEmail}`);
       }
       window.sessionStorage.removeItem(`gmp_oneclick_${user.uid}`);
       setOneClickVerifiedSession(false);
+      if (user.email) {
+        void registerEmailInAccountDirectory(user.email, undefined, false);
+      }
+    } else if (user.email) {
+      void registerEmailInAccountDirectory(user.email);
     }
     if (isProvider) {
       setWorkspaceMode('provider');
-    } else if (isNewAccount || !user.emailVerified) {
+    } else if ((isNewAccount || !user.emailVerified) && !isOneClick) {
       let smtpDelivered = false;
       if (user.email) {
         try {
@@ -801,6 +900,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               dateOfBirth: dobInput || '',
               insuranceProvider: insuranceInput || '',
               resendOnly: !isNewAccount,
+              requireEmailVerification: isNewAccount,
               clientOrigin: window.location.origin,
             }),
           });
@@ -813,9 +913,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       const verifyErr = await safeSendVerificationEmail(user);
       if (verifyErr && !smtpDelivered) {
         setAuthError(verifyErr);
-      } else if (!isOneClick) {
+      } else {
         setVerificationNotice(
-          `Welcome! A verification & welcome email has been sent to ${user.email}. Please open your inbox and click the verification link to confirm your email.`
+          `Welcome! A verification link has been sent to ${user.email}. Please open your email inbox and click "Verify My Email & Enter Client Portal" to unlock your portal.`
         );
       }
     }
@@ -1100,6 +1200,15 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       }
     }
 
+    if (isRegistering && !isAuthorizedProviderEmail(cleanEmail)) {
+      window.sessionStorage.removeItem('gmp_used_oneclick');
+      setUsedOneClickMethod(false);
+      window.sessionStorage.setItem(`gmp_pending_verify_${cleanEmail}`, '1');
+      window.localStorage.removeItem(`gmp_verified_email_${cleanEmail}`);
+      window.sessionStorage.removeItem(`gmp_verified_email_${cleanEmail}`);
+      setOneClickVerifiedSession(false);
+    }
+
     // Also issue/sync Standalone Ubuntu PostgreSQL + JWT Auth token in background
     fetch('/api/standalone/auth/login', {
       method: 'POST',
@@ -1127,14 +1236,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
         window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
         window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
-        await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+        await registerEmailInAccountDirectory(cleanEmail, rawPassword, false);
         void recordLoginAttempt(cleanEmail, true, 'password');
         fetch('/api/email/sync-account-credential', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
         }).catch(() => {});
-        await completeAuthenticatedSession(cred.user, true);
+        await completeAuthenticatedSession(cred.user, true, false);
         return true;
       } else {
         const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
@@ -1147,7 +1256,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
         }).catch(() => {});
-        await completeAuthenticatedSession(signInCred.user, false);
+        await completeAuthenticatedSession(signInCred.user, false, false);
         return true;
       }
     } catch (err: unknown) {
@@ -1214,15 +1323,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         }
       }
 
-      // 2. If user was on "New Client Registration" with an existing email, sign them in directly
+      // 2. If user was on "New Client Registration" with an existing email, require email verification if registering
       if (code === 'auth/email-already-in-use') {
         try {
           const existingCred = await signInWithEmailAndPassword(auth, cleanEmail, rawPassword);
+          const wasRegistering = isRegistering;
           setIsRegistering(false);
           window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
-          await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          await registerEmailInAccountDirectory(
+            cleanEmail,
+            rawPassword,
+            wasRegistering ? false : undefined
+          );
           void recordLoginAttempt(cleanEmail, true, 'password');
-          await completeAuthenticatedSession(existingCred.user, false);
+          await completeAuthenticatedSession(existingCred.user, wasRegistering, false);
           return true;
         } catch {
           const isVerifiedInDb = await verifyPasswordInAccountDirectory(cleanEmail, rawPassword);
@@ -1250,24 +1364,30 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         }
       }
 
-      // 3. If user was on "Sign In" tab with a brand-new email (not yet in golden-mind-psychiatry), seamlessly create their account!
+      // 3. If user was on "Sign In" tab with a brand-new email (not yet in golden-mind-psychiatry), seamlessly create their account and require email verification!
       if (
         !isRegistering &&
         cleanEmail !== 'beehobs@yahoo.com' &&
         (code === 'auth/invalid-credential' || code === 'auth/user-not-found')
       ) {
         try {
+          window.sessionStorage.removeItem('gmp_used_oneclick');
+          setUsedOneClickMethod(false);
+          window.sessionStorage.setItem(`gmp_pending_verify_${cleanEmail}`, '1');
+          window.localStorage.removeItem(`gmp_verified_email_${cleanEmail}`);
+          window.sessionStorage.removeItem(`gmp_verified_email_${cleanEmail}`);
+          setOneClickVerifiedSession(false);
           const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
           window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
           window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
-          await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          await registerEmailInAccountDirectory(cleanEmail, rawPassword, false);
           void recordLoginAttempt(cleanEmail, true, 'password');
           fetch('/api/email/sync-account-credential', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: cleanEmail, password: rawPassword }),
           }).catch(() => {});
-          await completeAuthenticatedSession(newCred.user, true);
+          await completeAuthenticatedSession(newCred.user, true, false);
           return true;
         } catch (createErr: unknown) {
           const createCode = (createErr as { code?: string })?.code || '';
@@ -1476,27 +1596,60 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         updatedAt: now,
       };
 
-      await updateDoc(doc(db, 'users', firebaseUser.uid), updatedFields);
+      const mergedUserRecord = {
+        ...portalUser,
+        ...updatedFields,
+        uid: firebaseUser.uid,
+        email: portalUser.email || firebaseUser.email || '',
+      };
 
-      setPortalUser((prev) => (prev ? { ...prev, ...updatedFields } : prev));
+      // 1. Persist to Ubuntu PostgreSQL database (works for both 1-Click OAuth and Email/Password users)
+      await fetch('/api/standalone/db/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collection: 'users',
+          docId: firebaseUser.uid,
+          data: mergedUserRecord,
+        }),
+      }).catch(() => {});
+
+      // 2. Also persist to Cloud Firestore when Firebase Auth session is active
+      try {
+        await setDoc(doc(db, 'users', firebaseUser.uid), mergedUserRecord, { merge: true });
+      } catch {
+        // Non-fatal for standalone OAuth sessions where auth.currentUser is null
+      }
+
+      setPortalUser(mergedUserRecord);
       setInsCarrier(cleanInsurance);
       setInsMemberId(cleanMemberId);
       setInsGroupId(cleanGroupNumber);
       setPrefPharmacy(cleanPharmacy);
 
       // Record client registration summary in messages so Brenda Hobyani, PMHNP-BC sees the full record immediately
+      const regMsgData = {
+        patientId: firebaseUser.uid,
+        patientName: cleanFullName,
+        senderId: firebaseUser.uid,
+        senderName: cleanFullName,
+        senderRole: 'patient' as const,
+        subject: `Client Registration Record Completed: ${cleanFullName} (DOB: ${cleanDob})`,
+        body: `New Client Registration Record saved to system:\n• Full Legal Name: ${cleanFullName}\n• Date of Birth: ${cleanDob}\n• Biological Sex: ${cleanSex || 'Not specified'}\n• Phone: ${cleanPhone}\n• Email: ${portalUser.email}\n• Residential Address: ${cleanAddress || 'Texas (Telehealth)'}\n• Primary Insurance: ${cleanInsurance}${cleanMemberId ? ` (Member ID: ${cleanMemberId}${cleanGroupNumber ? `, Group: ${cleanGroupNumber}` : ''})` : ''}\n• Preferred Pharmacy: ${cleanPharmacy || 'To be confirmed'}\n• Emergency Contact: ${cleanEmergency || 'To be confirmed'}\n• Primary Clinical Reason: ${cleanConcern}`,
+        read: false,
+        createdAt: now,
+      };
+      fetch('/api/standalone/db/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collection: 'messages',
+          docId: `reg_${firebaseUser.uid}_${Date.now()}`,
+          data: regMsgData,
+        }),
+      }).catch(() => {});
       try {
-        await addDoc(collection(db, 'messages'), {
-          patientId: firebaseUser.uid,
-          patientName: cleanFullName,
-          senderId: firebaseUser.uid,
-          senderName: cleanFullName,
-          senderRole: 'patient',
-          subject: `Client Registration Record Completed: ${cleanFullName} (DOB: ${cleanDob})`,
-          body: `New Client Registration Record saved to system:\n• Full Legal Name: ${cleanFullName}\n• Date of Birth: ${cleanDob}\n• Biological Sex: ${cleanSex || 'Not specified'}\n• Phone: ${cleanPhone}\n• Email: ${portalUser.email}\n• Residential Address: ${cleanAddress || 'Texas (Telehealth)'}\n• Primary Insurance: ${cleanInsurance}${cleanMemberId ? ` (Member ID: ${cleanMemberId}${cleanGroupNumber ? `, Group: ${cleanGroupNumber}` : ''})` : ''}\n• Preferred Pharmacy: ${cleanPharmacy || 'To be confirmed'}\n• Emergency Contact: ${cleanEmergency || 'To be confirmed'}\n• Primary Clinical Reason: ${cleanConcern}`,
-          read: false,
-          createdAt: now,
-        });
+        await addDoc(collection(db, 'messages'), regMsgData);
       } catch {
         // Non-fatal
       }
@@ -1514,7 +1667,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         }),
       }).catch(() => {});
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`);
+      console.error('Error saving client registration record:', err);
+      setRegError('Unable to save registration details. Please check your connection and try again.');
     } finally {
       setRegSubmitting(false);
     }
@@ -1831,6 +1985,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
     }
     if (activeEmail) {
+      window.sessionStorage.removeItem(`gmp_pending_verify_${activeEmail}`);
       await markEmailVerifiedInAccountDirectory(activeEmail);
     }
 
@@ -1842,6 +1997,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const handleSignOut = async () => {
     try {
       window.localStorage.removeItem('gmp_standalone_jwt');
+      window.sessionStorage.removeItem('gmp_used_oneclick');
       if (auth.currentUser) {
         window.sessionStorage.removeItem(`gmp_oneclick_${auth.currentUser.uid}`);
       }
@@ -1852,6 +2008,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     setPortalUser(null);
     setFirebaseUser(null);
     setOneClickVerifiedSession(false);
+    setUsedOneClickMethod(false);
     setWorkspaceMode('patient');
   };
 
@@ -2117,29 +2274,57 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               <label className="text-xs font-semibold text-stone-700 block mb-1">
                 New Password *
               </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                placeholder="At least 6 characters"
-                value={newResetPassword}
-                onChange={(e) => setNewResetPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-              />
+              <div className="relative">
+                <input
+                  type={showNewResetPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  placeholder="At least 6 characters"
+                  value={newResetPassword}
+                  onChange={(e) => setNewResetPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewResetPassword((prev) => !prev)}
+                  aria-label={showNewResetPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+                >
+                  {showNewResetPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-stone-700 block mb-1">
                 Confirm New Password *
               </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                placeholder="Re-enter your new password"
-                value={confirmResetPassword}
-                onChange={(e) => setConfirmResetPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmResetPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  placeholder="Re-enter your new password"
+                  value={confirmResetPassword}
+                  onChange={(e) => setConfirmResetPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmResetPassword((prev) => !prev)}
+                  aria-label={showConfirmResetPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+                >
+                  {showConfirmResetPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <button
               type="submit"
@@ -2707,16 +2892,31 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       Reset Password?
                     </button>
                   </div>
-                  <input
-                    ref={passwordInputRef}
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="••••••••"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                  />
+                  <div className="relative">
+                    <input
+                      ref={passwordInputRef}
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      placeholder="••••••••"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 pr-10 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2960,15 +3160,30 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
                       Account Password *
                     </label>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      placeholder="Enter your password"
-                      value={oneClickPassword}
-                      onChange={(e) => setOneClickPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-xs focus:outline-none focus:border-[#D4AF37]"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showOneClickPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        placeholder="Enter your password"
+                        value={oneClickPassword}
+                        onChange={(e) => setOneClickPassword(e.target.value)}
+                        className="w-full px-3.5 py-2.5 pr-10 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOneClickPassword((prev) => !prev)}
+                        aria-label={showOneClickPassword ? 'Hide password' : 'Show password'}
+                        title={showOneClickPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
+                      >
+                        {showOneClickPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -3127,6 +3342,39 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             onSubmit={handleCompleteClientRegistrationRecord}
             className="p-6 sm:p-8 space-y-6"
           >
+            {/* Prominent Notification Banner for 1-Click Sign-Up Users */}
+            <div className="p-4 rounded-[16px] bg-[#FAF6EA] border border-[#D4AF37] text-xs text-stone-800 flex items-start gap-3 shadow-xs">
+              <AlertCircle className="w-5 h-5 text-[#9E7206] shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-[#9E7206] uppercase tracking-wider text-[11px]">
+                  {usedOneClickMethod
+                    ? '1-Click Sign-Up Notice — Required Registration Details'
+                    : 'Required Client Portal Registration Details'}
+                </p>
+                <p className="leading-relaxed text-stone-700">
+                  {usedOneClickMethod ? (
+                    <>
+                      Because you signed up using the <strong>1-Click Login method</strong>, please
+                      fill in the mandatory registration details below (
+                      <strong>
+                        Full Legal Name, Mobile Phone Number, Date of Birth, and Primary Insurance
+                      </strong>
+                      —the same required details that clients who register with a standard email
+                      address must complete) before continuing to your Client Portal.
+                    </>
+                  ) : (
+                    <>
+                      Please complete your required registration details below (
+                      <strong>
+                        Full Legal Name, Mobile Phone Number, Date of Birth, and Primary Insurance
+                      </strong>
+                      ) before continuing into your Client Portal.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
             {regError && (
               <div className="p-3.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
