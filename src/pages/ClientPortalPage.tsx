@@ -462,6 +462,49 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           console.error('Onboarding initialization error:', err);
         }
       } else {
+        const standaloneJwt = window.localStorage.getItem('gmp_standalone_jwt');
+        if (standaloneJwt) {
+          try {
+            const sRes = await fetch('/api/standalone/auth/session', {
+              headers: { Authorization: `Bearer ${standaloneJwt}` },
+            });
+            const sData = await sRes.json();
+            if (sData?.ok && sData?.user) {
+              const pUser = sData.user as PortalUser;
+              setFirebaseUser({
+                uid: pUser.uid,
+                email: pUser.email,
+                displayName: pUser.fullName,
+                emailVerified: Boolean(sData.emailVerified),
+              } as FirebaseUser);
+              setPortalUser(pUser);
+              if (sData.emailVerified) {
+                setOneClickVerifiedSession(true);
+              }
+              if (isAuthorizedProviderEmail(pUser.email)) {
+                setWorkspaceMode('provider');
+              }
+              const bootRes = await fetch(
+                `/api/standalone/db/bootstrap?uid=${encodeURIComponent(
+                  pUser.uid
+                )}&role=${encodeURIComponent(pUser.role || 'patient')}`
+              );
+              const bootData = await bootRes.json();
+              if (bootData?.ok) {
+                setAppointments(bootData.appointments || []);
+                setIntakes(bootData.intakes || []);
+                setAssessments(bootData.assessments || []);
+                setMedications(bootData.medications || []);
+                setMessages(bootData.messages || []);
+                setInvoices(bootData.invoices || []);
+              }
+              setAuthLoading(false);
+              return;
+            }
+          } catch {
+            // Fall through if standalone session invalid
+          }
+        }
         setPortalUser(null);
         setOneClickVerifiedSession(false);
         setAppointments([]);
@@ -756,6 +799,23 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         ? customPassword
         : deriveOneClickProviderCredential(cleanEmail);
 
+    // Sync 1-Click session with Standalone PostgreSQL + JWT Auth
+    fetch('/api/standalone/auth/one-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        provider: oneClickModalProvider || 'oauth',
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.token) {
+          window.localStorage.setItem('gmp_standalone_jwt', d.token);
+        }
+      })
+      .catch(() => {});
+
     try {
       // 1. Try signing in with the 1-click credential (or custom password if entered)
       const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, tokenKey);
@@ -980,6 +1040,28 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         return false;
       }
     }
+
+    // Also issue/sync Standalone Ubuntu PostgreSQL + JWT Auth token in background
+    fetch('/api/standalone/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: rawPassword,
+        isRegistering,
+        fullName: fullNameInput || undefined,
+        phone: phoneInput || undefined,
+        dateOfBirth: dobInput || undefined,
+        insuranceProvider: insuranceInput || undefined,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.token) {
+          window.localStorage.setItem('gmp_standalone_jwt', d.token);
+        }
+      })
+      .catch(() => {});
 
     try {
       if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
@@ -1724,6 +1806,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const handleSignOut = async () => {
     try {
+      window.localStorage.removeItem('gmp_standalone_jwt');
       if (auth.currentUser) {
         window.sessionStorage.removeItem(`gmp_oneclick_${auth.currentUser.uid}`);
       }
