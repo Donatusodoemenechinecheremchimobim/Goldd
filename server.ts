@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import pg from 'pg';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
@@ -33,9 +34,29 @@ const RESET_HMAC_SECRET =
     .update(`gmp_reset_secret_${process.env.SMTP_PASS || 'golden_mind_2026'}`)
     .digest('hex');
 
+const MAX_LOGIN_ATTEMPTS = Number(process.env.AUTH_MAX_LOGIN_ATTEMPTS || 5);
+const LOCKOUT_DURATION_MS = Number(process.env.AUTH_LOCKOUT_MINUTES || 15) * 60 * 1000;
+
 const CREDENTIALS_STORE_PATH = path.join(__dirname, 'portal-credentials.db.json');
+const BACKUPS_DIR = path.join(__dirname, 'backups');
+if (!fs.existsSync(BACKUPS_DIR)) {
+  try {
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+  } catch {
+    // ignore
+  }
+}
+
+interface LockoutRecord {
+  failedAttempts: number;
+  lockedUntil: number | null;
+  lastAttemptAt: string;
+  lastIp?: string;
+}
+
 const verifiedResetPasswords = new Map<string, string>();
 const verifiedEmailAddresses = new Set<string>();
+const accountLockouts = new Map<string, LockoutRecord>();
 
 try {
   if (fs.existsSync(CREDENTIALS_STORE_PATH)) {
@@ -46,8 +67,15 @@ try {
           if (typeof em === 'string') verifiedEmailAddresses.add(em.toLowerCase());
         }
       }
+      if (rawStore.__lockouts && typeof rawStore.__lockouts === 'object') {
+        for (const [k, v] of Object.entries(rawStore.__lockouts)) {
+          if (v && typeof v === 'object') {
+            accountLockouts.set(k.toLowerCase(), v as LockoutRecord);
+          }
+        }
+      }
       for (const [k, v] of Object.entries(rawStore)) {
-        if (k !== '__verifiedEmails' && typeof v === 'string') {
+        if (k !== '__verifiedEmails' && k !== '__lockouts' && typeof v === 'string') {
           verifiedResetPasswords.set(k.toLowerCase(), v);
         }
       }
@@ -59,8 +87,13 @@ try {
 
 function saveCredentialsStoreToDisk(): void {
   try {
+    const lockoutsObj: Record<string, LockoutRecord> = {};
+    for (const [k, v] of accountLockouts.entries()) {
+      lockoutsObj[k] = v;
+    }
     const obj: Record<string, unknown> = {
       __verifiedEmails: Array.from(verifiedEmailAddresses),
+      __lockouts: lockoutsObj,
     };
     for (const [k, v] of verifiedResetPasswords.entries()) {
       obj[k] = v;
@@ -71,11 +104,502 @@ function saveCredentialsStoreToDisk(): void {
   }
 }
 
+// ============================================================================
+// SELF-HOSTED UBUNTU POSTGRESQL (goldenmind_db) CONNECTION POOL & SYNC ENGINE
+// Connects automatically to goldenmind_db on Ubuntu (127.0.0.1:5432) without
+// touching or altering any Firebase configuration.
+// ============================================================================
+const { Pool } = pg;
+let pgPool: pg.Pool | null = null;
+let pgConnected = false;
+let pgLastError = '';
+
+async function initPostgresPool(): Promise<void> {
+  try {
+    const connectionString = process.env.DATABASE_URL?.trim();
+    const dbHost = process.env.DB_HOST?.trim() || '127.0.0.1';
+    const dbPort = Number(process.env.DB_PORT || 5432);
+    const dbName = process.env.DB_NAME?.trim() || 'goldenmind_db';
+    const dbUser = process.env.DB_USER?.trim() || 'goldenmind_admin';
+    const dbPassword =
+      process.env.DB_PASSWORD || process.env.SMTP_PASS || 'Golden$43';
+
+    const pool = connectionString
+      ? new Pool({
+          connectionString,
+          max: 10,
+          connectionTimeoutMillis: 3000,
+          idleTimeoutMillis: 30000,
+        })
+      : new Pool({
+          host: dbHost,
+          port: dbPort,
+          database: dbName,
+          user: dbUser,
+          password: dbPassword,
+          max: 10,
+          connectionTimeoutMillis: 3000,
+          idleTimeoutMillis: 30000,
+        });
+
+    pool.on('error', (err) => {
+      pgLastError = err.message;
+    });
+
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS account_directory (
+          email_hash VARCHAR(128) PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255),
+          auth_provider VARCHAR(64) DEFAULT 'password',
+          email_verified BOOLEAN DEFAULT FALSE,
+          failed_login_attempts INT DEFAULT 0,
+          locked_until TIMESTAMPTZ DEFAULT NULL,
+          last_login_ip VARCHAR(64),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS users (
+          uid VARCHAR(128) PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          full_name VARCHAR(255) NOT NULL,
+          role VARCHAR(32) DEFAULT 'patient',
+          phone VARCHAR(64),
+          date_of_birth VARCHAR(32),
+          state VARCHAR(64) DEFAULT 'Texas',
+          address VARCHAR(500),
+          insurance_provider VARCHAR(255),
+          insurance_member_id VARCHAR(128),
+          insurance_group_number VARCHAR(128),
+          preferred_pharmacy VARCHAR(500),
+          emergency_contact VARCHAR(500),
+          primary_concern VARCHAR(255),
+          registration_completed BOOLEAN DEFAULT FALSE,
+          assigned_provider VARCHAR(255) DEFAULT 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS appointments (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          patient_email VARCHAR(255) NOT NULL,
+          patient_phone VARCHAR(64),
+          provider_name VARCHAR(255) NOT NULL,
+          service_type VARCHAR(255) NOT NULL,
+          condition_reason VARCHAR(500),
+          preferred_date VARCHAR(64) NOT NULL,
+          preferred_time VARCHAR(128) NOT NULL,
+          insurance VARCHAR(255),
+          status VARCHAR(32) DEFAULT 'confirmed',
+          telehealth_room_code VARCHAR(128),
+          custom_video_url VARCHAR(500),
+          clinical_notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS intakes (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          form_title VARCHAR(255) NOT NULL,
+          category VARCHAR(64) NOT NULL,
+          status VARCHAR(32) DEFAULT 'pending',
+          assigned_at TIMESTAMPTZ DEFAULT NOW(),
+          completed_at TIMESTAMPTZ,
+          answers JSONB DEFAULT '{}'::jsonb
+        );
+        CREATE TABLE IF NOT EXISTS assessments (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          type VARCHAR(32) NOT NULL,
+          total_score NUMERIC NOT NULL,
+          severity VARCHAR(128) NOT NULL,
+          responses JSONB DEFAULT '[]'::jsonb,
+          sleep_hours NUMERIC,
+          energy_level NUMERIC,
+          medication_taken BOOLEAN,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS medications (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          medication_name VARCHAR(255) NOT NULL,
+          dosage VARCHAR(128) NOT NULL,
+          frequency VARCHAR(128) NOT NULL,
+          instructions TEXT,
+          prescribed_by VARCHAR(255) NOT NULL,
+          pharmacy VARCHAR(500),
+          refills_remaining INT DEFAULT 0,
+          status VARCHAR(64) DEFAULT 'active',
+          last_refill_requested_at TIMESTAMPTZ,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS messages (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          sender_role VARCHAR(32) NOT NULL,
+          sender_name VARCHAR(255) NOT NULL,
+          subject VARCHAR(255) NOT NULL,
+          body TEXT NOT NULL,
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS invoices (
+          id VARCHAR(128) PRIMARY KEY,
+          patient_uid VARCHAR(128) NOT NULL,
+          patient_name VARCHAR(255) NOT NULL,
+          description VARCHAR(500) NOT NULL,
+          cpt_code VARCHAR(64) NOT NULL,
+          service_date VARCHAR(64) NOT NULL,
+          total_charge NUMERIC NOT NULL,
+          insurance_covered NUMERIC NOT NULL,
+          patient_responsibility NUMERIC NOT NULL,
+          status VARCHAR(32) DEFAULT 'due',
+          paid_at TIMESTAMPTZ,
+          payment_method VARCHAR(128),
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+      pgPool = pool;
+      pgConnected = true;
+      pgLastError = '';
+      console.log('✅ Connected to Ubuntu PostgreSQL database (goldenmind_db) & verified all 8 tables.');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    pgConnected = false;
+    pgLastError = err instanceof Error ? err.message : String(err);
+  }
+}
+
+void initPostgresPool();
+
+async function syncAccountToPostgres(params: {
+  email: string;
+  passwordHash?: string;
+  authProvider?: string;
+  emailVerified?: boolean;
+  failedAttempts?: number;
+  lockedUntil?: number | null;
+  lastIp?: string;
+}): Promise<void> {
+  if (!pgPool || !pgConnected) return;
+  try {
+    const clean = params.email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+    if (!clean) return;
+    const emailHash = crypto.createHash('sha256').update(`gmp_acct_${clean}`).digest('hex');
+    const pwHash = params.passwordHash ?? verifiedResetPasswords.get(clean) ?? null;
+    const isVerified = params.emailVerified ?? verifiedEmailAddresses.has(clean);
+    const lockRec = accountLockouts.get(clean);
+    const failedCount = params.failedAttempts ?? lockRec?.failedAttempts ?? 0;
+    const lockedUntilIso =
+      params.lockedUntil !== undefined
+        ? params.lockedUntil
+          ? new Date(params.lockedUntil).toISOString()
+          : null
+        : lockRec?.lockedUntil
+        ? new Date(lockRec.lockedUntil).toISOString()
+        : null;
+
+    await pgPool.query(
+      `INSERT INTO account_directory (
+        email_hash, email, password_hash, auth_provider, email_verified,
+        failed_login_attempts, locked_until, last_login_ip, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      ON CONFLICT (email_hash) DO UPDATE SET
+        email = EXCLUDED.email,
+        password_hash = COALESCE(EXCLUDED.password_hash, account_directory.password_hash),
+        auth_provider = COALESCE(EXCLUDED.auth_provider, account_directory.auth_provider),
+        email_verified = EXCLUDED.email_verified OR account_directory.email_verified,
+        failed_login_attempts = EXCLUDED.failed_login_attempts,
+        locked_until = EXCLUDED.locked_until,
+        last_login_ip = COALESCE(EXCLUDED.last_login_ip, account_directory.last_login_ip),
+        updated_at = NOW()`,
+      [
+        emailHash,
+        clean,
+        pwHash,
+        params.authProvider || 'password',
+        Boolean(isVerified),
+        failedCount,
+        lockedUntilIso,
+        params.lastIp || null,
+      ]
+    );
+  } catch (err) {
+    pgLastError = err instanceof Error ? err.message : String(err);
+  }
+}
+
+async function upsertClinicalRecordToPostgres(
+  collectionName: string,
+  recordId: string,
+  data: Record<string, unknown>
+): Promise<boolean> {
+  if (!pgPool || !pgConnected || !recordId || !data) return false;
+  try {
+    if (collectionName === 'users') {
+      const uid = String(data.uid || recordId);
+      const email = String(data.email || `${uid}@goldenmindpsychiatry.org`).toLowerCase();
+      await pgPool.query(
+        `INSERT INTO users (
+          uid, email, full_name, role, phone, date_of_birth, state, address,
+          insurance_provider, insurance_member_id, insurance_group_number,
+          preferred_pharmacy, emergency_contact, primary_concern,
+          registration_completed, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+        ON CONFLICT (uid) DO UPDATE SET
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          role = EXCLUDED.role,
+          phone = EXCLUDED.phone,
+          date_of_birth = EXCLUDED.date_of_birth,
+          address = EXCLUDED.address,
+          insurance_provider = EXCLUDED.insurance_provider,
+          insurance_member_id = EXCLUDED.insurance_member_id,
+          insurance_group_number = EXCLUDED.insurance_group_number,
+          preferred_pharmacy = EXCLUDED.preferred_pharmacy,
+          emergency_contact = EXCLUDED.emergency_contact,
+          primary_concern = EXCLUDED.primary_concern,
+          registration_completed = EXCLUDED.registration_completed,
+          updated_at = NOW()`,
+        [
+          uid,
+          email,
+          String(data.fullName || 'Patient'),
+          String(data.role || 'patient'),
+          String(data.phone || ''),
+          String(data.dateOfBirth || ''),
+          'Texas',
+          String(data.address || ''),
+          String(data.insuranceProvider || ''),
+          String(data.insuranceMemberId || ''),
+          String(data.insuranceGroupNumber || ''),
+          String(data.preferredPharmacy || ''),
+          String(data.emergencyContact || ''),
+          String(data.primaryConcern || ''),
+          Boolean(data.registrationCompleted),
+        ]
+      );
+      await syncAccountToPostgres({
+        email,
+        emailVerified: true,
+      });
+      return true;
+    }
+
+    // Ensure parent user row exists before inserting foreign-key linked child records
+    const patientUid = String(data.patientId || data.patient_uid || 'guest');
+    const patientName = String(data.patientName || data.patient_name || 'Patient');
+    const patientEmail = String(
+      data.patientEmail || data.patient_email || `${patientUid}@goldenmindpsychiatry.org`
+    ).toLowerCase();
+
+    await pgPool.query(
+      `INSERT INTO users (uid, email, full_name, role, registration_completed)
+       VALUES ($1, $2, $3, 'patient', true)
+       ON CONFLICT (uid) DO NOTHING`,
+      [patientUid, patientEmail, patientName]
+    );
+
+    if (collectionName === 'appointments') {
+      await pgPool.query(
+        `INSERT INTO appointments (
+          id, patient_uid, patient_name, patient_email, patient_phone,
+          provider_name, service_type, condition_reason, preferred_date,
+          preferred_time, insurance, status, telehealth_room_code,
+          custom_video_url, clinical_notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        ON CONFLICT (id) DO UPDATE SET
+          status = EXCLUDED.status,
+          preferred_date = EXCLUDED.preferred_date,
+          preferred_time = EXCLUDED.preferred_time,
+          custom_video_url = EXCLUDED.custom_video_url,
+          clinical_notes = EXCLUDED.clinical_notes`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          patientEmail,
+          String(data.patientPhone || ''),
+          'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+          String(data.serviceType || 'Psychiatric Consultation'),
+          String(data.conditionReason || ''),
+          String(data.preferredDate || ''),
+          String(data.preferredTime || ''),
+          String(data.insuranceProvider || data.insurance || ''),
+          String(data.status || 'confirmed'),
+          String(data.telehealthUrl || ''),
+          String(data.telehealthUrl || ''),
+          String(data.notes || data.providerNotes || ''),
+        ]
+      );
+      return true;
+    }
+
+    if (collectionName === 'intakes') {
+      await pgPool.query(
+        `INSERT INTO intakes (
+          id, patient_uid, patient_name, form_title, category, status,
+          completed_at, answers
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (id) DO UPDATE SET
+          status = EXCLUDED.status,
+          completed_at = EXCLUDED.completed_at,
+          answers = EXCLUDED.answers`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          String(data.title || data.form_title || 'Clinical Intake Form'),
+          String(data.formType || data.category || 'intake'),
+          String(data.status || 'pending'),
+          data.completedAt ? new Date(String(data.completedAt)).toISOString() : null,
+          JSON.stringify(data.responses || data.answers || {}),
+        ]
+      );
+      return true;
+    }
+
+    if (collectionName === 'assessments') {
+      await pgPool.query(
+        `INSERT INTO assessments (
+          id, patient_uid, patient_name, type, total_score, severity,
+          responses, sleep_hours, energy_level, medication_taken, notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+          total_score = EXCLUDED.total_score,
+          severity = EXCLUDED.severity,
+          notes = EXCLUDED.notes`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          String(data.type || 'PHQ-9'),
+          Number(data.totalScore ?? 0),
+          String(data.severity || 'Minimal'),
+          JSON.stringify(data.answers || data.responses || []),
+          Number(data.sleepHours ?? 7.5),
+          Number(data.energyLevel ?? 7),
+          Boolean(data.medicationTaken ?? true),
+          String(data.notes || ''),
+        ]
+      );
+      return true;
+    }
+
+    if (collectionName === 'medications') {
+      await pgPool.query(
+        `INSERT INTO medications (
+          id, patient_uid, patient_name, medication_name, dosage, frequency,
+          instructions, prescribed_by, pharmacy, refills_remaining, status,
+          last_refill_requested_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+        ON CONFLICT (id) DO UPDATE SET
+          dosage = EXCLUDED.dosage,
+          frequency = EXCLUDED.frequency,
+          pharmacy = EXCLUDED.pharmacy,
+          refills_remaining = EXCLUDED.refills_remaining,
+          status = EXCLUDED.status,
+          last_refill_requested_at = EXCLUDED.last_refill_requested_at,
+          updated_at = NOW()`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          String(data.medicationName || ''),
+          String(data.dosage || ''),
+          String(data.frequency || ''),
+          String(data.instructions || ''),
+          String(data.prescribedBy || 'Brenda Hobyani, PMHNP-BC'),
+          String(data.pharmacy || ''),
+          Number(data.refillsRemaining ?? 0),
+          String(data.refillStatus || data.status || 'active'),
+          data.lastRefillRequestedAt
+            ? new Date(String(data.lastRefillRequestedAt)).toISOString()
+            : null,
+        ]
+      );
+      return true;
+    }
+
+    if (collectionName === 'messages') {
+      await pgPool.query(
+        `INSERT INTO messages (
+          id, patient_uid, patient_name, sender_role, sender_name,
+          subject, body, read
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (id) DO UPDATE SET
+          read = EXCLUDED.read,
+          body = EXCLUDED.body`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          String(data.senderRole || 'patient'),
+          String(data.senderName || patientName),
+          String(data.subject || 'Portal Message'),
+          String(data.body || ''),
+          Boolean(data.read),
+        ]
+      );
+      return true;
+    }
+
+    if (collectionName === 'invoices') {
+      await pgPool.query(
+        `INSERT INTO invoices (
+          id, patient_uid, patient_name, description, cpt_code, service_date,
+          total_charge, insurance_covered, patient_responsibility, status,
+          paid_at, payment_method
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        ON CONFLICT (id) DO UPDATE SET
+          status = EXCLUDED.status,
+          paid_at = EXCLUDED.paid_at,
+          payment_method = EXCLUDED.payment_method`,
+        [
+          recordId,
+          patientUid,
+          patientName,
+          String(data.description || 'Psychiatric Telehealth Session'),
+          String(data.cptCode || '99214'),
+          String(data.serviceDate || ''),
+          Number(data.totalAmount ?? data.total_charge ?? 0),
+          Number(data.insuranceCovered ?? data.insurance_covered ?? 0),
+          Number(data.patientResponsibility ?? data.patient_responsibility ?? 0),
+          String(data.status || 'due'),
+          data.paidAt ? new Date(String(data.paidAt)).toISOString() : null,
+          String(data.paymentMethod || ''),
+        ]
+      );
+      return true;
+    }
+  } catch (err) {
+    pgLastError = err instanceof Error ? err.message : String(err);
+  }
+  return false;
+}
+
 function persistResetPasswordHash(email: string, pwHash: string): void {
   const clean = email.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
   verifiedResetPasswords.set(clean, pwHash);
   verifiedEmailAddresses.add(clean);
+  accountLockouts.delete(clean);
   saveCredentialsStoreToDisk();
+  void syncAccountToPostgres({
+    email: clean,
+    passwordHash: pwHash,
+    emailVerified: true,
+    failedAttempts: 0,
+    lockedUntil: null,
+  });
 }
 
 function persistEmailVerified(email: string): void {
@@ -83,6 +607,10 @@ function persistEmailVerified(email: string): void {
   if (!clean) return;
   verifiedEmailAddresses.add(clean);
   saveCredentialsStoreToDisk();
+  void syncAccountToPostgres({
+    email: clean,
+    emailVerified: true,
+  });
 }
 
 async function syncPasswordHashToFirestoreRest(email: string, rawPassword: string): Promise<void> {
@@ -469,8 +997,8 @@ async function startServer() {
     req.pipe(upstreamReq);
   });
 
-  // Strict 64KB JSON body limit to block oversized payload attacks
-  app.use(express.json({ limit: '64kb' }));
+  // Allow up to 10MB JSON payloads for full clinical database backup & restore snapshots
+  app.use(express.json({ limit: '10mb' }));
 
   // Production security headers, HTTPS HSTS, anti-clickjacking, dotfile/sourcemap blocking, & OAuth popup compatibility
   app.use((req, res, next) => {
@@ -957,6 +1485,502 @@ async function startServer() {
     } catch (error) {
       console.error('Portal message alert email error:', error);
       res.status(200).json({ ok: true, deliveredViaSmtp: false });
+    }
+  });
+
+  // ============================================================================
+  // 5. BRUTE-FORCE ACCOUNT LOCKOUT ENDPOINTS (Synced with PostgreSQL & Disk)
+  // ============================================================================
+  app.post('/api/auth/check-lockout', (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
+    if (!email) {
+      res.json({ ok: true, locked: false, failedAttempts: 0, maxAttempts: MAX_LOGIN_ATTEMPTS });
+      return;
+    }
+    const rec = accountLockouts.get(email);
+    if (!rec) {
+      res.json({ ok: true, locked: false, failedAttempts: 0, maxAttempts: MAX_LOGIN_ATTEMPTS });
+      return;
+    }
+    if (rec.lockedUntil && rec.lockedUntil > Date.now()) {
+      const remainingSeconds = Math.ceil((rec.lockedUntil - Date.now()) / 1000);
+      res.json({
+        ok: true,
+        locked: true,
+        remainingSeconds,
+        failedAttempts: rec.failedAttempts,
+        maxAttempts: MAX_LOGIN_ATTEMPTS,
+      });
+      return;
+    }
+    if (rec.lockedUntil && rec.lockedUntil <= Date.now()) {
+      accountLockouts.delete(email);
+      saveCredentialsStoreToDisk();
+      void syncAccountToPostgres({ email, failedAttempts: 0, lockedUntil: null });
+      res.json({ ok: true, locked: false, failedAttempts: 0, maxAttempts: MAX_LOGIN_ATTEMPTS });
+      return;
+    }
+    res.json({
+      ok: true,
+      locked: false,
+      failedAttempts: rec.failedAttempts,
+      remainingAttempts: Math.max(0, MAX_LOGIN_ATTEMPTS - rec.failedAttempts),
+      maxAttempts: MAX_LOGIN_ATTEMPTS,
+    });
+  });
+
+  app.post('/api/auth/record-login-attempt', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
+    const success = Boolean(req.body?.success);
+    const authProvider =
+      typeof req.body?.authProvider === 'string' ? req.body.authProvider : 'password';
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+
+    if (!email) {
+      res.json({ ok: false });
+      return;
+    }
+
+    if (success) {
+      accountLockouts.delete(email);
+      saveCredentialsStoreToDisk();
+      await syncAccountToPostgres({
+        email,
+        authProvider,
+        failedAttempts: 0,
+        lockedUntil: null,
+        lastIp: clientIp,
+      });
+      res.json({
+        ok: true,
+        locked: false,
+        failedAttempts: 0,
+        maxAttempts: MAX_LOGIN_ATTEMPTS,
+      });
+      return;
+    }
+
+    const existing = accountLockouts.get(email);
+    const now = Date.now();
+    // If previously locked and lock expired, reset counter before counting new failure
+    const currentFailures =
+      existing && (!existing.lockedUntil || existing.lockedUntil <= now)
+        ? existing.failedAttempts + 1
+        : existing?.lockedUntil && existing.lockedUntil > now
+        ? existing.failedAttempts
+        : 1;
+
+    const isNowLocked = currentFailures >= MAX_LOGIN_ATTEMPTS;
+    const lockedUntil = isNowLocked ? now + LOCKOUT_DURATION_MS : null;
+
+    const updatedRecord: LockoutRecord = {
+      failedAttempts: currentFailures,
+      lockedUntil,
+      lastAttemptAt: new Date(now).toISOString(),
+      lastIp: clientIp,
+    };
+    accountLockouts.set(email, updatedRecord);
+    saveCredentialsStoreToDisk();
+
+    await syncAccountToPostgres({
+      email,
+      authProvider,
+      failedAttempts: currentFailures,
+      lockedUntil,
+      lastIp: clientIp,
+    });
+
+    const remainingSeconds = lockedUntil ? Math.ceil((lockedUntil - now) / 1000) : 0;
+    res.json({
+      ok: true,
+      locked: isNowLocked,
+      remainingSeconds,
+      failedAttempts: currentFailures,
+      remainingAttempts: Math.max(0, MAX_LOGIN_ATTEMPTS - currentFailures),
+      maxAttempts: MAX_LOGIN_ATTEMPTS,
+    });
+  });
+
+  app.get('/api/auth/locked-accounts', (_req, res) => {
+    const now = Date.now();
+    const list: Array<{
+      email: string;
+      failedAttempts: number;
+      lockedUntil: number | null;
+      remainingSeconds: number;
+      lastAttemptAt: string;
+      lastIp?: string;
+    }> = [];
+    for (const [email, rec] of accountLockouts.entries()) {
+      if (rec.lockedUntil && rec.lockedUntil > now) {
+        list.push({
+          email,
+          failedAttempts: rec.failedAttempts,
+          lockedUntil: rec.lockedUntil,
+          remainingSeconds: Math.ceil((rec.lockedUntil - now) / 1000),
+          lastAttemptAt: rec.lastAttemptAt,
+          lastIp: rec.lastIp,
+        });
+      } else if (rec.failedAttempts > 0) {
+        list.push({
+          email,
+          failedAttempts: rec.failedAttempts,
+          lockedUntil: null,
+          remainingSeconds: 0,
+          lastAttemptAt: rec.lastAttemptAt,
+          lastIp: rec.lastIp,
+        });
+      }
+    }
+    res.json({ ok: true, accounts: list });
+  });
+
+  app.post('/api/auth/unlock-account', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
+    if (!email) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+    accountLockouts.delete(email);
+    saveCredentialsStoreToDisk();
+    await syncAccountToPostgres({
+      email,
+      failedAttempts: 0,
+      lockedUntil: null,
+    });
+    res.json({ ok: true, unlocked: true, email });
+  });
+
+  // ============================================================================
+  // 6. REAL-TIME POSTGRESQL RECORD MIRROR & MULTI-DESTINATION BACKUP ENGINE
+  // ============================================================================
+  app.post('/api/db/sync-record', async (req, res) => {
+    const collectionName =
+      typeof req.body?.collection === 'string' ? req.body.collection.trim() : '';
+    const recordId = typeof req.body?.id === 'string' ? req.body.id.trim() : '';
+    const data =
+      req.body?.data && typeof req.body.data === 'object'
+        ? (req.body.data as Record<string, unknown>)
+        : null;
+
+    if (!collectionName || !recordId || !data) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+
+    if (!pgConnected) {
+      await initPostgresPool();
+    }
+
+    const syncedToPostgres = await upsertClinicalRecordToPostgres(
+      collectionName,
+      recordId,
+      data
+    );
+    res.json({ ok: true, syncedToPostgres, pgConnected });
+  });
+
+  app.post('/api/backup/sync-all', async (req, res) => {
+    try {
+      if (!pgConnected) {
+        await initPostgresPool();
+      }
+
+      const payload = req.body || {};
+      const users = Array.isArray(payload.users) ? payload.users : [];
+      const appointments = Array.isArray(payload.appointments) ? payload.appointments : [];
+      const intakes = Array.isArray(payload.intakes) ? payload.intakes : [];
+      const assessments = Array.isArray(payload.assessments) ? payload.assessments : [];
+      const medications = Array.isArray(payload.medications) ? payload.medications : [];
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      const invoices = Array.isArray(payload.invoices) ? payload.invoices : [];
+      const createSnapshotFile = Boolean(payload.createSnapshotFile ?? true);
+
+      let pgSyncedCount = 0;
+
+      if (pgConnected && pgPool) {
+        for (const u of users) {
+          if (u && typeof u === 'object' && u.uid) {
+            const ok = await upsertClinicalRecordToPostgres('users', String(u.uid), u);
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const a of appointments) {
+          if (a && typeof a === 'object' && a.id) {
+            const ok = await upsertClinicalRecordToPostgres('appointments', String(a.id), a);
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const i of intakes) {
+          if (i && typeof i === 'object' && i.id) {
+            const ok = await upsertClinicalRecordToPostgres('intakes', String(i.id), i);
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const asmt of assessments) {
+          if (asmt && typeof asmt === 'object' && asmt.id) {
+            const ok = await upsertClinicalRecordToPostgres(
+              'assessments',
+              String(asmt.id),
+              asmt
+            );
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const m of medications) {
+          if (m && typeof m === 'object' && m.id) {
+            const ok = await upsertClinicalRecordToPostgres('medications', String(m.id), m);
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const msg of messages) {
+          if (msg && typeof msg === 'object' && msg.id) {
+            const ok = await upsertClinicalRecordToPostgres('messages', String(msg.id), msg);
+            if (ok) pgSyncedCount++;
+          }
+        }
+        for (const inv of invoices) {
+          if (inv && typeof inv === 'object' && inv.id) {
+            const ok = await upsertClinicalRecordToPostgres('invoices', String(inv.id), inv);
+            if (ok) pgSyncedCount++;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const backupArchive = {
+        practice: 'Golden Mind Psychiatry PLLC',
+        provider: 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+        createdAt: nowIso,
+        counts: {
+          users: users.length,
+          appointments: appointments.length,
+          intakes: intakes.length,
+          assessments: assessments.length,
+          medications: medications.length,
+          messages: messages.length,
+          invoices: invoices.length,
+        },
+        collections: {
+          users,
+          appointments,
+          intakes,
+          assessments,
+          medications,
+          messages,
+          invoices,
+        },
+        credentialsSummary: {
+          verifiedEmails: Array.from(verifiedEmailAddresses),
+        },
+      };
+
+      const latestPath = path.join(BACKUPS_DIR, 'latest-backup.json');
+      fs.writeFileSync(latestPath, JSON.stringify(backupArchive, null, 2), 'utf8');
+
+      let snapshotFilename = 'latest-backup.json';
+      if (createSnapshotFile) {
+        const safeStamp = nowIso.replace(/[:.]/g, '-');
+        snapshotFilename = `gmp-backup-${safeStamp}.json`;
+        fs.writeFileSync(
+          path.join(BACKUPS_DIR, snapshotFilename),
+          JSON.stringify(backupArchive, null, 2),
+          'utf8'
+        );
+
+        // Retain the 30 most recent timestamped snapshot files
+        const files = fs
+          .readdirSync(BACKUPS_DIR)
+          .filter((f) => f.startsWith('gmp-backup-') && f.endsWith('.json'))
+          .sort()
+          .reverse();
+        for (const oldFile of files.slice(30)) {
+          try {
+            fs.unlinkSync(path.join(BACKUPS_DIR, oldFile));
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      res.json({
+        ok: true,
+        pgConnected,
+        pgSyncedCount,
+        snapshotFilename,
+        createdAt: nowIso,
+      });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Backup sync failed',
+      });
+    }
+  });
+
+  app.get('/api/backup/status', async (_req, res) => {
+    if (!pgConnected) {
+      await initPostgresPool();
+    }
+
+    const pgCounts: Record<string, number> = {
+      account_directory: 0,
+      users: 0,
+      appointments: 0,
+      intakes: 0,
+      assessments: 0,
+      medications: 0,
+      messages: 0,
+      invoices: 0,
+    };
+
+    if (pgConnected && pgPool) {
+      for (const table of Object.keys(pgCounts)) {
+        try {
+          const r = await pgPool.query(`SELECT COUNT(*)::int AS cnt FROM ${table}`);
+          pgCounts[table] = Number(r.rows?.[0]?.cnt ?? 0);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    let snapshots: Array<{ filename: string; sizeBytes: number; createdAt: string }> = [];
+    try {
+      if (fs.existsSync(BACKUPS_DIR)) {
+        snapshots = fs
+          .readdirSync(BACKUPS_DIR)
+          .filter((f) => f.endsWith('.json'))
+          .map((filename) => {
+            const stat = fs.statSync(path.join(BACKUPS_DIR, filename));
+            return {
+              filename,
+              sizeBytes: stat.size,
+              createdAt: stat.mtime.toISOString(),
+            };
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, 20);
+      }
+    } catch {
+      // ignore
+    }
+
+    res.json({
+      ok: true,
+      pgConnected,
+      pgDatabase: process.env.DB_NAME || 'goldenmind_db',
+      pgLastError: pgConnected ? '' : pgLastError,
+      pgCounts,
+      snapshots,
+    });
+  });
+
+  app.get('/api/backup/download/:filename', (req, res) => {
+    const rawName = path.basename(String(req.params.filename || 'latest-backup.json'));
+    if (!rawName.endsWith('.json')) {
+      res.status(400).json({ ok: false, error: 'Invalid backup filename' });
+      return;
+    }
+    const targetPath = path.join(BACKUPS_DIR, rawName);
+    if (!fs.existsSync(targetPath)) {
+      res.status(404).json({ ok: false, error: 'Backup snapshot not found' });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${rawName}"`);
+    res.sendFile(targetPath);
+  });
+
+  app.post('/api/backup/email-clinic', async (req, res) => {
+    try {
+      const backupData = req.body?.backupData || {};
+      const nowIso = new Date().toISOString();
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const counts = backupData.counts || {};
+
+      const html = buildBrandedEmailHtml(
+        `Complete Clinical Database Backup Snapshot (${nowIso.slice(0, 10)})`,
+        `
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Golden Mind Psychiatry PLLC — Database Backup Archive</h2>
+        <p style="margin:0 0 16px 0;">Attached is your complete, timestamped clinical database backup file (<strong>golden-mind-backup-${nowIso.slice(0, 10)}.json</strong>). You can store this attachment safely in your email archive or upload it in the Admin Portal's <strong>Backups &amp; Security</strong> tab to restore all records or any single patient chart at any time.</p>
+        <table width="100%" cellpadding="8" cellspacing="0" style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:12px;font-size:13px;">
+          <tr><td><strong>Backup Timestamp:</strong></td><td>${nowIso}</td></tr>
+          <tr><td><strong>Registered Patients (users):</strong></td><td>${counts.users ?? 0}</td></tr>
+          <tr><td><strong>Telehealth Appointments:</strong></td><td>${counts.appointments ?? 0}</td></tr>
+          <tr><td><strong>Clinical Intake Forms:</strong></td><td>${counts.intakes ?? 0}</td></tr>
+          <tr><td><strong>PHQ-9 / GAD-7 Assessments:</strong></td><td>${counts.assessments ?? 0}</td></tr>
+          <tr><td><strong>Medications &amp; e-Rx Records:</strong></td><td>${counts.medications ?? 0}</td></tr>
+          <tr><td><strong>Direct Portal Messages:</strong></td><td>${counts.messages ?? 0}</td></tr>
+          <tr><td><strong>Billing Invoices:</strong></td><td>${counts.invoices ?? 0}</td></tr>
+        </table>
+        `
+      );
+
+      const transporter = getSmtpTransporter();
+      let deliveredViaSmtp = false;
+      if (transporter) {
+        try {
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`,
+            to: DOCTOR_ALERT_RECIPIENTS,
+            subject: `[Database Backup] Golden Mind Psychiatry PLLC (${nowIso.slice(0, 10)})`,
+            html,
+            attachments: [
+              ...(HAS_LOCAL_LOGO_PNG
+                ? [
+                    {
+                      filename: 'golden-mind-logo.png',
+                      path: LOGO_PNG_PATH,
+                      cid: 'goldenmindlogo',
+                    },
+                  ]
+                : []),
+              {
+                filename: `golden-mind-backup-${nowIso.slice(0, 10)}.json`,
+                content: Buffer.from(jsonString, 'utf8'),
+                contentType: 'application/json',
+              },
+            ],
+          });
+          deliveredViaSmtp = true;
+        } catch {
+          const fallbackTransport = getSmtpTransporter(587);
+          if (fallbackTransport) {
+            await fallbackTransport.sendMail({
+              from: process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`,
+              to: DOCTOR_ALERT_RECIPIENTS,
+              subject: `[Database Backup] Golden Mind Psychiatry PLLC (${nowIso.slice(0, 10)})`,
+              html,
+              attachments: [
+                ...(HAS_LOCAL_LOGO_PNG
+                  ? [
+                      {
+                        filename: 'golden-mind-logo.png',
+                        path: LOGO_PNG_PATH,
+                        cid: 'goldenmindlogo',
+                      },
+                    ]
+                  : []),
+                {
+                  filename: `golden-mind-backup-${nowIso.slice(0, 10)}.json`,
+                  content: Buffer.from(jsonString, 'utf8'),
+                  contentType: 'application/json',
+                },
+              ],
+            });
+            deliveredViaSmtp = true;
+          }
+        }
+      }
+
+      res.json({ ok: true, deliveredViaSmtp });
+    } catch (err) {
+      res.status(200).json({
+        ok: false,
+        deliveredViaSmtp: false,
+        error: err instanceof Error ? err.message : 'Failed to email backup',
+      });
     }
   });
 

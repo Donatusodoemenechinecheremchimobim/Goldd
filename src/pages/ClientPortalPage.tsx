@@ -54,6 +54,7 @@ import {
   Link2,
   Users,
   UserCheck,
+  Database,
 } from 'lucide-react';
 import {
   auth,
@@ -96,6 +97,8 @@ import {
   markEmailVerifiedInAccountDirectory,
   checkEmailVerifiedInAccountDirectory,
   normalizePortalEmail,
+  checkAccountLockout,
+  recordLoginAttempt,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
 import {
@@ -942,8 +945,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
     if (authLockoutUntil > Date.now()) {
       const waitSeconds = Math.ceil((authLockoutUntil - Date.now()) / 1000);
+      const waitMins = Math.ceil(waitSeconds / 60);
       setAuthError(
-        `Too many failed login attempts. For your account security, please wait ${waitSeconds} seconds before trying again.`
+        `Account temporarily locked due to 5 failed login attempts. Please wait ${
+          waitSeconds > 60 ? `${waitMins} minute(s)` : `${waitSeconds} seconds`
+        } or click "Forgot / Reset Password?" below to unlock immediately.`
       );
       return false;
     }
@@ -960,12 +966,26 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       return false;
     }
 
+    // Check Server + PostgreSQL brute-force lockout state before attempting login
+    if (!isRegistering) {
+      const serverLock = await checkAccountLockout(cleanEmail);
+      if (serverLock.locked && serverLock.remainingSeconds > 0) {
+        setAuthLockoutUntil(Date.now() + serverLock.remainingSeconds * 1000);
+        const mins = Math.ceil(serverLock.remainingSeconds / 60);
+        setAuthError(
+          `Security Lockout Active: This account (${cleanEmail}) is locked for ${mins} more minute(s) after 5 failed password attempts. Click "Forgot / Reset Password?" below to unlock your account immediately.`
+        );
+        return false;
+      }
+    }
+
     try {
       if (isRegistering && cleanEmail !== 'beehobs@yahoo.com') {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
         window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
         window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
         await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+        void recordLoginAttempt(cleanEmail, true, 'password');
         fetch('/api/email/sync-account-credential', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -978,6 +998,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
         window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
         await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+        void recordLoginAttempt(cleanEmail, true, 'password');
         fetch('/api/email/sync-account-credential', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1024,6 +1045,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         if (isVerifiedUpdatedPassword) {
           const established = await establishVerifiedPortalSession(cleanEmail, rawPassword);
           if (established) {
+            void recordLoginAttempt(cleanEmail, true, 'password');
             return true;
           }
         }
@@ -1041,6 +1063,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           const adminCred = await createUserWithEmailAndPassword(auth, cleanEmail, rawPassword);
           setIsRegistering(false);
           await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          void recordLoginAttempt(cleanEmail, true, 'password');
           await completeAuthenticatedSession(adminCred.user, false, true);
           return true;
         } catch {
@@ -1055,6 +1078,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           setIsRegistering(false);
           window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
           await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          void recordLoginAttempt(cleanEmail, true, 'password');
           await completeAuthenticatedSession(existingCred.user, false);
           return true;
         } catch {
@@ -1062,11 +1086,22 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           if (isVerifiedInDb) {
             setIsRegistering(false);
             const established = await establishVerifiedPortalSession(cleanEmail, rawPassword);
-            if (established) return true;
+            if (established) {
+              void recordLoginAttempt(cleanEmail, true, 'password');
+              return true;
+            }
           }
           setIsRegistering(false);
+          const attemptState = await recordLoginAttempt(cleanEmail, false, 'password');
+          if (attemptState.locked) {
+            setAuthLockoutUntil(Date.now() + attemptState.remainingSeconds * 1000);
+            setAuthError(
+              `Security Lockout Active: ${cleanEmail} is locked for 15 minutes after 5 failed attempts. Click "Forgot / Reset Password?" below to unlock immediately.`
+            );
+            return false;
+          }
           setAuthError(
-            `An account for ${cleanEmail} already exists with a different password. Click "Forgot / Reset Password?" below to receive a password reset link in your email inbox.`
+            `An account for ${cleanEmail} already exists with a different password (${attemptState.remainingAttempts} attempt(s) remaining before 15-minute lockout). Click "Forgot / Reset Password?" below to reset via email.`
           );
           return false;
         }
@@ -1083,6 +1118,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           window.localStorage.setItem(`gmp_auth_key_${cleanEmail}`, rawPassword);
           window.localStorage.setItem(`gmp_pw_sync_${cleanEmail}`, rawPassword);
           await registerEmailInAccountDirectory(cleanEmail, rawPassword);
+          void recordLoginAttempt(cleanEmail, true, 'password');
           fetch('/api/email/sync-account-credential', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1093,18 +1129,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         } catch (createErr: unknown) {
           const createCode = (createErr as { code?: string })?.code || '';
           if (createCode === 'auth/email-already-in-use') {
-            const nextCount = failedAuthAttempts + 1;
-            setFailedAuthAttempts(nextCount);
-            if (nextCount >= 5) {
-              setAuthLockoutUntil(Date.now() + 30_000);
+            const attemptState = await recordLoginAttempt(cleanEmail, false, 'password');
+            setFailedAuthAttempts(attemptState.failedAttempts);
+            if (attemptState.locked) {
+              setAuthLockoutUntil(Date.now() + attemptState.remainingSeconds * 1000);
               setFailedAuthAttempts(0);
               setAuthError(
-                'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot / Reset Password?" to reset via email.'
+                `Security Lockout Active: ${cleanEmail} has been locked for 15 minutes after 5 failed sign-in attempts. Click "Forgot / Reset Password?" below to reset via email and unlock immediately.`
               );
               return false;
             }
             setAuthError(
-              `Incorrect password for ${cleanEmail}. Please try again or click "Forgot / Reset Password?" to receive a reset link in your email.`
+              `Incorrect password for ${cleanEmail} (${attemptState.remainingAttempts} attempt(s) remaining before 15-minute security lockout). Click "Forgot / Reset Password?" to receive a reset link.`
             );
             return false;
           }
@@ -1117,18 +1153,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         code === 'auth/user-not-found' ||
         code === 'auth/too-many-requests'
       ) {
-        const nextCount = failedAuthAttempts + 1;
-        setFailedAuthAttempts(nextCount);
-        if (nextCount >= 5 || code === 'auth/too-many-requests') {
-          setAuthLockoutUntil(Date.now() + 30_000);
+        const attemptState = await recordLoginAttempt(cleanEmail, false, 'password');
+        setFailedAuthAttempts(attemptState.failedAttempts);
+        if (attemptState.locked || code === 'auth/too-many-requests') {
+          setAuthLockoutUntil(
+            Date.now() + (attemptState.remainingSeconds || 900) * 1000
+          );
           setFailedAuthAttempts(0);
           setAuthError(
-            'Multiple failed sign-in attempts detected. Login is temporarily rate-limited for 30 seconds, or click "Forgot / Reset Password?" to reset via email.'
+            `Security Lockout Active: ${cleanEmail} is locked for 15 minutes due to multiple failed sign-in attempts. Click "Forgot / Reset Password?" below to unlock immediately.`
           );
           return false;
         }
         setAuthError(
-          'Incorrect email or password. Please try again or click "Forgot / Reset Password?" to receive a reset link in your email.'
+          `Incorrect email or password (${attemptState.remainingAttempts} attempt(s) remaining before 15-minute lockout). Click "Forgot / Reset Password?" to receive a reset link.`
         );
         return false;
       }
@@ -3297,6 +3335,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       id: 'billing' as AdminSubTab,
                       label: 'Billing & Copays',
                       icon: CreditCard,
+                    },
+                    {
+                      id: 'backups' as AdminSubTab,
+                      label: 'Backups & PostgreSQL',
+                      icon: Database,
                     },
                   ] as const
                 ).map((item) => {

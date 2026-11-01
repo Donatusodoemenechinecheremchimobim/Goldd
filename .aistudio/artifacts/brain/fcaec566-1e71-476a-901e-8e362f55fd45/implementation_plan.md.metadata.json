@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for Admin Login (beehobs@yahoo.com / johnbull), All-Patients Database with isolated Per-Patient Chart Workspaces, live Medication/Treatment Plan/Intake/Billing synchronization to each client's portal, 1-on-1 Portal Messaging with clickable links, and instant dual-recipient email alerts when clients message the provider.",
-  "updatedAt":  "2026-10-27T21:15:05.817183352Z",
+  "summary":  "Implementation plan for: (1) Multi-Destination Database Backup & Disaster Recovery Center (1-click JSON/CSV export, automated daily & event-triggered server snapshots, SMTP email backups, Google Drive backup sync, full 1-click restore, and single-patient selective chart restore), (2) Brute-Force Account Lockout Protection across all login endpoints and Admin Lockout Manager, and (3) Self-Hosted VPS Database & Authentication Dual-Sync / Migration Kit for the clinic's own server.",
+  "updatedAt":  "2026-11-01T19:10:47.876003696Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

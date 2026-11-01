@@ -228,6 +228,103 @@ export async function verifyPasswordInAccountDirectory(
 }
 
 /**
+ * Mirrors any clinical record (users, appointments, intakes, assessments, medications, messages, invoices)
+ * to the Ubuntu PostgreSQL database (`goldenmind_db`) in real time via `/api/db/sync-record`.
+ */
+export function syncRecordToPostgres(
+  collectionName: string,
+  id: string,
+  data: Record<string, unknown>
+): void {
+  if (!collectionName || !id || !data) return;
+  fetch('/api/db/sync-record', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ collection: collectionName, id, data }),
+  }).catch(() => {});
+}
+
+/**
+ * Checks whether an email account is currently locked out due to consecutive failed password attempts.
+ */
+export async function checkAccountLockout(rawEmail: string): Promise<{
+  locked: boolean;
+  remainingSeconds: number;
+  failedAttempts: number;
+  maxAttempts: number;
+}> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail) {
+    return { locked: false, remainingSeconds: 0, failedAttempts: 0, maxAttempts: 5 };
+  }
+  try {
+    const resp = await fetch('/api/auth/check-lockout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    const data = await resp.json();
+    return {
+      locked: Boolean(data?.locked),
+      remainingSeconds: Number(data?.remainingSeconds || 0),
+      failedAttempts: Number(data?.failedAttempts || 0),
+      maxAttempts: Number(data?.maxAttempts || 5),
+    };
+  } catch {
+    return { locked: false, remainingSeconds: 0, failedAttempts: 0, maxAttempts: 5 };
+  }
+}
+
+/**
+ * Records a login attempt (success or failure) and enforces the 5-attempt / 15-minute lockout policy.
+ */
+export async function recordLoginAttempt(
+  rawEmail: string,
+  success: boolean,
+  authProvider = 'password'
+): Promise<{
+  locked: boolean;
+  remainingSeconds: number;
+  failedAttempts: number;
+  remainingAttempts: number;
+  maxAttempts: number;
+}> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  if (!cleanEmail) {
+    return {
+      locked: false,
+      remainingSeconds: 0,
+      failedAttempts: 0,
+      remainingAttempts: 5,
+      maxAttempts: 5,
+    };
+  }
+  try {
+    const resp = await fetch('/api/auth/record-login-attempt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, success, authProvider }),
+    });
+    const data = await resp.json();
+    return {
+      locked: Boolean(data?.locked),
+      remainingSeconds: Number(data?.remainingSeconds || 0),
+      failedAttempts: Number(data?.failedAttempts || 0),
+      remainingAttempts: Number(data?.remainingAttempts ?? 5),
+      maxAttempts: Number(data?.maxAttempts || 5),
+    };
+  } catch {
+    return {
+      locked: false,
+      remainingSeconds: 0,
+      failedAttempts: 0,
+      remainingAttempts: 5,
+      maxAttempts: 5,
+    };
+  }
+}
+
+/**
  * Checks whether an email address is linked to an existing account in our database or Firebase Auth.
  */
 export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boolean> {
@@ -649,6 +746,9 @@ export async function ensurePatientOnboarding(
     }
   }
 
+  // Mirror user profile to Ubuntu PostgreSQL (`goldenmind_db`) in real time
+  syncRecordToPostgres('users', uid, portalUser as unknown as Record<string, unknown>);
+
   return portalUser;
 }
 
@@ -733,6 +833,11 @@ export async function createTelehealthAppointment(
       // Non-fatal if backend route unreachable
     }
 
+    syncRecordToPostgres('appointments', docRef.id, {
+      id: docRef.id,
+      ...payload,
+    });
+
     return { id: docRef.id, telehealthUrl, emailDispatched };
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, 'appointments');
@@ -762,7 +867,7 @@ export async function submitClinicalAssessment(params: {
       : calculateMoodSeverity(params.totalScore);
 
   try {
-    await addDoc(collection(db, 'assessments'), {
+    const assessmentPayload = {
       patientId: params.patientId,
       patientName: sanitizeClinicalInput(params.patientName, 120),
       type: params.type,
@@ -774,6 +879,11 @@ export async function submitClinicalAssessment(params: {
       notes: sanitizeClinicalInput(params.notes || '', 1000),
       answers: params.answers || [],
       createdAt: now,
+    };
+    const asmtRef = await addDoc(collection(db, 'assessments'), assessmentPayload);
+    syncRecordToPostgres('assessments', asmtRef.id, {
+      id: asmtRef.id,
+      ...assessmentPayload,
     });
 
     if (params.type === 'PHQ-9' || params.type === 'GAD-7') {

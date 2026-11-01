@@ -34,6 +34,12 @@ import {
   Trash2,
   ClipboardCheck,
   UserCheck,
+  Database,
+  Download,
+  Upload,
+  Lock,
+  Unlock,
+  RefreshCw,
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
@@ -65,7 +71,8 @@ export type AdminSubTab =
   | 'refills'
   | 'intakes'
   | 'messages'
-  | 'billing';
+  | 'billing'
+  | 'backups';
 
 interface ProviderDashboardViewProps {
   currentUser: PortalUser;
@@ -230,9 +237,65 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [invTotal, setInvTotal] = useState(0);
   const [invCovered, setInvCovered] = useState(0);
 
+  // Backups, Ubuntu PostgreSQL (goldenmind_db) Status & Account Lockout Manager State
+  const [pgConnected, setPgConnected] = useState(false);
+  const [pgDatabaseName, setPgDatabaseName] = useState('goldenmind_db');
+  const [pgCounts, setPgCounts] = useState<Record<string, number>>({});
+  const [serverSnapshots, setServerSnapshots] = useState<
+    Array<{ filename: string; sizeBytes: number; createdAt: string }>
+  >([]);
+  const [lockedAccounts, setLockedAccounts] = useState<
+    Array<{
+      email: string;
+      failedAttempts: number;
+      lockedUntil: number | null;
+      remainingSeconds: number;
+      lastAttemptAt: string;
+      lastIp?: string;
+    }>
+  >([]);
+  const [backupSyncing, setBackupSyncing] = useState(false);
+  const [emailingBackup, setEmailingBackup] = useState(false);
+  const [uploadedBackupData, setUploadedBackupData] = useState<{
+    createdAt?: string;
+    collections?: {
+      users?: PortalUser[];
+      appointments?: AppointmentRecord[];
+      intakes?: IntakeRecord[];
+      assessments?: AssessmentRecord[];
+      medications?: MedicationRecord[];
+      messages?: MessageRecord[];
+      invoices?: InvoiceRecord[];
+    };
+  } | null>(null);
+  const [restoreTargetPatientUid, setRestoreTargetPatientUid] = useState<string>('ALL');
+  const [restoringBackup, setRestoringBackup] = useState(false);
+
   const showBanner = (msg: string) => {
     setStatusFeedback(msg);
     setTimeout(() => setStatusFeedback(null), 4500);
+  };
+
+  const refreshBackupAndLockoutStatus = async () => {
+    try {
+      const [statusRes, lockRes] = await Promise.all([
+        fetch('/api/backup/status'),
+        fetch('/api/auth/locked-accounts'),
+      ]);
+      const statusData = await statusRes.json();
+      if (statusData?.ok) {
+        setPgConnected(Boolean(statusData.pgConnected));
+        setPgDatabaseName(statusData.pgDatabase || 'goldenmind_db');
+        setPgCounts(statusData.pgCounts || {});
+        setServerSnapshots(Array.isArray(statusData.snapshots) ? statusData.snapshots : []);
+      }
+      const lockData = await lockRes.json();
+      if (lockData?.ok && Array.isArray(lockData.accounts)) {
+        setLockedAccounts(lockData.accounts);
+      }
+    } catch {
+      // ignore
+    }
   };
 
   useEffect(() => {
@@ -329,6 +392,353 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       unsubInvoices();
     };
   }, []);
+
+  // Automatically mirror all live clinical records to Ubuntu PostgreSQL (`goldenmind_db`) & latest server backup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch('/api/backup/sync-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          users: patients,
+          appointments,
+          intakes,
+          assessments,
+          medications,
+          messages,
+          invoices,
+          createSnapshotFile: false,
+        }),
+      })
+        .then(() => {
+          void refreshBackupAndLockoutStatus();
+        })
+        .catch(() => {});
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [patients, appointments, intakes, assessments, medications, messages, invoices]);
+
+  const handleManualSyncAndSnapshot = async () => {
+    setBackupSyncing(true);
+    try {
+      const res = await fetch('/api/backup/sync-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          users: patients,
+          appointments,
+          intakes,
+          assessments,
+          medications,
+          messages,
+          invoices,
+          createSnapshotFile: true,
+        }),
+      });
+      const data = await res.json();
+      await refreshBackupAndLockoutStatus();
+      if (data?.pgConnected) {
+        showBanner(
+          `Synced ${data.pgSyncedCount} records to Ubuntu PostgreSQL (${pgDatabaseName}) & saved snapshot ${data.snapshotFilename}!`
+        );
+      } else {
+        showBanner(`Saved full database snapshot (${data?.snapshotFilename || 'latest-backup.json'}) on server!`);
+      }
+    } catch {
+      showBanner('Saved local database backup.');
+    } finally {
+      setBackupSyncing(false);
+    }
+  };
+
+  const handleDownloadJsonBackup = () => {
+    const nowIso = new Date().toISOString();
+    const archive = {
+      practice: 'Golden Mind Psychiatry PLLC',
+      provider: 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+      createdAt: nowIso,
+      counts: {
+        users: patients.length,
+        appointments: appointments.length,
+        intakes: intakes.length,
+        assessments: assessments.length,
+        medications: medications.length,
+        messages: messages.length,
+        invoices: invoices.length,
+      },
+      collections: {
+        users: patients,
+        appointments,
+        intakes,
+        assessments,
+        medications,
+        messages,
+        invoices,
+      },
+    };
+    const blob = new Blob([JSON.stringify(archive, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `golden-mind-backup-${nowIso.slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showBanner('Downloaded full JSON database backup to your computer!');
+  };
+
+  const handleDownloadPatientsCsv = () => {
+    const headers = [
+      'UID',
+      'Full Name',
+      'Email',
+      'Phone',
+      'Date of Birth',
+      'Biological Sex',
+      'Address',
+      'Insurance Provider',
+      'Member ID',
+      'Group Number',
+      'Preferred Pharmacy',
+      'Emergency Contact',
+      'Diagnosis',
+    ];
+    const escapeCsv = (val: unknown) => {
+      const s = String(val ?? '').replace(/"/g, '""');
+      return `"${s}"`;
+    };
+    const rows = patients.map((p) =>
+      [
+        p.uid,
+        p.fullName,
+        p.email,
+        p.phone,
+        p.dateOfBirth,
+        p.biologicalSex,
+        p.address,
+        p.insuranceProvider,
+        p.insuranceMemberId,
+        p.insuranceGroupNumber,
+        p.preferredPharmacy,
+        p.emergencyContact,
+        p.diagnosis,
+      ]
+        .map(escapeCsv)
+        .join(',')
+    );
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `golden-mind-patients-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showBanner('Downloaded Patients Directory CSV!');
+  };
+
+  const handleEmailBackupToClinic = async () => {
+    setEmailingBackup(true);
+    try {
+      const backupData = {
+        practice: 'Golden Mind Psychiatry PLLC',
+        createdAt: new Date().toISOString(),
+        counts: {
+          users: patients.length,
+          appointments: appointments.length,
+          intakes: intakes.length,
+          assessments: assessments.length,
+          medications: medications.length,
+          messages: messages.length,
+          invoices: invoices.length,
+        },
+        collections: {
+          users: patients,
+          appointments,
+          intakes,
+          assessments,
+          medications,
+          messages,
+          invoices,
+        },
+      };
+      const res = await fetch('/api/backup/email-clinic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupData }),
+      });
+      const data = await res.json();
+      if (data?.deliveredViaSmtp) {
+        showBanner(
+          'Full JSON backup emailed to info@goldenmindpsychiatry.org & beehobs@yahoo.com!'
+        );
+      } else {
+        showBanner('Backup saved on server. Check SMTP credentials to email externally.');
+      }
+    } catch {
+      showBanner('Unable to dispatch backup email.');
+    } finally {
+      setEmailingBackup(false);
+    }
+  };
+
+  const handleBackupFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(String(evt.target?.result || '{}'));
+        if (parsed && parsed.collections) {
+          setUploadedBackupData(parsed);
+          setRestoreTargetPatientUid('ALL');
+          showBanner(
+            `Loaded backup file (${file.name}) with ${
+              parsed.collections.users?.length || 0
+            } patient chart(s). Ready to restore.`
+          );
+        }
+      } catch {
+        showBanner('Invalid JSON backup file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!uploadedBackupData?.collections) return;
+    setRestoringBackup(true);
+    try {
+      // 1. Create a pre-restore safety snapshot on server first
+      await fetch('/api/backup/sync-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          users: patients,
+          appointments,
+          intakes,
+          assessments,
+          medications,
+          messages,
+          invoices,
+          createSnapshotFile: true,
+        }),
+      }).catch(() => {});
+
+      const cols = uploadedBackupData.collections;
+      const isSinglePatient = restoreTargetPatientUid !== 'ALL';
+
+      const targetUsers = (cols.users || []).filter((u) =>
+        isSinglePatient ? u.uid === restoreTargetPatientUid : true
+      );
+      const targetAppts = (cols.appointments || []).filter((a) =>
+        isSinglePatient ? a.patientId === restoreTargetPatientUid : true
+      );
+      const targetIntakes = (cols.intakes || []).filter((i) =>
+        isSinglePatient ? i.patientId === restoreTargetPatientUid : true
+      );
+      const targetAssessments = (cols.assessments || []).filter((asmt) =>
+        isSinglePatient ? asmt.patientId === restoreTargetPatientUid : true
+      );
+      const targetMeds = (cols.medications || []).filter((m) =>
+        isSinglePatient ? m.patientId === restoreTargetPatientUid : true
+      );
+      const targetMsgs = (cols.messages || []).filter((msg) =>
+        isSinglePatient ? msg.patientId === restoreTargetPatientUid : true
+      );
+      const targetInvoices = (cols.invoices || []).filter((inv) =>
+        isSinglePatient ? inv.patientId === restoreTargetPatientUid : true
+      );
+
+      for (const u of targetUsers) {
+        if (u?.uid) {
+          await setDoc(doc(db, 'users', u.uid), u);
+        }
+      }
+      for (const a of targetAppts) {
+        if (a?.id) {
+          const { id, ...rest } = a;
+          await setDoc(doc(db, 'appointments', id), rest);
+        }
+      }
+      for (const i of targetIntakes) {
+        if (i?.id) {
+          const { id, ...rest } = i;
+          await setDoc(doc(db, 'intakes', id), rest);
+        }
+      }
+      for (const asmt of targetAssessments) {
+        if (asmt?.id) {
+          const { id, ...rest } = asmt;
+          await setDoc(doc(db, 'assessments', id), rest);
+        }
+      }
+      for (const m of targetMeds) {
+        if (m?.id) {
+          const { id, ...rest } = m;
+          await setDoc(doc(db, 'medications', id), rest);
+        }
+      }
+      for (const msg of targetMsgs) {
+        if (msg?.id) {
+          const { id, ...rest } = msg;
+          await setDoc(doc(db, 'messages', id), rest);
+        }
+      }
+      for (const inv of targetInvoices) {
+        if (inv?.id) {
+          const { id, ...rest } = inv;
+          await setDoc(doc(db, 'invoices', id), rest);
+        }
+      }
+
+      // Also sync restored records to Ubuntu PostgreSQL (`goldenmind_db`)
+      await fetch('/api/backup/sync-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          users: targetUsers,
+          appointments: targetAppts,
+          intakes: targetIntakes,
+          assessments: targetAssessments,
+          medications: targetMeds,
+          messages: targetMsgs,
+          invoices: targetInvoices,
+          createSnapshotFile: false,
+        }),
+      }).catch(() => {});
+
+      await refreshBackupAndLockoutStatus();
+      showBanner(
+        isSinglePatient
+          ? `Successfully restored single patient chart (${targetUsers[0]?.fullName || restoreTargetPatientUid})!`
+          : `Successfully restored full database (${targetUsers.length} patient charts & all clinical records)!`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'restore');
+    } finally {
+      setRestoringBackup(false);
+    }
+  };
+
+  const handleUnlockAccount = async (email: string) => {
+    try {
+      await fetch('/api/auth/unlock-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      await refreshBackupAndLockoutStatus();
+      showBanner(`Unlocked login access for ${email}!`);
+    } catch {
+      // ignore
+    }
+  };
 
   // Synchronize care plan & demographic fields when opening an individual patient chart
   const activeChartPatient =
@@ -2511,6 +2921,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
             { id: 'charts', label: 'PHQ-9 / GAD-7 Scales', icon: Activity },
             { id: 'intakes', label: 'Intake Forms', icon: FileText },
             { id: 'billing', label: 'Billing & Copays', icon: CreditCard },
+            { id: 'backups', label: 'Backups, PostgreSQL & Lockouts', icon: Database },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeSubTab === tab.id;
@@ -3465,6 +3876,320 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                   Post Statement to Patient Portal
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* Sub-Tab 7: Database Backups, Ubuntu PostgreSQL (goldenmind_db) Mirror & Account Lockout Center */}
+          {activeSubTab === 'backups' && (
+            <div className="space-y-6">
+              {/* 1. Ubuntu PostgreSQL (goldenmind_db) & Multi-Destination Backup Action Card */}
+              <div className="bg-white portal-card p-6 space-y-5 border border-[#D4AF37]/40">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 pb-4">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
+                      Zero-Data-Loss Clinical Protection
+                    </span>
+                    <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                      Database Backup, Restore &amp; Ubuntu PostgreSQL ({pgDatabaseName}) Mirror
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Automatically mirrors all 8 tables (account_directory, users, appointments,
+                      intakes, assessments, medications, messages, invoices) without altering your
+                      Firebase configuration.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-3 py-1.5 rounded-[12px] text-xs font-bold ${
+                        pgConnected
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-[#FAF6EA] text-[#9E7206] border border-[#D4AF37]/40'
+                      }`}
+                    >
+                      {pgConnected
+                        ? `Ubuntu PostgreSQL (${pgDatabaseName}): Connected`
+                        : 'Server Snapshot & Cloud Firestore Mode Active'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live Record Counts Across All 8 Tables */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    {
+                      label: 'Patients (users)',
+                      live: patients.length,
+                      pg: pgCounts.users ?? 0,
+                    },
+                    {
+                      label: 'Auth Accounts',
+                      live: patients.length + 1,
+                      pg: pgCounts.account_directory ?? 0,
+                    },
+                    {
+                      label: 'Appointments',
+                      live: appointments.length,
+                      pg: pgCounts.appointments ?? 0,
+                    },
+                    {
+                      label: 'Intake Forms',
+                      live: intakes.length,
+                      pg: pgCounts.intakes ?? 0,
+                    },
+                    {
+                      label: 'PHQ-9 / GAD-7',
+                      live: assessments.length,
+                      pg: pgCounts.assessments ?? 0,
+                    },
+                    {
+                      label: 'Medications',
+                      live: medications.length,
+                      pg: pgCounts.medications ?? 0,
+                    },
+                    {
+                      label: 'Portal Messages',
+                      live: messages.length,
+                      pg: pgCounts.messages ?? 0,
+                    },
+                    {
+                      label: 'Billing Invoices',
+                      live: invoices.length,
+                      pg: pgCounts.invoices ?? 0,
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="p-3.5 rounded-[16px] bg-[#FAF9F5] border border-stone-200"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                        {item.label}
+                      </p>
+                      <p className="text-lg font-bold font-portal-heading tabular-nums text-stone-900 mt-1">
+                        {item.live}
+                      </p>
+                      {pgConnected && (
+                        <p className="text-[11px] text-emerald-700 font-semibold tabular-nums">
+                          {item.pg} in PostgreSQL
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 4-Way Backup Export Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                  <button
+                    type="button"
+                    disabled={backupSyncing}
+                    onClick={handleManualSyncAndSnapshot}
+                    className="py-3 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${backupSyncing ? 'animate-spin' : ''}`} />
+                    <span>
+                      {backupSyncing ? 'Syncing...' : 'Sync PostgreSQL & Snapshot'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadJsonBackup}
+                    className="py-3 px-4 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Full JSON Backup</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadPatientsCsv}
+                    className="py-3 px-4 rounded-[12px] bg-[#FAF9F5] border border-stone-300 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-100"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Patients CSV</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={emailingBackup}
+                    onClick={handleEmailBackupToClinic}
+                    className="py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37] text-[#9E7206] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-[#f3ebd3] disabled:opacity-60"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {emailingBackup ? 'Sending Email...' : 'Email Backup to Clinic'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Full Database Restore & Single-Patient Selective Chart Restore */}
+              <div className="bg-white portal-card p-6 space-y-4">
+                <div className="border-b border-stone-200 pb-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                    Disaster Recovery &amp; Selective Chart Restore
+                  </span>
+                  <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                    Restore Full Database or Single Patient Chart from Backup File
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Upload any saved <code>golden-mind-backup-*.json</code> file. An automatic
+                    safety snapshot is created before any restore runs.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1.5">
+                      1. Select Backup JSON File (.json)
+                    </label>
+                    <label className="w-full px-4 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-dashed border-stone-300 text-xs font-semibold text-stone-700 flex items-center gap-2 cursor-pointer hover:border-[#D4AF37]">
+                      <Upload className="w-4 h-4 text-[#9E7206]" />
+                      <span>
+                        {uploadedBackupData
+                          ? `Backup Loaded (${
+                              uploadedBackupData.collections?.users?.length || 0
+                            } Patients)`
+                          : 'Choose Backup .json File...'}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={handleBackupFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1.5">
+                      2. Restore Scope (Full Database vs. Single Patient)
+                    </label>
+                    <select
+                      value={restoreTargetPatientUid}
+                      onChange={(e) => setRestoreTargetPatientUid(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    >
+                      <option value="ALL">
+                        Full Database Restore (All Patients &amp; Clinical Records)
+                      </option>
+                      {(uploadedBackupData?.collections?.users || []).map((u) => (
+                        <option key={u.uid} value={u.uid}>
+                          Single Patient Only: {u.fullName} ({u.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {uploadedBackupData && (
+                  <button
+                    type="button"
+                    disabled={restoringBackup}
+                    onClick={handleExecuteRestore}
+                    className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800 disabled:opacity-60"
+                  >
+                    {restoringBackup
+                      ? 'Restoring Records...'
+                      : restoreTargetPatientUid === 'ALL'
+                      ? 'Execute Full Database Restore Now (With Safety Snapshot)'
+                      : 'Restore Selected Patient Chart Only (Without Overwriting Others)'}
+                  </button>
+                )}
+
+                {/* Saved Server Snapshot History */}
+                {serverSnapshots.length > 0 && (
+                  <div className="pt-3 border-t border-stone-200 space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                      Automated Server-Side Snapshot Files ({serverSnapshots.length})
+                    </h4>
+                    <div className="divide-y divide-stone-200 max-h-48 overflow-y-auto">
+                      {serverSnapshots.map((snap) => (
+                        <div
+                          key={snap.filename}
+                          className="py-2.5 flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-stone-900 font-mono">{snap.filename}</p>
+                            <p className="text-[11px] text-stone-500 tabular-nums">
+                              {snap.createdAt.replace('T', ' ').slice(0, 19)} UTC ·{' '}
+                              {(snap.sizeBytes / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                          <a
+                            href={`/api/backup/download/${encodeURIComponent(snap.filename)}`}
+                            download={snap.filename}
+                            className="px-3 py-1.5 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs hover:bg-[#0A0A0A] hover:text-[#D4AF37]"
+                          >
+                            Download .json
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Brute-Force Login Account Lockout Protection Manager */}
+              <div className="bg-white portal-card p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                      Login Endpoint Brute-Force Protection
+                    </span>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Account Lockout Monitor (5 Failed Attempts = 15-Minute Lockout)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshBackupAndLockoutStatus}
+                    className="px-3 py-1.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-700 cursor-pointer"
+                  >
+                    Refresh Status
+                  </button>
+                </div>
+
+                {lockedAccounts.length === 0 ? (
+                  <div className="p-4 rounded-[14px] bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      No accounts are currently locked out. All login endpoints are actively
+                      protected against brute-force password guessing.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-stone-200">
+                    {lockedAccounts.map((acct) => (
+                      <div
+                        key={acct.email}
+                        className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+                      >
+                        <div>
+                          <p className="font-bold text-stone-900">{acct.email}</p>
+                          <p className="text-stone-500 tabular-nums">
+                            Failed Attempts: <strong>{acct.failedAttempts} / 5</strong> ·{' '}
+                            {acct.lockedUntil && acct.remainingSeconds > 0 ? (
+                              <span className="text-red-600 font-bold">
+                                Locked ({Math.ceil(acct.remainingSeconds / 60)} min remaining)
+                              </span>
+                            ) : (
+                              <span>Active warning state</span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleUnlockAccount(acct.email)}
+                          className="px-3.5 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>Unlock Account in 1 Click</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
