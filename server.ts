@@ -674,6 +674,7 @@ function getSafeClientOrigin(rawOrigin: unknown): string {
     trimmed === 'https://www.goldenmindpsychiatry.org' ||
     /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(trimmed) ||
     /^https?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{2,5})?$/i.test(trimmed) ||
+    /^https?:\/\/[a-z0-9.-]+\.(nip|sslip)\.io(:\d{2,5})?$/i.test(trimmed) ||
     /^https?:\/\/localhost(:\d{2,5})?$/i.test(trimmed)
   ) {
     return trimmed;
@@ -2390,25 +2391,32 @@ async function startServer() {
   });
 
   // 7C-2. Standalone Direct Server OAuth 2.0 Config & Endpoints (Zero firebaseapp.com URLs)
+  const isRealOAuthEnv = (val?: string) => {
+    const v = String(val || '').trim();
+    if (!v) return false;
+    if (/^(your-|paste-|change_this)/i.test(v)) return false;
+    return true;
+  };
+
   app.get('/api/standalone/oauth/config', (_req, res) => {
     res.json({
       ok: true,
       providers: {
-        google: Boolean(
-          process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
-        ),
-        yahoo: Boolean(
-          process.env.YAHOO_CLIENT_ID?.trim() && process.env.YAHOO_CLIENT_SECRET?.trim()
-        ),
-        microsoft: Boolean(
-          process.env.MICROSOFT_CLIENT_ID?.trim() && process.env.MICROSOFT_CLIENT_SECRET?.trim()
-        ),
-        twitter: Boolean(
-          process.env.TWITTER_CLIENT_ID?.trim() && process.env.TWITTER_CLIENT_SECRET?.trim()
-        ),
-        facebook: Boolean(
-          process.env.FACEBOOK_CLIENT_ID?.trim() && process.env.FACEBOOK_CLIENT_SECRET?.trim()
-        ),
+        google:
+          isRealOAuthEnv(process.env.GOOGLE_CLIENT_ID) &&
+          isRealOAuthEnv(process.env.GOOGLE_CLIENT_SECRET),
+        yahoo:
+          isRealOAuthEnv(process.env.YAHOO_CLIENT_ID) &&
+          isRealOAuthEnv(process.env.YAHOO_CLIENT_SECRET),
+        microsoft:
+          isRealOAuthEnv(process.env.MICROSOFT_CLIENT_ID) &&
+          isRealOAuthEnv(process.env.MICROSOFT_CLIENT_SECRET),
+        twitter:
+          isRealOAuthEnv(process.env.TWITTER_CLIENT_ID) &&
+          isRealOAuthEnv(process.env.TWITTER_CLIENT_SECRET),
+        facebook:
+          isRealOAuthEnv(process.env.FACEBOOK_CLIENT_ID) &&
+          isRealOAuthEnv(process.env.FACEBOOK_CLIENT_SECRET),
       },
     });
   });
