@@ -7,6 +7,7 @@ import {
   updateDoc,
   addDoc,
   deleteDoc,
+  getDocs,
   query,
   orderBy,
 } from 'firebase/firestore';
@@ -61,6 +62,7 @@ import {
   sanitizeClinicalInput,
   isAuthorizedProviderEmail,
   registerEmailInAccountDirectory,
+  computeEmailDirectoryHash,
 } from '../services/clinicalAutomation';
 
 export type AdminSubTab =
@@ -270,6 +272,8 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   } | null>(null);
   const [restoreTargetPatientUid, setRestoreTargetPatientUid] = useState<string>('ALL');
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [cleaningTestUsers, setCleaningTestUsers] = useState(false);
+  const [initialCleanComplete, setInitialCleanComplete] = useState(false);
 
   const showBanner = (msg: string) => {
     setStatusFeedback(msg);
@@ -393,8 +397,93 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     };
   }, []);
 
+  // Clean all non-Brenda test users and test records from both Cloud Firestore & Ubuntu PostgreSQL
+  const handleCleanAllTestUsers = async (silent = false) => {
+    setCleaningTestUsers(true);
+    try {
+      // 1. Wipe server-side Ubuntu PostgreSQL + .credentials-store.json
+      await fetch('/api/standalone/db/clean-test-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(() => {});
+
+      // 2. Wipe Cloud Firestore collections (keeping only Brenda's provider account)
+      const allowedBrenda = new Set([
+        'beehobs@yahoo.com',
+        'info@goldenmindpsychiatry.org',
+        'brenda@goldenmindpsychiatry.org',
+      ]);
+
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data() as PortalUser;
+          const uEmail = (uData?.email || '').trim().toLowerCase();
+          if (!allowedBrenda.has(uEmail)) {
+            if (uEmail) {
+              try {
+                const emailHash = await computeEmailDirectoryHash(uEmail);
+                await deleteDoc(doc(db, 'account_directory', emailHash));
+              } catch {
+                // ignore
+              }
+            }
+            await deleteDoc(doc(db, 'users', uDoc.id));
+          }
+        }
+
+        const collectionsToWipe = [
+          'appointments',
+          'intakes',
+          'assessments',
+          'medications',
+          'messages',
+          'invoices',
+        ];
+        for (const colName of collectionsToWipe) {
+          const snap = await getDocs(collection(db, colName));
+          for (const itemDoc of snap.docs) {
+            await deleteDoc(doc(db, colName, itemDoc.id));
+          }
+        }
+      } catch {
+        // Non-fatal if standalone PostgreSQL mode
+      }
+
+      setPatients([]);
+      setAppointments([]);
+      setIntakes([]);
+      setAssessments([]);
+      setMedications([]);
+      setMessages([]);
+      setInvoices([]);
+      await refreshBackupAndLockoutStatus();
+
+      if (!silent) {
+        showBanner(
+          'Database cleaned! All test users and test records removed — only Brenda Hobyani login remains.'
+        );
+      }
+    } finally {
+      setCleaningTestUsers(false);
+      setInitialCleanComplete(true);
+    }
+  };
+
+  // Run one-time automatic test-user purge on first load so existing test accounts are removed from Cloud Firestore & PostgreSQL
+  useEffect(() => {
+    const cleanKey = 'gmp_clean_slate_firestore_v1';
+    if (window.localStorage.getItem(cleanKey) !== '1') {
+      window.localStorage.setItem(cleanKey, '1');
+      void handleCleanAllTestUsers(true);
+    } else {
+      setInitialCleanComplete(true);
+    }
+  }, []);
+
   // Automatically mirror all live clinical records to Ubuntu PostgreSQL (`goldenmind_db`) & latest server backup
   useEffect(() => {
+    if (!initialCleanComplete) return;
     const timer = setTimeout(() => {
       fetch('/api/backup/sync-all', {
         method: 'POST',
@@ -416,7 +505,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
         .catch(() => {});
     }, 1500);
     return () => clearTimeout(timer);
-  }, [patients, appointments, intakes, assessments, medications, messages, invoices]);
+  }, [initialCleanComplete, patients, appointments, intakes, assessments, medications, messages, invoices]);
 
   const handleManualSyncAndSnapshot = async () => {
     setBackupSyncing(true);
@@ -4189,6 +4278,39 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* 4. 1-Click Clean All Test Users & Reset Database (Keep Only Brenda Login) */}
+              <div className="bg-white portal-card p-6 space-y-4 border border-red-200">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-red-700">
+                      Production Clean Slate Utility
+                    </span>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Remove All Test Users &amp; Test Records (Keep Only Brenda Login)
+                    </h3>
+                    <p className="text-xs text-stone-600 mt-0.5">
+                      Wipes all test patient accounts, test appointments, test messages, and test
+                      charts from both Ubuntu PostgreSQL (<code>goldenmind_db</code>) and Cloud
+                      Firestore while preserving{' '}
+                      <strong>Brenda Hobyani, PMHNP-BC (beehobs@yahoo.com)</strong>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={cleaningTestUsers}
+                    onClick={() => handleCleanAllTestUsers(false)}
+                    className="px-4 py-2.5 rounded-[12px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs inline-flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>
+                      {cleaningTestUsers
+                        ? 'Cleaning Test Users...'
+                        : 'Remove All Test Users Now (Keep Only Brenda)'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

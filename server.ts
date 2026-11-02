@@ -855,14 +855,18 @@ function getSmtpTransporter(overridePort?: number) {
   });
 }
 
+let cachedWorkingSmtpPort: number | null = null;
+
 async function sendClinicEmail(opts: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
 }): Promise<{ deliveredViaSmtp: boolean; smtpError?: string }> {
-  const configuredPort = Number(process.env.SMTP_PORT || 587);
-  const fallbackPort = configuredPort === 465 ? 587 : 465;
+  const portsOrder =
+    cachedWorkingSmtpPort === 587
+      ? [587, 465]
+      : [465, 587];
   const fromAddress =
     process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`;
 
@@ -884,11 +888,12 @@ async function sendClinicEmail(opts: {
   };
 
   let lastErrMsg = '';
-  for (const portToTry of [configuredPort, fallbackPort]) {
+  for (const portToTry of portsOrder) {
     const transporter = getSmtpTransporter(portToTry);
     if (!transporter) continue;
     try {
       await transporter.sendMail(mailPayload);
+      cachedWorkingSmtpPort = portToTry;
       console.log(`📧 [SMTP] Delivered "${opts.subject}" to ${opts.to} (port ${portToTry})`);
       return { deliveredViaSmtp: true };
     } catch (err) {
@@ -2876,6 +2881,114 @@ async function startServer() {
       });
     }
   });
+
+  // 7F. Clean All Test Users & Reset Database (Keep ONLY Brenda Provider Login)
+  async function cleanAllTestUsersFromServerAndPostgres(): Promise<{
+    ok: boolean;
+    deletedPostgresUsers: number;
+    keptAdmins: string[];
+  }> {
+    const allowedBrendaEmails = new Set([
+      'beehobs@yahoo.com',
+      'info@goldenmindpsychiatry.org',
+      'brenda@goldenmindpsychiatry.org',
+    ]);
+
+    // 1. Clean in-memory & disk credential store (.credentials-store.json)
+    for (const email of Array.from(verifiedResetPasswords.keys())) {
+      if (!allowedBrendaEmails.has(email.toLowerCase())) {
+        verifiedResetPasswords.delete(email);
+      }
+    }
+    for (const email of Array.from(verifiedEmailAddresses)) {
+      if (!allowedBrendaEmails.has(email.toLowerCase())) {
+        verifiedEmailAddresses.delete(email);
+      }
+    }
+    accountLockouts.clear();
+    verifiedEmailAddresses.add('beehobs@yahoo.com');
+    verifiedEmailAddresses.add('info@goldenmindpsychiatry.org');
+    saveCredentialsStoreToDisk();
+
+    // 2. Clean Ubuntu PostgreSQL (goldenmind_db) tables, keeping only Brenda's provider account
+    let deletedPostgresUsers = 0;
+    if (!pgConnected) {
+      await initPostgresPool();
+    }
+    if (pgPool && pgConnected) {
+      try {
+        await pgPool.query('DELETE FROM appointments');
+        await pgPool.query('DELETE FROM intakes');
+        await pgPool.query('DELETE FROM assessments');
+        await pgPool.query('DELETE FROM medications');
+        await pgPool.query('DELETE FROM messages');
+        await pgPool.query('DELETE FROM invoices');
+        await pgPool.query(
+          `DELETE FROM account_directory WHERE LOWER(email) NOT IN ('beehobs@yahoo.com', 'info@goldenmindpsychiatry.org', 'brenda@goldenmindpsychiatry.org')`
+        );
+        const delUsersRes = await pgPool.query(
+          `DELETE FROM users WHERE LOWER(email) NOT IN ('beehobs@yahoo.com', 'info@goldenmindpsychiatry.org', 'brenda@goldenmindpsychiatry.org')`
+        );
+        deletedPostgresUsers = delUsersRes.rowCount || 0;
+
+        // Ensure Brenda's provider profile exists cleanly
+        await ensureStandalonePostgresUser({
+          email: 'beehobs@yahoo.com',
+          fullName: 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+          phone: '(432) 934-3185',
+          dateOfBirth: '1980-01-01',
+          insuranceProvider: 'Golden Mind Psychiatry PLLC',
+          authProvider: 'password',
+          emailVerified: true,
+        });
+      } catch (err) {
+        console.warn('PostgreSQL test-user cleanup warning:', err);
+      }
+    }
+
+    // 3. Remove stale test snapshot files so test users are not restored
+    try {
+      const latestBackupPath = path.join(BACKUPS_DIR, 'latest-clinical-backup.json');
+      if (fs.existsSync(latestBackupPath)) {
+        fs.unlinkSync(latestBackupPath);
+      }
+    } catch {
+      // ignore
+    }
+
+    return {
+      ok: true,
+      deletedPostgresUsers,
+      keptAdmins: Array.from(allowedBrendaEmails),
+    };
+  }
+
+  app.post('/api/standalone/db/clean-test-data', async (_req, res) => {
+    try {
+      const result = await cleanAllTestUsersFromServerAndPostgres();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to clean test data',
+      });
+    }
+  });
+
+  // One-time automatic production clean-slate reset on startup
+  const cleanSlateMarkerFile = path.join(BACKUPS_DIR, '.clean_slate_prod_v1.done');
+  if (!fs.existsSync(cleanSlateMarkerFile)) {
+    cleanAllTestUsersFromServerAndPostgres()
+      .then(() => {
+        try {
+          fs.writeFileSync(cleanSlateMarkerFile, new Date().toISOString(), 'utf8');
+        } catch {
+          // ignore
+        }
+        console.log('🧹 [Clean Slate] Removed all test users; kept only Brenda Hobyani provider login.');
+      })
+      .catch(() => {});
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
