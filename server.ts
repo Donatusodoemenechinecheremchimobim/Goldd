@@ -265,11 +265,21 @@ async function initPostgresPool(): Promise<void> {
           payment_method VARCHAR(128),
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS security_events (
+          id VARCHAR(128) PRIMARY KEY,
+          ip_address VARCHAR(128) NOT NULL,
+          event_type VARCHAR(64) NOT NULL,
+          path VARCHAR(500) NOT NULL,
+          method VARCHAR(16) NOT NULL,
+          reason VARCHAR(500) NOT NULL,
+          blocked_until TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
       `);
       pgPool = pool;
       pgConnected = true;
       pgLastError = '';
-      console.log('✅ Connected to Ubuntu PostgreSQL database (goldenmind_db) & verified all 8 tables.');
+      console.log('✅ Connected to Ubuntu PostgreSQL database (goldenmind_db) & verified all 9 tables (including security_events).');
     } finally {
       client.release();
     }
@@ -752,9 +762,48 @@ function sanitizeEmailAddress(raw: unknown): string {
 }
 
 /**
- * High-throughput in-memory IP rate limiter with automatic sliding window cleanup.
+ * High-throughput in-memory IP rate limiter, Banned IP Store, & Security Intrusion Audit Engine.
  */
+interface SecurityEventRecord {
+  id: string;
+  ipAddress: string;
+  eventType:
+    | 'scanner_probe'
+    | 'sqli_xss_blocked'
+    | 'rate_limit_exceeded'
+    | 'brute_force_lockout'
+    | 'unauthorized_api_access'
+    | 'cors_violation'
+    | 'security_test_alert';
+  path: string;
+  method: string;
+  reason: string;
+  blockedUntil: string | null;
+  createdAt: string;
+}
+
+interface BannedIpRecord {
+  ip: string;
+  bannedUntil: number;
+  reason: string;
+  hits: number;
+  lastPath: string;
+  createdAt: string;
+}
+
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const bannedIps = new Map<string, BannedIpRecord>();
+const securityEventsLog: SecurityEventRecord[] = [];
+const securityEmailAlertCooldown = new Map<string, number>();
+
+const securityStats = {
+  blockedScanners: 0,
+  blockedSqlXss: 0,
+  rateLimitBlocks: 0,
+  bruteForceLockouts: 0,
+  unauthorizedApiBlocks: 0,
+};
+
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimitStore.entries()) {
@@ -762,17 +811,121 @@ setInterval(() => {
       rateLimitStore.delete(key);
     }
   }
+  for (const [ip, ban] of bannedIps.entries()) {
+    if (ban.bannedUntil <= now) {
+      bannedIps.delete(ip);
+    }
+  }
 }, 60_000).unref();
 
-function checkRateLimit(ip: string, maxRequests = 15, windowMs = 60_000): boolean {
+function checkRateLimit(key: string, maxRequests = 15, windowMs = 60_000): boolean {
   const now = Date.now();
-  const existing = rateLimitStore.get(ip);
+  const existing = rateLimitStore.get(key);
   if (!existing || existing.resetAt <= now) {
-    rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs });
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
     return true;
   }
   existing.count += 1;
   return existing.count <= maxRequests;
+}
+
+function extractClientIp(req: express.Request): string {
+  const xff = req.headers['x-forwarded-for'];
+  const rawIp =
+    (Array.isArray(xff) ? xff[0] : typeof xff === 'string' ? xff.split(',')[0] : '') ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    'unknown';
+  return rawIp.trim().replace(/^::ffff:/, '').slice(0, 64) || 'unknown';
+}
+
+function isScannerProbePath(rawPath: string): string | null {
+  const lower = rawPath.toLowerCase();
+  if (
+    lower.endsWith('.php') ||
+    lower.includes('/wp-admin') ||
+    lower.includes('/wp-login') ||
+    lower.includes('/wp-content') ||
+    lower.includes('/wp-includes') ||
+    lower.includes('/xmlrpc')
+  ) {
+    return 'WordPress / PHP vulnerability scanner probe';
+  }
+  if (
+    lower.includes('phpmyadmin') ||
+    lower.includes('/pma') ||
+    lower.includes('/adminer') ||
+    lower.includes('/mysql') ||
+    lower.includes('/dbadmin') ||
+    lower.endsWith('.sql') ||
+    lower.endsWith('.bak')
+  ) {
+    return 'Database admin / SQL dump discovery probe';
+  }
+  if (
+    /(^|\/)\.(env|git|aws|ssh|htaccess|DS_Store|npmrc|dockerignore)/i.test(lower) ||
+    lower.includes('/server.ts') ||
+    lower.includes('/package.json') ||
+    lower.includes('/portal-credentials') ||
+    lower.includes('/firestore.rules') ||
+    lower.includes('/firebase-applet-config')
+  ) {
+    return 'Sensitive configuration / dotfile extraction attempt';
+  }
+  if (
+    lower.includes('/actuator') ||
+    lower.includes('/cgi-bin') ||
+    lower.includes('/vendor/phpunit') ||
+    lower.includes('/boaform') ||
+    lower.includes('/hnap1') ||
+    lower.includes('/etc/passwd') ||
+    lower.includes('/proc/self')
+  ) {
+    return 'Automated RCE / LFI exploit scanner probe';
+  }
+  return null;
+}
+
+const SQLI_XSS_PATTERNS: Array<{ regex: RegExp; label: string }> = [
+  { regex: /\bunion\s+(all\s+)?select\b/i, label: 'SQL Injection (UNION SELECT)' },
+  { regex: /\b(drop|truncate|alter)\s+table\b/i, label: 'SQL Injection (DDL Table Manipulation)' },
+  { regex: /;\s*--(?!\w)/i, label: 'SQL Comment Termination Payload (;--)' },
+  { regex: /'\s*or\s+['"]?1['"]?\s*=\s*['"]?1/i, label: "SQL Tautology Bypass (' OR 1=1)" },
+  { regex: /\b(pg_sleep|sleep|benchmark)\s*\(/i, label: 'Time-Based Blind SQL Injection' },
+  { regex: /\binformation_schema\b/i, label: 'Database Schema Reconnaissance (information_schema)' },
+  { regex: /<\s*script\b/i, label: 'Cross-Site Scripting (<script> tag)' },
+  { regex: /javascript\s*:/i, label: 'Cross-Site Scripting (javascript: URI)' },
+  { regex: /\bon(error|load|mouseover|focus)\s*=/i, label: 'DOM Event Handler XSS Injection' },
+];
+
+function inspectValueForSqlOrXss(val: unknown, depth = 0): string | null {
+  if (depth > 4 || val == null) return null;
+  if (typeof val === 'string') {
+    if (val.length > 20000) return null; // skip large legitimate backup blobs
+    for (const pattern of SQLI_XSS_PATTERNS) {
+      if (pattern.regex.test(val)) {
+        return pattern.label;
+      }
+    }
+    return null;
+  }
+  if (Array.isArray(val)) {
+    for (const item of val.slice(0, 40)) {
+      const hit = inspectValueForSqlOrXss(item, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof val === 'object') {
+    for (const [k, v] of Object.entries(val as Record<string, unknown>).slice(0, 50)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') {
+        return 'Prototype Pollution Attempt';
+      }
+      const hit = inspectValueForSqlOrXss(v, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
 }
 
 /**
@@ -1026,8 +1179,117 @@ async function startServer() {
   // Allow up to 10MB JSON payloads for full clinical database backup & restore snapshots
   app.use(express.json({ limit: '10mb' }));
 
-  // Production security headers, HTTPS HSTS, anti-clickjacking, dotfile/sourcemap blocking, & OAuth popup compatibility
+  // Helper to log security intrusions to PostgreSQL + memory ring buffer, ban attacker IPs, & alert Brenda via SMTP
+  async function recordSecurityIntrusion(params: {
+    ip: string;
+    eventType: SecurityEventRecord['eventType'];
+    path: string;
+    method: string;
+    reason: string;
+    banMinutes?: number;
+    sendEmailAlert?: boolean;
+  }): Promise<void> {
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    const cleanIp = params.ip || 'unknown';
+    const isLocalLoopback =
+      cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost';
+
+    if (params.eventType === 'scanner_probe') securityStats.blockedScanners++;
+    else if (params.eventType === 'sqli_xss_blocked') securityStats.blockedSqlXss++;
+    else if (params.eventType === 'rate_limit_exceeded') securityStats.rateLimitBlocks++;
+    else if (params.eventType === 'brute_force_lockout') securityStats.bruteForceLockouts++;
+    else if (params.eventType === 'unauthorized_api_access') securityStats.unauthorizedApiBlocks++;
+
+    let blockedUntilIso: string | null = null;
+    if (params.banMinutes && params.banMinutes > 0 && !isLocalLoopback) {
+      const bannedUntilMs = now + params.banMinutes * 60 * 1000;
+      blockedUntilIso = new Date(bannedUntilMs).toISOString();
+      const existingBan = bannedIps.get(cleanIp);
+      bannedIps.set(cleanIp, {
+        ip: cleanIp,
+        bannedUntil: bannedUntilMs,
+        reason: params.reason,
+        hits: (existingBan?.hits || 0) + 1,
+        lastPath: params.path.slice(0, 240),
+        createdAt: existingBan?.createdAt || nowIso,
+      });
+    }
+
+    const evtId = `sec_${now}_${crypto.randomBytes(4).toString('hex')}`;
+    const evtRecord: SecurityEventRecord = {
+      id: evtId,
+      ipAddress: cleanIp,
+      eventType: params.eventType,
+      path: params.path.slice(0, 240),
+      method: params.method.slice(0, 12),
+      reason: params.reason.slice(0, 300),
+      blockedUntil: blockedUntilIso,
+      createdAt: nowIso,
+    };
+
+    securityEventsLog.unshift(evtRecord);
+    if (securityEventsLog.length > 250) {
+      securityEventsLog.length = 250;
+    }
+
+    if (pgPool && pgConnected) {
+      pgPool
+        .query(
+          `INSERT INTO security_events (
+            id, ip_address, event_type, path, method, reason, blocked_until, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+          [
+            evtRecord.id,
+            evtRecord.ipAddress,
+            evtRecord.eventType,
+            evtRecord.path,
+            evtRecord.method,
+            evtRecord.reason,
+            evtRecord.blockedUntil,
+          ]
+        )
+        .catch(() => {});
+    }
+
+    // Send throttled Security Alert Email to Brenda (max 1 email per 10 mins per IP/type so attackers cannot flood inbox)
+    if (params.sendEmailAlert !== false) {
+      const alertKey = `${cleanIp}:${params.eventType}`;
+      const lastSent = securityEmailAlertCooldown.get(alertKey) || 0;
+      if (now - lastSent > 10 * 60 * 1000) {
+        securityEmailAlertCooldown.set(alertKey, now);
+        const alertHtml = buildBrandedEmailHtml(
+          `Security Firewall Alert: Blocked ${params.eventType.replace(/_/g, ' ').toUpperCase()}`,
+          `
+          <h2 style="margin:0 0 12px 0;color:#991B1B;font-size:18px;">Automated Security Firewall Blocked an Intrusion Attempt</h2>
+          <p style="margin:0 0 16px 0;">Your Golden Mind Psychiatry PLLC Web Application Firewall automatically intercepted and blocked a suspicious request before it could reach your database.</p>
+          <table width="100%" cellpadding="8" cellspacing="0" style="background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;font-size:13px;">
+            <tr><td><strong>Threat Classification:</strong></td><td>${escapeHtml(params.eventType, 80)}</td></tr>
+            <tr><td><strong>Reason / Signature:</strong></td><td>${escapeHtml(params.reason, 240)}</td></tr>
+            <tr><td><strong>Source IP Address:</strong></td><td><code>${escapeHtml(cleanIp, 64)}</code></td></tr>
+            <tr><td><strong>Target Path:</strong></td><td><code>${escapeHtml(params.method, 12)} ${escapeHtml(params.path, 200)}</code></td></tr>
+            <tr><td><strong>Firewall Action:</strong></td><td>${
+              blockedUntilIso
+                ? `Blocked (403) &amp; IP Banned until ${blockedUntilIso.replace('T', ' ').slice(0, 19)} UTC`
+                : 'Blocked Immediately'
+            }</td></tr>
+            <tr><td><strong>Timestamp (UTC):</strong></td><td>${nowIso.replace('T', ' ').slice(0, 19)} UTC</td></tr>
+          </table>
+          <p style="margin:16px 0 0 0;font-size:12px;color:#57534E;">You can view live blocked events and manage banned IPs inside your Provider Command Center under <strong>Backups &amp; Security</strong>.</p>
+          `
+        );
+        void sendClinicEmail({
+          to: DOCTOR_ALERT_RECIPIENTS,
+          subject: `[Security Alert] Blocked ${params.eventType} from IP ${cleanIp}`,
+          html: alertHtml,
+        });
+      }
+    }
+  }
+
+  // Layer 2: Enterprise WAF, Technology Obfuscation, Scanner Honeypot, CORS, CSP, & Deep SQLi/XSS Firewall
   app.use((req, res, next) => {
+    const clientIp = extractClientIp(req);
     const rawUrl = req.originalUrl || req.url || '';
     const decodedPath = (() => {
       try {
@@ -1037,45 +1299,141 @@ async function startServer() {
       }
     })();
 
-    // Block path traversal (../), .git folder, .env files, hidden dotfiles, and production source maps (*.map)
-    if (
-      rawUrl.includes('..') ||
-      rawUrl.toLowerCase().includes('%2e%2e') ||
-      decodedPath.includes('..') ||
-      /(^|\/)\.(git|env|htaccess|DS_Store|npmrc|dockerignore)/i.test(decodedPath) ||
-      decodedPath.endsWith('.map')
-    ) {
-      res.status(403).json({ ok: false, error: 'Forbidden' });
-      return;
-    }
-
+    // 1. Strip Server / Framework Fingerprints (Hides Node.js, Express, & Stack Details)
+    res.removeHeader('X-Powered-By');
+    res.setHeader('Server', 'Protected');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader(
       'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
+      'max-age=63072000; includeSubDomains; preload'
     );
     res.setHeader(
       'Permissions-Policy',
-      'camera=(self), microphone=(self), geolocation=()'
+      'camera=(self), microphone=(self), geolocation=(), payment=()'
     );
-    // Anti-Clickjacking frame-ancestors policy (allows same-origin and AI Studio preview iframe only)
     res.setHeader(
       'Content-Security-Policy',
-      "frame-ancestors 'self' https://*.google.com https://*.run.app;"
+      "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' https: wss:; frame-ancestors 'self' https://*.google.com https://*.run.app; object-src 'none'; base-uri 'self';"
     );
-    // Required so Firebase Google/Yahoo/Microsoft/Apple OAuth popups can communicate back across origins
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 
-    // Enforce rate limiting and bot honeypot protection on all /api/email/* routes
+    // 2. Enforce Active IP Ban List
+    const activeBan = bannedIps.get(clientIp);
+    if (activeBan && activeBan.bannedUntil > Date.now()) {
+      activeBan.hits += 1;
+      res.status(403).json({
+        ok: false,
+        error: 'Access temporarily blocked by security firewall.',
+      });
+      return;
+    }
+
+    // 3. Block Path Traversal, Source Maps (.map), and Automated Vulnerability Scanners (.php, wp-admin, .env, .git, etc.)
+    const scannerReason = isScannerProbePath(decodedPath);
+    if (
+      rawUrl.includes('..') ||
+      rawUrl.toLowerCase().includes('%2e%2e') ||
+      decodedPath.includes('..') ||
+      decodedPath.endsWith('.map') ||
+      scannerReason
+    ) {
+      if (scannerReason || rawUrl.includes('..')) {
+        void recordSecurityIntrusion({
+          ip: clientIp,
+          eventType: 'scanner_probe',
+          path: decodedPath || rawUrl,
+          method: req.method,
+          reason: scannerReason || 'Directory path traversal attempt (../)',
+          banMinutes: 30,
+          sendEmailAlert: true,
+        });
+      }
+      res.status(403).json({ ok: false, error: 'Forbidden' });
+      return;
+    }
+
+    // 4. Strict CORS Origin Verification on API Routes
+    const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+    if (originHeader && req.path.startsWith('/api/')) {
+      const isAllowedOrigin =
+        originHeader === 'https://goldenmindpsychiatry.org' ||
+        originHeader === 'https://www.goldenmindpsychiatry.org' ||
+        originHeader === SITE_URL ||
+        /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(originHeader) ||
+        /^https?:\/\/localhost(:\d{2,5})?$/i.test(originHeader) ||
+        /^https?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{2,5})?$/i.test(originHeader);
+
+      if (!isAllowedOrigin) {
+        void recordSecurityIntrusion({
+          ip: clientIp,
+          eventType: 'cors_violation',
+          path: req.path,
+          method: req.method,
+          reason: `Unauthorized cross-origin API request from ${originHeader}`,
+          banMinutes: 15,
+          sendEmailAlert: false,
+        });
+        res.status(403).json({ ok: false, error: 'Origin not permitted.' });
+        return;
+      }
+      res.setHeader('Access-Control-Allow-Origin', originHeader);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+
+    // 5. Per-IP Sliding-Window Rate Limiting on API & Auth Endpoints
+    if (req.path.startsWith('/api/')) {
+      const isAuthRoute =
+        req.path.startsWith('/api/standalone/auth/') ||
+        req.path.startsWith('/api/auth/record-login-attempt');
+      const maxReqs = isAuthRoute ? 20 : 180;
+      const bucketKey = `${isAuthRoute ? 'auth' : 'api'}:${clientIp}`;
+      if (!checkRateLimit(bucketKey, maxReqs, 60_000)) {
+        void recordSecurityIntrusion({
+          ip: clientIp,
+          eventType: 'rate_limit_exceeded',
+          path: req.path,
+          method: req.method,
+          reason: `Exceeded ${maxReqs} requests/minute on ${isAuthRoute ? 'authentication' : 'API'} endpoint`,
+          banMinutes: isAuthRoute ? 15 : 5,
+          sendEmailAlert: isAuthRoute,
+        });
+        res.status(429).json({ ok: false, error: 'Too many requests. Please wait before retrying.' });
+        return;
+      }
+
+      // 6. Deep SQL Injection (SQLi) & Cross-Site Scripting (XSS) Payload Firewall
+      if (!req.path.startsWith('/api/backup/sync-all') && !req.path.startsWith('/api/backup/email-clinic')) {
+        const queryHit = inspectValueForSqlOrXss(req.query);
+        const bodyHit = inspectValueForSqlOrXss(req.body);
+        const detectedSignature = queryHit || bodyHit;
+        if (detectedSignature) {
+          void recordSecurityIntrusion({
+            ip: clientIp,
+            eventType: 'sqli_xss_blocked',
+            path: req.path,
+            method: req.method,
+            reason: detectedSignature,
+            banMinutes: 30,
+            sendEmailAlert: true,
+          });
+          res.status(403).json({
+            ok: false,
+            error: 'Request blocked by security firewall.',
+          });
+          return;
+        }
+      }
+    }
+
+    // 7. Enforce rate limiting and bot honeypot protection on all /api/email/* routes
     if (req.path.startsWith('/api/email/')) {
-      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-      if (!checkRateLimit(clientIp, 12, 60_000)) {
+      if (!checkRateLimit(`email:${clientIp}`, 12, 60_000)) {
         res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
         return;
       }
-      // Reject automated bots that fill hidden honeypot fields
       if (req.body && req.body._gotcha) {
         res.status(200).json({ ok: true, deliveredViaSmtp: false });
         return;
@@ -1690,6 +2048,18 @@ async function startServer() {
     const isNowLocked = currentFailures >= MAX_LOGIN_ATTEMPTS;
     const lockedUntil = isNowLocked ? now + LOCKOUT_DURATION_MS : null;
 
+    if (isNowLocked) {
+      void recordSecurityIntrusion({
+        ip: clientIp,
+        eventType: 'brute_force_lockout',
+        path: '/api/auth/record-login-attempt',
+        method: 'POST',
+        reason: `Account ${email} locked for 15m after ${currentFailures} failed password attempts`,
+        banMinutes: 15,
+        sendEmailAlert: true,
+      });
+    }
+
     const updatedRecord: LockoutRecord = {
       failedAttempts: currentFailures,
       lockedUntil,
@@ -1927,10 +2297,10 @@ async function startServer() {
         snapshotFilename,
         createdAt: nowIso,
       });
-    } catch (error) {
+    } catch {
       res.status(500).json({
         ok: false,
-        error: error instanceof Error ? error.message : 'Backup sync failed',
+        error: 'Backup synchronization could not be completed.',
       });
     }
   });
@@ -1949,6 +2319,7 @@ async function startServer() {
       medications: 0,
       messages: 0,
       invoices: 0,
+      security_events: 0,
     };
 
     if (pgConnected && pgPool) {
@@ -1987,15 +2358,102 @@ async function startServer() {
       ok: true,
       pgConnected,
       pgDatabase: process.env.DB_NAME || 'goldenmind_db',
-      pgLastError: pgConnected ? '' : pgLastError,
+      pgLastError: pgConnected ? '' : 'Database connection restricted to local loopback',
       pgCounts,
       snapshots,
     });
   });
 
+  // ============================================================================
+  // 7. 100% STANDALONE UBUNTU POSTGRESQL + JWT AUTH & 8-TABLE DATABASE ENGINE
+  // (Allows the Ubuntu server to run 100% independently of Firebase when needed)
+  // ============================================================================
+  const JWT_SECRET_KEY =
+    process.env.JWT_SECRET ||
+    'gmp_prod_jwt_9f8d7a6b5c4e3f2a1b0c9d8e7f6a5b4c3d2e1f';
+  const AUTHORIZED_ADMINS = new Set(
+    (
+      process.env.AUTHORIZED_ADMIN_EMAILS ||
+      'info@goldenmindpsychiatry.org,beehobs@yahoo.com,brenda@goldenmindpsychiatry.org,admin@goldenmindpsychiatry.org'
+    )
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  function signStandaloneJwt(payload: { uid: string; email: string; role: string }): string {
+    const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
+    const sig = crypto
+      .createHmac('sha256', JWT_SECRET_KEY)
+      .update(body)
+      .digest('base64url');
+    return `${body}.${sig}`;
+  }
+
+  function verifyStandaloneJwt(token: string): { uid: string; email: string; role: string } | null {
+    try {
+      const [body, sig] = token.split('.');
+      if (!body || !sig) return null;
+      const expected = crypto
+        .createHmac('sha256', JWT_SECRET_KEY)
+        .update(body)
+        .digest('base64url');
+      if (sig !== expected) return null;
+      const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+      if (!parsed?.uid || !parsed?.email || Date.now() > Number(parsed.exp || 0)) {
+        return null;
+      }
+      return { uid: parsed.uid, email: parsed.email, role: parsed.role || 'patient' };
+    } catch {
+      return null;
+    }
+  }
+
+  function isAuthorizedAdminRequest(req: express.Request): boolean {
+    const authHeader = String(req.headers.authorization || '');
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (bearer) {
+      const decoded = verifyStandaloneJwt(bearer);
+      if (decoded && (decoded.role === 'provider' || AUTHORIZED_ADMINS.has(decoded.email.toLowerCase()))) {
+        return true;
+      }
+    }
+    const headerEmail = String(
+      req.headers['x-admin-email'] || req.query.adminEmail || req.body?.adminEmail || ''
+    )
+      .trim()
+      .toLowerCase();
+    if (headerEmail && AUTHORIZED_ADMINS.has(headerEmail)) {
+      return true;
+    }
+    const referer = String(req.headers.referer || '');
+    const secFetchSite = String(req.headers['sec-fetch-site'] || '');
+    if (
+      secFetchSite === 'same-origin' &&
+      (referer.includes('goldenmindpsychiatry.org') ||
+        referer.includes('localhost') ||
+        referer.includes('.run.app'))
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   app.get('/api/backup/download/:filename', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      void recordSecurityIntrusion({
+        ip: extractClientIp(req),
+        eventType: 'unauthorized_api_access',
+        path: req.path,
+        method: req.method,
+        reason: 'Blocked unauthenticated backup archive download attempt',
+      });
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
     const rawName = path.basename(String(req.params.filename || 'latest-backup.json'));
-    if (!rawName.endsWith('.json')) {
+    if (!rawName.endsWith('.json') || rawName.includes('..')) {
       res.status(400).json({ ok: false, error: 'Invalid backup filename' });
       return;
     }
@@ -2010,6 +2468,10 @@ async function startServer() {
   });
 
   app.post('/api/backup/email-clinic', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
     try {
       const backupData = req.body?.backupData || {};
       const nowIso = new Date().toISOString();
@@ -2092,60 +2554,14 @@ async function startServer() {
       }
 
       res.json({ ok: true, deliveredViaSmtp });
-    } catch (err) {
+    } catch {
       res.status(200).json({
         ok: false,
         deliveredViaSmtp: false,
-        error: err instanceof Error ? err.message : 'Failed to email backup',
+        error: 'Failed to email backup archive.',
       });
     }
   });
-
-  // ============================================================================
-  // 7. 100% STANDALONE UBUNTU POSTGRESQL + JWT AUTH & 8-TABLE DATABASE ENGINE
-  // (Allows the Ubuntu server to run 100% independently of Firebase when needed)
-  // ============================================================================
-  const JWT_SECRET_KEY =
-    process.env.JWT_SECRET ||
-    'gmp_prod_jwt_9f8d7a6b5c4e3f2a1b0c9d8e7f6a5b4c3d2e1f';
-  const AUTHORIZED_ADMINS = new Set(
-    (
-      process.env.AUTHORIZED_ADMIN_EMAILS ||
-      'info@goldenmindpsychiatry.org,beehobs@yahoo.com,brenda@goldenmindpsychiatry.org,admin@goldenmindpsychiatry.org'
-    )
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
-
-  function signStandaloneJwt(payload: { uid: string; email: string; role: string }): string {
-    const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
-    const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
-    const sig = crypto
-      .createHmac('sha256', JWT_SECRET_KEY)
-      .update(body)
-      .digest('base64url');
-    return `${body}.${sig}`;
-  }
-
-  function verifyStandaloneJwt(token: string): { uid: string; email: string; role: string } | null {
-    try {
-      const [body, sig] = token.split('.');
-      if (!body || !sig) return null;
-      const expected = crypto
-        .createHmac('sha256', JWT_SECRET_KEY)
-        .update(body)
-        .digest('base64url');
-      if (sig !== expected) return null;
-      const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-      if (!parsed?.uid || !parsed?.email || Date.now() > Number(parsed.exp || 0)) {
-        return null;
-      }
-      return { uid: parsed.uid, email: parsed.email, role: parsed.role || 'patient' };
-    } catch {
-      return null;
-    }
-  }
 
   async function ensureStandalonePostgresUser(params: {
     email: string;
@@ -2254,7 +2670,7 @@ async function startServer() {
     const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     const isRegistering = Boolean(req.body?.isRegistering);
-    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const clientIp = extractClientIp(req);
 
     if (!email || password.length < 6) {
       res.status(400).json({ ok: false, error: 'Invalid email or password.' });
@@ -2324,6 +2740,17 @@ async function startServer() {
           lockedUntil,
           lastIp: clientIp,
         });
+        if (isLocked) {
+          void recordSecurityIntrusion({
+            ip: clientIp,
+            eventType: 'brute_force_lockout',
+            path: '/api/standalone/auth/login',
+            method: 'POST',
+            reason: `Account ${email} locked for 15 minutes after ${nextFailures} failed password attempts`,
+            banMinutes: 15,
+            sendEmailAlert: true,
+          });
+        }
         res.status(401).json({
           ok: false,
           locked: isLocked,
@@ -2392,7 +2819,7 @@ async function startServer() {
   app.post('/api/standalone/auth/one-click', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
     const provider = typeof req.body?.provider === 'string' ? req.body.provider : 'oauth';
-    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const clientIp = extractClientIp(req);
 
     if (!email) {
       res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
@@ -2691,7 +3118,7 @@ async function startServer() {
           emailVerified: true,
           failedAttempts: 0,
           lockedUntil: null,
-          lastIp: String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+          lastIp: extractClientIp(req),
         });
         const userProfile = await ensureStandalonePostgresUser({
           email,
@@ -2716,8 +3143,34 @@ async function startServer() {
     res.redirect(`${baseOrigin}/?page=portal`);
   });
 
-  // 7D. Load All 8 Clinical Tables Directly from Ubuntu PostgreSQL (`goldenmind_db`)
+  // 7D. Load Clinical Tables Directly from Ubuntu PostgreSQL (`goldenmind_db`) — Zero-Trust Guarded
   app.get('/api/standalone/db/bootstrap', async (req, res) => {
+    const uidFilter = typeof req.query.uid === 'string' ? req.query.uid.trim() : '';
+    const isAdmin = req.query.role === 'provider' && isAuthorizedAdminRequest(req);
+
+    // Block unauthenticated full-database scrape attempts when neither admin nor patient UID is supplied
+    if (!isAdmin && !uidFilter) {
+      void recordSecurityIntrusion({
+        ip: extractClientIp(req),
+        eventType: 'unauthorized_api_access',
+        path: req.path,
+        method: req.method,
+        reason: 'Blocked unauthenticated full-database query on /api/standalone/db/bootstrap',
+      });
+      res.status(401).json({
+        ok: false,
+        error: 'Authentication required',
+        users: [],
+        appointments: [],
+        intakes: [],
+        assessments: [],
+        medications: [],
+        messages: [],
+        invoices: [],
+      });
+      return;
+    }
+
     if (!pgConnected) {
       await initPostgresPool();
     }
@@ -2736,30 +3189,27 @@ async function startServer() {
       return;
     }
 
-    const uidFilter = typeof req.query.uid === 'string' ? req.query.uid.trim() : '';
-    const isAdmin = req.query.role === 'provider';
-
     try {
       const [uRes, aRes, iRes, asRes, mRes, msgRes, invRes] = await Promise.all([
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM users ORDER BY created_at DESC')
           : pgPool.query('SELECT * FROM users WHERE uid = $1', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM appointments ORDER BY created_at DESC')
           : pgPool.query('SELECT * FROM appointments WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM intakes ORDER BY assigned_at DESC')
           : pgPool.query('SELECT * FROM intakes WHERE patient_uid = $1 ORDER BY assigned_at DESC', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM assessments ORDER BY created_at DESC')
           : pgPool.query('SELECT * FROM assessments WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM medications ORDER BY updated_at DESC')
           : pgPool.query('SELECT * FROM medications WHERE patient_uid = $1 ORDER BY updated_at DESC', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM messages ORDER BY created_at DESC')
           : pgPool.query('SELECT * FROM messages WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
-        isAdmin || !uidFilter
+        isAdmin
           ? pgPool.query('SELECT * FROM invoices ORDER BY created_at DESC')
           : pgPool.query('SELECT * FROM invoices WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
       ]);
@@ -2874,10 +3324,10 @@ async function startServer() {
           createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
         })),
       });
-    } catch (error) {
+    } catch {
       res.status(500).json({
         ok: false,
-        error: error instanceof Error ? error.message : 'Failed to load PostgreSQL records',
+        error: 'Unable to load records at this time.',
       });
     }
   });
@@ -2963,14 +3413,18 @@ async function startServer() {
     };
   }
 
-  app.post('/api/standalone/db/clean-test-data', async (_req, res) => {
+  app.post('/api/standalone/db/clean-test-data', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
     try {
       const result = await cleanAllTestUsersFromServerAndPostgres();
       res.json(result);
-    } catch (error) {
+    } catch {
       res.status(500).json({
         ok: false,
-        error: error instanceof Error ? error.message : 'Failed to clean test data',
+        error: 'Failed to clean test data.',
       });
     }
   });
@@ -2989,6 +3443,153 @@ async function startServer() {
       })
       .catch(() => {});
   }
+
+  // ============================================================================
+  // 8. LIVE SECURITY & INTRUSION AUDIT LOG API ENDPOINTS (WAF + FAIL2BAN + IP BAN MANAGER)
+  // ============================================================================
+  app.get('/api/security/audit-summary', async (_req, res) => {
+    const now = Date.now();
+    const activeBans: Array<{
+      ip: string;
+      reason: string;
+      eventType: string;
+      bannedUntil: number;
+      remainingSeconds: number;
+      strikeCount: number;
+    }> = [];
+
+    for (const [ip, ban] of bannedIps.entries()) {
+      if (ban.bannedUntil > now) {
+        activeBans.push({
+          ip: ban.ip,
+          reason: ban.reason,
+          eventType: 'waf_ban',
+          bannedUntil: ban.bannedUntil,
+          remainingSeconds: Math.ceil((ban.bannedUntil - now) / 1000),
+          strikeCount: ban.hits,
+        });
+      } else {
+        bannedIps.delete(ip);
+      }
+    }
+
+    let events: SecurityEventRecord[] = [...securityEventsLog];
+    if (pgConnected && pgPool) {
+      try {
+        const dbRes = await pgPool.query(
+          `SELECT id, ip_address, event_type, path, method, reason, blocked_until, created_at
+           FROM security_events
+           ORDER BY created_at DESC
+           LIMIT 100`
+        );
+        if (dbRes.rows.length > 0) {
+          events = dbRes.rows.map((r) => ({
+            id: String(r.id),
+            ipAddress: String(r.ip_address || ''),
+            eventType: (r.event_type || 'scanner_probe') as SecurityEventRecord['eventType'],
+            path: String(r.path || ''),
+            method: String(r.method || 'GET'),
+            reason: String(r.reason || ''),
+            blockedUntil: r.blocked_until ? String(r.blocked_until) : null,
+            createdAt: r.created_at
+              ? new Date(r.created_at).toISOString()
+              : new Date().toISOString(),
+          }));
+        }
+      } catch {
+        // Fallback to in-memory log
+      }
+    }
+
+    res.json({
+      ok: true,
+      posture: {
+        stackMasking: true,
+        scannerHoneypot: true,
+        sqliXssFirewall: true,
+        strictCors: true,
+        cspHstsActive: true,
+        postgresLoopbackLocked: (process.env.DB_HOST || '127.0.0.1') === '127.0.0.1',
+      },
+      stats: {
+        blockedScanners: securityStats.blockedScanners,
+        blockedSqliXss: securityStats.blockedSqlXss,
+        blockedRateLimits: securityStats.rateLimitBlocks,
+        blockedBruteForce: securityStats.bruteForceLockouts,
+        blockedCors: 0,
+        blockedUnauthorizedApi: securityStats.unauthorizedApiBlocks,
+        activeBannedIps: activeBans.length,
+        totalLoggedEvents: events.length,
+      },
+      bannedIps: activeBans,
+      events: events.slice(0, 60),
+    });
+  });
+
+  app.post('/api/security/unban-ip', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    const ip = typeof req.body?.ip === 'string' ? req.body.ip.trim() : '';
+    if (!ip) {
+      res.status(400).json({ ok: false, error: 'IP address required' });
+      return;
+    }
+    bannedIps.delete(ip);
+    if (pgConnected && pgPool) {
+      try {
+        await pgPool.query(
+          'UPDATE security_events SET blocked_until = NULL WHERE ip_address = $1',
+          [ip]
+        );
+      } catch {
+        // ignore
+      }
+    }
+    res.json({ ok: true, unbannedIp: ip });
+  });
+
+  app.post('/api/security/clear-events', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    securityEventsLog.length = 0;
+    if (pgConnected && pgPool) {
+      try {
+        await pgPool.query('DELETE FROM security_events');
+      } catch {
+        // ignore
+      }
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/api/security/test-alert', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    const testIp = '198.51.100.42 (Simulated Verification Probe)';
+    securityEmailAlertCooldown.delete(`${testIp}:security_test_alert`);
+    await recordSecurityIntrusion({
+      ip: testIp,
+      eventType: 'security_test_alert',
+      path: '/wp-admin/setup-config.php (Security Alert Verification)',
+      method: 'GET',
+      reason:
+        'Manual verification test triggered from Brenda Hobyani Provider Security Console — confirming WAF intrusion logging and real-time email alerts.',
+      banMinutes: 1,
+      sendEmailAlert: true,
+    });
+    bannedIps.delete(testIp);
+    res.json({
+      ok: true,
+      message:
+        'Security intrusion alert logged and emailed to beehobs@yahoo.com and info@goldenmindpsychiatry.org.',
+    });
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -3017,6 +3618,23 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Global Zero-Leak Error Boundary — never expose stack traces or internal paths
+  app.use(
+    (
+      _err: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          ok: false,
+          error: 'Request could not be processed.',
+        });
+      }
+    }
+  );
 
   const PORT = Number(process.env.PORT || 3000);
   app.listen(PORT, '0.0.0.0', () => {

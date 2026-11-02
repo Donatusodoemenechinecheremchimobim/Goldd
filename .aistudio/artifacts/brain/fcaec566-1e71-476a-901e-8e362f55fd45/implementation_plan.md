@@ -1,142 +1,101 @@
-# Database Backup & Disaster Recovery Center, Login Account Lockout & Self-Hosted Server Architecture
+# Enterprise HIPAA & Infrastructure Security Hardening Plan
 
-This plan delivers a four-tier **Database Backup & Disaster Recovery Center**, **Brute-Force Account Lockout Protection** across all login endpoints, and a **Self-Hosted Database & Authentication Bridge** so Golden Mind Psychiatry PLLC never loses clinical records and can run seamlessly alongside or directly on your own server (`mailserver.businessidentity.llc`).
-
----
+This plan delivers comprehensive, defense-in-depth security across the Golden Mind Psychiatry web application, PostgreSQL database, and Ubuntu production server to prevent API leaks, SQL injection, automated penetration scanning, brute-force attacks, database discovery, and technology stack fingerprinting.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> **Confirmed Choices from Phase 1 & Follow-Up Request**
-> - **Confirmed Backup Destinations**:
->   1. **1-Click JSON & CSV Download** inside the Admin Portal (`Backups & Security` tab).
->   2. **Automated Server-Side Snapshot Files** stored on disk with rolling retention.
->   3. **Scheduled Encrypted/Structured Backup Emailed via Clinic SMTP** to `info@goldenmindpsychiatry.org` and `beehobs@yahoo.com`.
->   4. **Google Drive Cloud Backup Integration** (`drive.file` scope) to upload backup snapshots directly to your Google Drive.
-> - **Confirmed Backup Cadence**: Automatic **daily scheduled backups** plus **automatic change-triggered snapshots** whenever major clinical or credential changes occur.
-> - **Confirmed Restore Capabilities**:
->   1. **Full 1-Click Database Restore** from any server snapshot or uploaded backup `.json` file (with an automatic pre-restore safety snapshot before overwriting).
->   2. **Single-Patient Chart Restore** to selectively recover one patient's demographics, appointments, medications, intakes, PHQ-9/GAD-7 scales, messages, and invoices without touching other patients' records.
-> - **Confirmed Login Security**: **Account Lockout Protection** enforced across all login endpoints (locking an account and/or IP after 5 consecutive failed password attempts for 15 minutes, sending an optional security alert email, and allowing the Admin to unlock any locked patient account in 1 click).
-> - **Self-Hosted Server Database & Auth Architecture**: Built-in **Self-Hosted Server Sync & Export Kit** (PostgreSQL / SQLite schema + JWT/Session Authentication + Docker/Node setup guide) so your app can dual-write to or run 100% on the server you purchased.
+> All 12 security measures you selected in Phase 1 are incorporated into this plan and organized into three coordinated layers: **Application API & Payload Firewall**, **Technology Obfuscation & Scanner Traps**, and **Ubuntu Server Hardening & Live Intrusion Monitoring**.
+
+- **Confirmed Decision 1 (API & Database Guards)**: Enforce strict JWT and admin-role verification on all sensitive database, backup, and account-management endpoints; add per-IP rate limiting with automatic temporary IP banning; inspect incoming requests with a SQL/XSS payload firewall; and mask all internal stack traces and database errors from public API responses.
+- **Confirmed Decision 2 (Anti-Fingerprinting & Scanner Blocking)**: Strip server/framework headers (`Server`, `X-Powered-By`, `Via`), block automated vulnerability scanners probing `.php`, `wp-admin`, `.env`, `.git`, `phpmyadmin`, or `actuator` paths, enforce strict CORS limited to `goldenmindpsychiatry.org`, and apply hardened Content-Security-Policy (CSP), HSTS, and anti-framing headers.
+- **Confirmed Decision 3 (Ubuntu Infrastructure & Live Audit Log)**: Bind PostgreSQL strictly to `127.0.0.1` (`localhost`), lock down external ports via UFW (`22`, `80`, `443` only), configure Fail2Ban for SSH and Nginx, send real-time security email alerts to Brenda (`beehobs@yahoo.com` & `info@goldenmindpsychiatry.org`) when attacks or lockouts occur, and add a live **Security & Intrusion Audit Log** inside Brenda's Provider Command Center.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**:
-  1. **Zero-Data-Loss Backup & Restore Center**: Continuously mirrors all 7 clinical collections (`users`, `appointments`, `intakes`, `assessments`, `medications`, `messages`, `invoices`) plus `account_directory` credentials into local server snapshots, downloadable JSON/CSV archives, clinic email attachments, and Google Drive.
-  2. **Brute-Force Login Account Lockout**: Tracks failed sign-in attempts per email account and IP address across both client and server login verification endpoints, automatically locking accounts after 5 failed attempts for 15 minutes and providing a real-time countdown and Admin 1-Click Unlock control.
-  3. **Own-Server Database & Auth Readiness**: Explains and provisions a dual-mode database and authentication layer so you can mirror every record to your own server (`mailserver.businessidentity.llc`) or switch to a self-hosted PostgreSQL/SQLite + Node.js JWT auth backend on your server at any time.
-- **Target Audience / Persona**: Brenda Hobyani, PMHNP-BC and clinic administrators managing patient charts and security compliance in the Provider Clinical Command Center.
-- **Key Value**: Eliminates single points of failure, prevents brute-force unauthorized access to patient accounts, and gives you complete ownership of your clinical data on your own server hardware.
+- **What It Does**: Protects patient clinical data (PHI) and practice infrastructure with zero-trust API authorization, an active Web Application Firewall (WAF) middleware layer, automated scanner honeypots, technology-stack masking, and real-time intrusion auditing.
+- **Target Audience / Persona**: **Brenda Hobyani, MSN, APRN, PMHNP-BC** (Practice Owner & Clinical Director) managing the practice from the Provider Command Center, and patients accessing the HIPAA-encrypted Client Portal.
+- **Key Value**: Eliminates unauthorized API data exposure, stops credential stuffing and vulnerability scanners before they reach database routes, hides the underlying server/database architecture from reconnaissance tools, and gives the provider full visibility and 1-click IP unban controls.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 - **Key User Flows**:
-  1. **Admin "Backups & Security" Command Tab**:
-     - Accessible from both the left sidebar and top bar in the Admin Portal.
-     - Displays backup health metrics in tabular numerals (`tabular-nums`): Last Snapshot Timestamp, Total Records Protected, Active Server Snapshots, and Locked Accounts Count.
-     - **Action Bar**:
-       - `Download Full JSON Backup` & `Download Patients CSV`
-       - `Create Server Snapshot Now`
-       - `Email Backup to Clinic Inbox` (`info@goldenmindpsychiatry.org`)
-       - `Save Backup to Google Drive`
-     - **Restore Panel**:
-       - Upload a `.json` backup file or pick from the Server Snapshot History table.
-       - Choose **"Full Database Restore"** (with mandatory confirmation modal + automatic pre-restore snapshot) or **"Single-Patient Selective Restore"** (pick a specific patient from the backup file and restore only their chart).
-  2. **Login Account Lockout Flow**:
-     - When a user enters an incorrect password, the login screen displays the remaining attempts (`4 attempts remaining before temporary 15-minute security lockout`).
-     - On the 5th failed attempt within 15 minutes, the endpoint blocks sign-in for that account, displays a clear lockout banner with a live minute/second countdown and a `"Reset Password via Email to Unlock Immediately"` button, and logs the lockout in the Admin Security table where the provider can click **"Unlock Account"** in 1 click.
-  3. **Self-Hosted Server Setup & Live Mirroring Panel**:
-     - Inside the `Backups & Security` tab, a dedicated **"Self-Hosted Server Database & Auth Guide"** section provides:
-       - A downloadable ready-to-run `golden-mind-selfhosted-schema.sql` (PostgreSQL / SQLite) + `.env` configuration template for your server.
-       - An optional Webhook / Remote Server Sync URL setting to automatically push real-time encrypted backups to your server.
-
+  1. **Transparent Protection for Legitimate Patients**: Real patients signing in, verifying emails, and booking telehealth visits experience zero friction while malformed payloads, cross-origin scripts, and brute-force bots are silently blocked at the edge.
+  2. **Automated Scanner & Brute-Force Blocking**: Any IP address probing exploit paths (e.g., `/wp-admin`, `/.env`, `/phpmyadmin`, `/config.php`) or exceeding API/login rate thresholds is immediately blocked with a generic `403 Forbidden` or `429 Too Many Requests` JSON response (zero stack trace or server version disclosure), logged in the intrusion table, and triggers a security alert email to Brenda.
+  3. **Live Security & Intrusion Audit Panel (Provider Command Center)**: Inside Brenda's **Database & Backups / Security** workspace, a dedicated high-density security console displays blocked intrusion attempts, banned IPs, locked accounts, active firewall rules, and a 1-click **"Copy Ubuntu Hardening Script (UFW + Fail2Ban + Nginx + PostgreSQL)"** utility.
 - **Visual Identity & Theme**:
-  - **Aesthetic Direction**: Luxury clinical SaaS console matching Golden Mind Psychiatry PLLC's established palette.
-  - **Color Palette & Mood**:
-    - 60% Neutral Canvas: Warm Alabaster (`#FAF9F5`)
-    - 30% Structural Surfaces: Crisp White (`#FFFFFF`) cards with `1px solid #E7E5E4` hairline borders and Obsidian (`#0A0A0A`) primary command headers
-    - 10% Accent Budget: Metallic Gold (`#D4AF37` / `#9E7206`), Semantic Emerald (`#16A34A`) for verified backups, Amber (`#D97706`) for remaining login attempts, and Crimson (`#DC2626`) for active account lockouts.
-  - **Typography & Hierarchy**: `Plus Jakarta Sans` for headings and navigation, `DM Sans` / `Plus Jakarta Sans` for clinical prose, and `JetBrains Mono` (`tabular-nums`) for snapshot sizes, record counts, lockout countdown timers, and timestamps.
+  - *Aesthetic Direction*: Luxury clinical sanctuary and high-density enterprise command center matching Golden Mind Psychiatry's warm alabaster (`#FAF9F5`), obsidian (`#0A0A0A`), and champagne gold (`#D4AF37` / `#9E7206`) palette.
+  - *Typography & Hierarchy*: Crisp display headings paired with `tabular-nums` monospace (`font-mono`) for IP addresses, timestamps, HTTP status codes, and rate-limit counters.
+  - *Zero-Pill & Single-Elevation Discipline*: Flat 1px bordered panels (`border-stone-200`), unboxed inline metadata separated by `·`, and clear semantic status indicators (emerald for active shields, amber for rate-limit warnings, crimson for blocked intrusion events).
 
 ---
 
-## 3. How Setting Up Your Own Database & Authentication on Your Server Works
+## 3. Key Product Decisions & Trade-Offs
 
-If you decide to host your own database on the same server you purchased (`mailserver.businessidentity.llc` or your VPS), here is exactly how we help you set it up and how authentication and clinical data work:
-
-### A. Database Setup on Your Server
-1. **Database Engine (PostgreSQL or SQLite on Your VPS)**:
-   - Your server can run **PostgreSQL** (recommended for multi-user concurrency) or **SQLite** (single-file zero-configuration database stored directly on your server disk).
-   - We generate and provide the complete **SQL Schema (`golden-mind-schema.sql`)** and **1-Click Migration Importer** that takes your JSON backup from this portal and populates all 8 tables (`users`, `account_credentials`, `login_lockouts`, `appointments`, `intakes`, `assessments`, `medications`, `messages`, `invoices`) on your server with zero data loss.
-2. **Dual-Write / Live Mirroring (Hybrid Mode or Full Cutover)**:
-   - **Option 1 — Hybrid Cloud + Your Server (Recommended)**: Keep Cloud Firestore active for instant real-time browser updates while our Express backend (`server.ts`) automatically mirrors every backup snapshot and credential change to your server disk and clinic SMTP email.
-   - **Option 2 — 100% Self-Hosted on Your Server**: Point the app's `/api/db/*` endpoints directly to PostgreSQL/SQLite on your VPS so 100% of data stays on your own server hardware.
-
-### B. How Authentication & Security Work on Your Own Server
-1. **Password Hashing & Storage**:
-   - Passwords are salted and hashed (SHA-256 / Scrypt / Bcrypt) in the `account_credentials` table on your server—plain-text passwords are never stored.
-2. **Session Tokens (HTTP-Only Signed JWT Cookies + Bearer Tokens)**:
-   - When a patient or admin logs in via `/api/auth/login`, your server checks the **Account Lockout table** first, verifies the password hash, and issues a cryptographically signed **JWT session token** (using your `RESET_HMAC_SECRET`).
-3. **Email Verification & Password Reset via Your Own SMTP**:
-   - Because your server already runs `mailserver.businessidentity.llc` (`info@goldenmindpsychiatry.org`), password reset links and email verification links are signed and verified 100% by your own server without depending on any third-party email service.
-4. **Role-Based Access Control (RBAC)**:
-   - Your server middleware verifies the signed token on every request: patients can only read/write rows matching their own `uid`, while authorized provider emails (`info@goldenmindpsychiatry.org`, `beehobs@yahoo.com`, `chibundusadiq@gmail.com`) have full Admin Portal privileges.
+- **Decision 1: Zero-Trust Bearer Token & Role Authorization on Sensitive Endpoints**
+  - *Chosen Approach*: Require a valid signed JWT (`Authorization: Bearer <token>`) or verified admin session on all `/api/backup/*`, `/api/standalone/db/*`, and admin management routes; scope patient bootstrap queries strictly to the authenticated user's UID.
+  - *Why*: Prevents attackers from calling `/api/backup/download`, `/api/standalone/db/bootstrap`, or `/api/standalone/db/clean-test-data` directly via `curl` or Postman to leak or wipe database records.
+- **Decision 2: In-Memory + PostgreSQL Persistent WAF & IP Rate Limiter**
+  - *Chosen Approach*: Combine fast in-memory sliding-window rate counters (120 general API requests/min per IP; 10 auth requests/min per IP; immediate 30-minute IP ban on exploit-path probing or SQLi/XSS payload detection) with persistent logging in PostgreSQL (`security_events` table).
+  - *Why*: Rejects abusive traffic in sub-millisecond memory checks without overloading PostgreSQL during a flood, while keeping an auditable forensic log for Brenda.
+- **Decision 3: Complete Technology Stack Obfuscation & Generic Error Envelopes**
+  - *Chosen Approach*: Strip `X-Powered-By`, override `Server` headers, block `.map` source maps and dotfiles, and wrap all Express routes in a global error boundary that logs internal details server-side while returning only a sanitized `{ ok: false, error: "Request could not be processed." }` payload to the client.
+  - *Why*: Reconnaissance tools (Wappalyzer, Nmap, Burp Suite, SQLMap) rely on verbose error messages and response headers to identify Express, Node.js, or PostgreSQL versions.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture & Data Strategy *(Technical Reference)*
+
+### Architecture & Defense-in-Depth Flow
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                   CLIENT PORTAL & ADMIN COMMAND CENTER                     │
-│  ┌──────────────────────────────┐    ┌──────────────────────────────────┐  │
-│  │ Patient & Provider Login UI  │    │ Admin "Backups & Security" Tab   │  │
-│  │ • Pre-login lockout check    │    │ • 1-Click JSON & CSV Export      │  │
-│  │ • Remaining attempts warning │    │ • Server Snapshot Manager        │  │
-│  │ • Live 15-min lockout timer  │    │ • Full & Single-Patient Restore  │  │
-│  │ • 1-Click Email Reset unlock │    │ • Google Drive Backup Upload     │  │
-│  └──────────────┬───────────────┘    │ • Locked Accounts Unlock Table   │  │
-│                 │                    │ • Self-Hosted SQL Schema Export  │  │
-└─────────────────┼────────────────────┴─────────────────┬────────────────┘  │
-                  │                                      │
-                  ▼                                      ▼
+│                   Incoming HTTPS Request (Port 443)                        │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                     EXPRESS BACKEND SERVER (server.ts)                     │
-│  ┌────────────────────────────────┐  ┌──────────────────────────────────┐  │
-│  │ Account Lockout Engine         │  │ Multi-Destination Backup Engine  │  │
-│  │ • POST /api/auth/check-lockout │  │ • Auto daily + on-change backups │  │
-│  │ • POST /api/auth/record-attempt│  │ • /backups/snapshot-*.json store │  │
-│  │ • POST /api/auth/admin-unlock  │  │ • POST /api/backup/email-clinic  │  │
-│  │ • Locks 15m after 5 failures   │  │ • GET /api/backup/sql-schema     │  │
-│  └──────────────┬─────────────────┘  └─────────────────┬────────────────┘  │
-└─────────────────┼──────────────────────────────────────┼───────────────────┘
-                  │                                      │
-                  ▼                                      ▼
-┌───────────────────────────────────┐  ┌─────────────────────────────────────┐
-│   FIRESTORE & CREDENTIALS STORE   │  │   EXTERNAL BACKUP DESTINATIONS      │
-│ • Cloud Firestore (7 collections) │  │ • Local Disk (/backups/*.json)      │
-│ • /account_directory/{emailHash}  │  │ • Clinic SMTP (info@ & beehobs@)    │
-│ • portal-credentials.db.json      │  │ • Google Drive (drive.file API)     │
-└───────────────────────────────────┘  └─────────────────────────────────────┘
+│ Layer 1: Ubuntu OS & Nginx Reverse Proxy                                   │
+│ • UFW Firewall: Only Ports 22, 80, 443 open (Port 5432 PostgreSQL closed)  │
+│ • Fail2Ban: Bans SSH & Nginx 4xx/scanner IPs at kernel iptables level      │
+│ • Nginx `server_tokens off;` + HSTS + TLS 1.2/1.3                          │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Layer 2: Express WAF, Anti-Fingerprinting & Scanner Trap Middleware        │
+│ • Strips X-Powered-By / Server headers; enforces strict CORS & CSP         │
+│ • Honeypot Scanner Trap: Instant IP ban on .php, wp-admin, .env, .git      │
+│ • Sliding-Window Rate Limiter: 120 req/min general, 10 req/min auth        │
+│ • SQLi / XSS / Path-Traversal Deep Payload Inspector                       │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Layer 3: Zero-Trust API Authentication & Role Guard                        │
+│ • Verifies HMAC-SHA256 JWT / Admin identity on /api/backup/* & /api/db/*   │
+│ • Enforces tenant isolation (patients can only read/write their own UID)   │
+│ • Parameterized SQL ($1, $2) + Sanitized Error Boundary (zero stack leaks) │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Layer 4: Live Security Audit Log & Provider Alerting                       │
+│ • Persists blocked events to PostgreSQL `security_events` + disk           │
+│ • Dispatches throttled SMTP security alert emails to Brenda on attacks     │
+│ • Streams live blocked IPs & 1-click Unban controls to Provider Portal     │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Interactive Component & Endpoint Mapping
-1. **Brute-Force Account Lockout Endpoints & State**:
-   - `POST /api/auth/check-lockout`: Checks if an email or IP is currently locked out; returns `{ locked, remainingMs, failedAttempts, maxAttempts: 5 }`.
-   - `POST /api/auth/record-attempt`: Records `{ email, success }`. On `success: true`, resets `failedAttempts` to `0`. On `success: false`, increments `failedAttempts`; when reaching `5`, sets `lockedUntil = Date.now() + 15 * 60 * 1000` (15 minutes), persists to `portal-credentials.db.json`, and emails a security notice if locked.
-   - `GET /api/auth/locked-accounts` & `POST /api/auth/admin-unlock`: Lets the Admin view all currently locked accounts and unlock any patient in 1 click.
-   - **Successful Password Reset Auto-Unlock**: Completing a password reset via email automatically clears any active lockout for that email address.
-2. **Automated & On-Demand Backup Engine**:
-   - `POST /api/backup/create-snapshot`: Saves a complete timestamped backup snapshot (`users`, `appointments`, `intakes`, `assessments`, `medications`, `messages`, `invoices`, and `account_directory`) to `/backups/gmp-backup-<timestamp>.json` (retaining the latest 30 snapshots) and updates `/backups/latest-backup.json`.
-   - **Automatic Daily + Event-Triggered Backups**: Runs a background daily scheduler on the server and automatically syncs whenever the Admin opens the portal or triggers clinical changes.
-   - `POST /api/backup/send-email`: Sends the complete JSON + summary report as an email attachment to `info@goldenmindpsychiatry.org` and `beehobs@yahoo.com` via `mailserver.businessidentity.llc`.
-   - **Google Drive Cloud Backup**: Uses the Google Drive API (`https://www.googleapis.com/auth/drive.file`) to upload `golden-mind-backup-YYYY-MM-DD.json` directly to the admin's Google Drive with a confirmation banner.
-3. **Full & Single-Patient Restore Engine**:
-   - **Pre-Restore Safety Snapshot**: Before any restore runs, the system automatically creates a safety snapshot so no data can ever be accidentally lost.
-   - **Full Database Restore**: Writes all collections and credentials from the selected snapshot or uploaded `.json` file back into Cloud Firestore and the server credentials store.
-   - **Single-Patient Chart Restore**: Lets the Admin select a single patient from inside any backup snapshot and restores *only* that patient's `users/{uid}` document and their associated `appointments`, `medications`, `intakes`, `assessments`, `messages`, and `invoices`.
+### Data Model & State
+
+- **`security_events` Table (PostgreSQL & In-Memory Ring Buffer)**:
+  - Stores `id`, `ip_address`, `event_type` (`scanner_probe`, `sqli_xss_blocked`, `rate_limit_exceeded`, `brute_force_lockout`, `unauthorized_api_access`), `path`, `method`, `reason`, `blocked_until`, and `created_at`.
+- **`bannedIps` Map**:
+  - Tracks banned IP addresses, expiration timestamps, ban reasons, and hit counts, with 1-click unban capability from Brenda's Provider Dashboard.
+
+### Interactive Component & State Mapping
+
+- **Provider Security & Intrusion Console (`ProviderDashboardView`)**:
+  - Displays real-time counters (`tabular-nums`) for Blocked Scanner Probes, Banned IPs, Locked Accounts, and Active WAF Rules.
+  - Provides interactive **Unban IP**, **Clear Security Log**, **Trigger Test Security Alert**, and **Copy One-Line Ubuntu Server Hardening Command (UFW + Fail2Ban + PostgreSQL Localhost Lock + Nginx Stealth)** buttons with instant feedback banners.

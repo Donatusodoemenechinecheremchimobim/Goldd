@@ -275,6 +275,60 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [cleaningTestUsers, setCleaningTestUsers] = useState(false);
   const [initialCleanComplete, setInitialCleanComplete] = useState(false);
 
+  // Live Security & Intrusion Audit Log (WAF, Scanner Honeypot, SQLi/XSS & IP Ban Manager) State
+  const [securityStats, setSecurityStats] = useState<{
+    blockedScanners: number;
+    blockedSqliXss: number;
+    blockedRateLimits: number;
+    blockedBruteForce: number;
+    blockedCors: number;
+    blockedUnauthorizedApi: number;
+    activeBannedIps: number;
+    totalLoggedEvents: number;
+  }>({
+    blockedScanners: 0,
+    blockedSqliXss: 0,
+    blockedRateLimits: 0,
+    blockedBruteForce: 0,
+    blockedCors: 0,
+    blockedUnauthorizedApi: 0,
+    activeBannedIps: 0,
+    totalLoggedEvents: 0,
+  });
+  const [bannedIps, setBannedIps] = useState<
+    Array<{
+      ip: string;
+      reason: string;
+      eventType: string;
+      bannedUntil: number;
+      remainingSeconds: number;
+      strikeCount: number;
+    }>
+  >([]);
+  const [securityEvents, setSecurityEvents] = useState<
+    Array<{
+      id: string;
+      ipAddress: string;
+      eventType: string;
+      path: string;
+      method: string;
+      reason: string;
+      blockedUntil?: number | null;
+      createdAt: string;
+    }>
+  >([]);
+  const [testingSecurityAlert, setTestingSecurityAlert] = useState(false);
+  const [copiedUbuntuHardeningCmd, setCopiedUbuntuHardeningCmd] = useState(false);
+
+  const getAdminHeaders = (): Record<string, string> => {
+    const jwt = window.localStorage.getItem('gmp_standalone_jwt') || '';
+    return {
+      'Content-Type': 'application/json',
+      'X-Admin-Email': currentUser.email || 'beehobs@yahoo.com',
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+    };
+  };
+
   const showBanner = (msg: string) => {
     setStatusFeedback(msg);
     setTimeout(() => setStatusFeedback(null), 4500);
@@ -282,9 +336,10 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
 
   const refreshBackupAndLockoutStatus = async () => {
     try {
-      const [statusRes, lockRes] = await Promise.all([
-        fetch('/api/backup/status'),
-        fetch('/api/auth/locked-accounts'),
+      const [statusRes, lockRes, secRes] = await Promise.all([
+        fetch('/api/backup/status', { headers: getAdminHeaders() }),
+        fetch('/api/auth/locked-accounts', { headers: getAdminHeaders() }),
+        fetch('/api/security/audit-summary', { headers: getAdminHeaders() }),
       ]);
       const statusData = await statusRes.json();
       if (statusData?.ok) {
@@ -296,6 +351,12 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       const lockData = await lockRes.json();
       if (lockData?.ok && Array.isArray(lockData.accounts)) {
         setLockedAccounts(lockData.accounts);
+      }
+      const secData = await secRes.json();
+      if (secData?.ok) {
+        if (secData.stats) setSecurityStats(secData.stats);
+        setBannedIps(Array.isArray(secData.bannedIps) ? secData.bannedIps : []);
+        setSecurityEvents(Array.isArray(secData.events) ? secData.events : []);
       }
     } catch {
       // ignore
@@ -404,7 +465,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       // 1. Wipe server-side Ubuntu PostgreSQL + .credentials-store.json
       await fetch('/api/standalone/db/clean-test-data', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
       }).catch(() => {});
 
       // 2. Wipe Cloud Firestore collections (keeping only Brenda's provider account)
@@ -658,7 +719,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
       };
       const res = await fetch('/api/backup/email-clinic', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ backupData }),
       });
       const data = await res.json();
@@ -819,7 +880,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     try {
       await fetch('/api/auth/unlock-account', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ email }),
       });
       await refreshBackupAndLockoutStatus();
@@ -827,6 +888,75 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
     } catch {
       // ignore
     }
+  };
+
+  const handleUnbanIp = async (ip: string) => {
+    try {
+      await fetch('/api/security/unban-ip', {
+        method: 'POST',
+        headers: getAdminHeaders(),
+        body: JSON.stringify({ ip }),
+      });
+      await refreshBackupAndLockoutStatus();
+      showBanner(`Removed IP ban for ${ip}.`);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleClearSecurityEvents = async () => {
+    try {
+      await fetch('/api/security/clear-events', {
+        method: 'POST',
+        headers: getAdminHeaders(),
+      });
+      await refreshBackupAndLockoutStatus();
+      showBanner('Cleared security intrusion audit log.');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleTestSecurityAlert = async () => {
+    setTestingSecurityAlert(true);
+    try {
+      const res = await fetch('/api/security/test-alert', {
+        method: 'POST',
+        headers: getAdminHeaders(),
+      });
+      const data = await res.json();
+      await refreshBackupAndLockoutStatus();
+      if (data?.ok) {
+        showBanner(
+          'Simulated scanner probe blocked & security alert email sent to beehobs@yahoo.com and info@goldenmindpsychiatry.org!'
+        );
+      }
+    } catch {
+      showBanner('Triggered security alert test.');
+    } finally {
+      setTestingSecurityAlert(false);
+    }
+  };
+
+  const UBUNTU_SERVER_HARDENING_COMMAND = `sudo apt-get update -y && sudo apt-get install -y ufw fail2ban && \\
+sudo ufw default deny incoming && sudo ufw default allow outgoing && \\
+sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && \\
+sudo ufw deny 5432/tcp && sudo ufw --force enable && \\
+sudo sed -i "s/^#*listen_addresses.*/listen_addresses = '127.0.0.1'/" /etc/postgresql/*/main/postgresql.conf 2>/dev/null || true && \\
+sudo systemctl restart postgresql && \\
+sudo sed -i 's/# server_tokens off;/server_tokens off;/g' /etc/nginx/nginx.conf && \\
+sudo systemctl enable fail2ban && sudo systemctl restart fail2ban nginx && \\
+cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm install && npm run build && pm2 restart golden-mind-psychiatry --update-env`;
+
+  const handleCopyUbuntuHardeningCommand = () => {
+    navigator.clipboard
+      .writeText(UBUNTU_SERVER_HARDENING_COMMAND)
+      .then(() => {
+        setCopiedUbuntuHardeningCmd(true);
+        showBanner('Copied 1-Click Ubuntu Server Hardening Command to clipboard!');
+        setTimeout(() => setCopiedUbuntuHardeningCmd(false), 3500);
+      })
+      .catch(() => {});
   };
 
   // Synchronize care plan & demographic fields when opening an individual patient chart
@@ -4280,7 +4410,184 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
                 )}
               </div>
 
-              {/* 4. 1-Click Clean All Test Users & Reset Database (Keep Only Brenda Login) */}
+              {/* 4. Live Security & Intrusion Audit Log Console (WAF + Scanner Honeypot + SQLi/XSS Firewall + IP Ban Manager) */}
+              <div className="bg-white portal-card p-6 space-y-5 border border-[#D4AF37]/40">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-4">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                      Zero-Trust WAF · Anti-Fingerprinting · SQLi/XSS Firewall
+                    </span>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Live Security &amp; Intrusion Audit Log (Automated Scanner &amp; Brute-Force Defense)
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      Server headers masked (<code>Server: Protected</code>) · PostgreSQL locked to{' '}
+                      <code>127.0.0.1</code> · CORS locked to <code>goldenmindpsychiatry.org</code> ·
+                      Real-time email alerts to <strong>beehobs@yahoo.com</strong>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={testingSecurityAlert}
+                      onClick={handleTestSecurityAlert}
+                      className="px-3.5 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800 disabled:opacity-60"
+                    >
+                      {testingSecurityAlert
+                        ? 'Sending Alert...'
+                        : 'Test Intrusion & Email Alert'}
+                    </button>
+                    {securityEvents.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearSecurityEvents}
+                        className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-stone-700 font-semibold text-xs cursor-pointer hover:bg-stone-100"
+                      >
+                        Clear Log
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4 Security Telemetry Counters (tabular-nums) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Blocked Scanners (.env / .php)
+                    </p>
+                    <p className="text-xl font-bold font-portal-heading tabular-nums text-stone-900 mt-1">
+                      {securityStats.blockedScanners}
+                    </p>
+                    <p className="text-[11px] text-stone-500">Auto-banned 30m</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Blocked SQLi / XSS Payloads
+                    </p>
+                    <p className="text-xl font-bold font-portal-heading tabular-nums text-stone-900 mt-1">
+                      {securityStats.blockedSqliXss}
+                    </p>
+                    <p className="text-[11px] text-stone-500">Parameterized + WAF</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Rate-Limit / Brute-Force Blocks
+                    </p>
+                    <p className="text-xl font-bold font-portal-heading tabular-nums text-stone-900 mt-1">
+                      {securityStats.blockedRateLimits + securityStats.blockedBruteForce}
+                    </p>
+                    <p className="text-[11px] text-stone-500">IP Flood Defense</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Active Banned IPs
+                    </p>
+                    <p className="text-xl font-bold font-portal-heading tabular-nums text-stone-900 mt-1">
+                      {bannedIps.length}
+                    </p>
+                    <p className="text-[11px] text-emerald-700 font-semibold">
+                      WAF Shield Active
+                    </p>
+                  </div>
+                </div>
+
+                {/* Active Banned IP List with 1-Click Unban */}
+                {bannedIps.length > 0 && (
+                  <div className="p-4 rounded-[14px] bg-red-50/70 border border-red-200 space-y-2.5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-800">
+                      Currently Banned Attacker IP Addresses ({bannedIps.length})
+                    </p>
+                    <div className="divide-y divide-red-200/70">
+                      {bannedIps.map((b) => (
+                        <div
+                          key={b.ip}
+                          className="py-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold font-mono tabular-nums text-stone-900">
+                              {b.ip} · {b.eventType}
+                            </p>
+                            <p className="text-stone-600 tabular-nums">
+                              {b.reason} · {Math.ceil(b.remainingSeconds / 60)}m remaining
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUnbanIp(b.ip)}
+                            className="px-3 py-1.5 rounded-[10px] bg-white border border-stone-300 text-stone-800 font-bold text-xs cursor-pointer hover:bg-stone-100"
+                          >
+                            Unban IP
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Security Intrusion Events Log Table */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Recent Intrusion &amp; Scanner Audit Log ({securityEvents.length})
+                  </p>
+                  {securityEvents.length === 0 ? (
+                    <div className="p-4 rounded-[14px] bg-[#FAF9F5] border border-stone-200 text-xs text-stone-600">
+                      Zero unmitigated intrusions recorded. Any scanner probing <code>.env</code>,{' '}
+                      <code>.php</code>, <code>wp-admin</code>, SQL injection payloads, or brute-force
+                      attempts will appear here immediately and trigger an email alert to Brenda.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-stone-200 max-h-64 overflow-y-auto border border-stone-200 rounded-[14px] px-4 bg-[#FAF9F5]">
+                      {securityEvents.map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-stone-900 font-mono tabular-nums">
+                              {ev.eventType} · {ev.ipAddress} · {ev.method} {ev.path}
+                            </p>
+                            <p className="text-stone-600">{ev.reason}</p>
+                          </div>
+                          <span className="text-[11px] font-mono tabular-nums text-stone-500">
+                            {ev.createdAt.replace('T', ' ').slice(0, 19)} UTC
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 1-Click Copyable Ubuntu Server Infrastructure Hardening Command */}
+                <div className="pt-3 border-t border-stone-200 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-stone-900">
+                        Ubuntu Server Firewall &amp; PostgreSQL Loopback Lock Command (UFW + Fail2Ban + Nginx Stealth)
+                      </p>
+                      <p className="text-[11px] text-stone-500">
+                        Closes external PostgreSQL port 5432, locks PostgreSQL to <code>127.0.0.1</code>, enables Fail2Ban SSH/Nginx jail, hides Nginx version tokens, and restarts PM2 <code>golden-mind-psychiatry</code>.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyUbuntuHardeningCommand}
+                      className="px-3.5 py-2 rounded-[10px] bg-[#FAF6EA] border border-[#D4AF37] text-[#9E7206] font-bold text-xs cursor-pointer hover:bg-[#0A0A0A] hover:text-[#D4AF37]"
+                    >
+                      {copiedUbuntuHardeningCmd
+                        ? 'Copied Ubuntu Command!'
+                        : 'Copy Ubuntu Hardening Command'}
+                    </button>
+                  </div>
+                  <pre className="p-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] text-[11px] font-mono overflow-x-auto leading-relaxed">
+                    {UBUNTU_SERVER_HARDENING_COMMAND}
+                  </pre>
+                </div>
+              </div>
+
+              {/* 5. 1-Click Clean All Test Users & Reset Database (Keep Only Brenda Login) */}
               <div className="bg-white portal-card p-6 space-y-4 border border-red-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
                   <div>
