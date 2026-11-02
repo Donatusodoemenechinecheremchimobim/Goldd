@@ -164,7 +164,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [fullNameInput, setFullNameInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [dobInput, setDobInput] = useState('');
+  const [genderInput, setGenderInput] = useState<'Female' | 'Male' | 'Other'>('Female');
+  const [customGenderInput, setCustomGenderInput] = useState('');
   const [insuranceInput, setInsuranceInput] = useState('Blue Cross Blue Shield (BCBS)');
+  const [guardianNameInput, setGuardianNameInput] = useState('');
+  const [guardianConsentInput, setGuardianConsentInput] = useState(false);
+  const [signupHipaaConsent, setSignupHipaaConsent] = useState(false);
+  const [signupTelehealthConsent, setSignupTelehealthConsent] = useState(false);
+  const [signupTcpaConsent, setSignupTcpaConsent] = useState(false);
   const [botHoneypot, setBotHoneypot] = useState('');
   const [failedAuthAttempts, setFailedAuthAttempts] = useState(0);
   const [authLockoutUntil, setAuthLockoutUntil] = useState<number>(0);
@@ -175,7 +182,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [regFullName, setRegFullName] = useState('');
   const [regDob, setRegDob] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regSex, setRegSex] = useState('Female');
+  const [regSex, setRegSex] = useState<'Female' | 'Male' | 'Other'>('Female');
+  const [regCustomSex, setRegCustomSex] = useState('');
   const [regAddress, setRegAddress] = useState('');
   const [regInsurance, setRegInsurance] = useState('Blue Cross Blue Shield (BCBS)');
   const [regMemberId, setRegMemberId] = useState('');
@@ -185,8 +193,30 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [regPrimaryConcern, setRegPrimaryConcern] = useState(
     'Comprehensive Psychiatric Evaluation'
   );
+  const [regGuardianName, setRegGuardianName] = useState('');
+  const [regGuardianConsent, setRegGuardianConsent] = useState(false);
+  const [regHipaaConsent, setRegHipaaConsent] = useState(false);
+  const [regTelehealthConsent, setRegTelehealthConsent] = useState(false);
+  const [regTcpaConsent, setRegTcpaConsent] = useState(false);
   const [regSubmitting, setRegSubmitting] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
+
+  // Texas HB 300 & HB 4224 1-Click Electronic Medical Records Request State
+  const [recordsRequestSubmitting, setRecordsRequestSubmitting] = useState(false);
+  const [recordsRequestSent, setRecordsRequestSent] = useState(false);
+
+  const isDobUnder18 = (dobStr: string): boolean => {
+    if (!dobStr) return false;
+    const birth = new Date(dobStr);
+    if (Number.isNaN(birth.getTime())) return false;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age >= 0 && age < 18;
+  };
 
   // Real Email Action Link State (?mode=resetPassword&oobCode=... or ?mode=resetPassword&resetToken=... or ?mode=verifyEmail)
   const [resetOobCode, setResetOobCode] = useState<string | null>(null);
@@ -539,7 +569,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           );
           setRegDob((prev) => prev || profile.dateOfBirth || '');
           setRegPhone((prev) => prev || profile.phone || '');
-          setRegSex((prev) => profile.biologicalSex || prev || 'Female');
+          if (profile.biologicalSex) {
+            if (profile.biologicalSex === 'Female' || profile.biologicalSex === 'Male') {
+              setRegSex(profile.biologicalSex);
+            } else {
+              setRegSex('Other');
+              const extracted = profile.biologicalSex
+                .replace(/^Other\s*\((.*)\)$/i, '$1')
+                .replace(/^Other:\s*/i, '')
+                .trim();
+              if (extracted && extracted.toLowerCase() !== 'other') {
+                setRegCustomSex((prev) => prev || extracted);
+              }
+            }
+          }
           setRegAddress((prev) => prev || profile.address || '');
           setRegInsurance(
             (prev) => profile.insuranceProvider || prev || 'Blue Cross Blue Shield (BCBS)'
@@ -677,7 +720,20 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           }
           if (data.dateOfBirth) setRegDob((prev) => prev || data.dateOfBirth || '');
           if (data.phone) setRegPhone((prev) => prev || data.phone || '');
-          if (data.biologicalSex) setRegSex(data.biologicalSex);
+          if (data.biologicalSex) {
+            if (data.biologicalSex === 'Female' || data.biologicalSex === 'Male') {
+              setRegSex(data.biologicalSex);
+            } else {
+              setRegSex('Other');
+              const extracted = data.biologicalSex
+                .replace(/^Other\s*\((.*)\)$/i, '$1')
+                .replace(/^Other:\s*/i, '')
+                .trim();
+              if (extracted && extracted.toLowerCase() !== 'other') {
+                setRegCustomSex((prev) => prev || extracted);
+              }
+            }
+          }
           if (data.address) setRegAddress((prev) => prev || data.address || '');
           if (data.insuranceProvider) setRegInsurance(data.insuranceProvider);
           if (data.insuranceMemberId) setRegMemberId((prev) => prev || data.insuranceMemberId || '');
@@ -919,10 +975,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         );
       }
     }
+    const resolvedSignupGender =
+      genderInput === 'Other'
+        ? customGenderInput.trim()
+          ? `Other (${customGenderInput.trim()})`
+          : 'Other'
+        : genderInput;
     const profile = await ensurePatientOnboarding(user, {
       fullName: fullNameInput || undefined,
       phone: phoneInput || undefined,
       dateOfBirth: dobInput || undefined,
+      biologicalSex: isRegistering ? resolvedSignupGender : undefined,
       insuranceProvider: insuranceInput || undefined,
     });
     setPortalUser(profile);
@@ -1201,6 +1264,22 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
 
     if (isRegistering && !isAuthorizedProviderEmail(cleanEmail)) {
+      if (genderInput === 'Other' && !customGenderInput.trim()) {
+        setAuthError('Please state your gender in the text box when selecting "Other".');
+        return false;
+      }
+      if (isDobUnder18(dobInput) && (!guardianNameInput.trim() || !guardianConsentInput)) {
+        setAuthError(
+          'For patients under age 18, a parent or legal guardian must enter their full legal name and check the guardian consent box (Texas Family Code Ch. 32).'
+        );
+        return false;
+      }
+      if (!signupHipaaConsent || !signupTelehealthConsent || !signupTcpaConsent) {
+        setAuthError(
+          'Please check the required HIPAA/Texas HB 300 Privacy Notice, Texas Telehealth Consent, and SMS/Email Notification consent boxes to create your account.'
+        );
+        return false;
+      }
       window.sessionStorage.removeItem('gmp_used_oneclick');
       setUsedOneClickMethod(false);
       window.sessionStorage.setItem(`gmp_pending_verify_${cleanEmail}`, '1');
@@ -1208,6 +1287,13 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       window.sessionStorage.removeItem(`gmp_verified_email_${cleanEmail}`);
       setOneClickVerifiedSession(false);
     }
+
+    const resolvedSignupGender =
+      genderInput === 'Other'
+        ? customGenderInput.trim()
+          ? `Other (${customGenderInput.trim()})`
+          : 'Other'
+        : genderInput;
 
     // Also issue/sync Standalone Ubuntu PostgreSQL + JWT Auth token in background
     fetch('/api/standalone/auth/login', {
@@ -1220,6 +1306,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         fullName: fullNameInput || undefined,
         phone: phoneInput || undefined,
         dateOfBirth: dobInput || undefined,
+        biologicalSex: isRegistering ? resolvedSignupGender : undefined,
         insuranceProvider: insuranceInput || undefined,
       }),
     })
@@ -1550,10 +1637,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     if (!firebaseUser || !portalUser) return;
     setRegError(null);
 
+    const resolvedRawSex =
+      regSex === 'Other'
+        ? regCustomSex.trim()
+          ? `Other (${regCustomSex.trim()})`
+          : ''
+        : regSex;
+
     const cleanFullName = sanitizeClinicalInput(regFullName.trim(), 120);
     const cleanDob = sanitizeClinicalInput(regDob.trim(), 20);
     const cleanPhone = sanitizeClinicalInput(regPhone.trim(), 40);
-    const cleanSex = sanitizeClinicalInput(regSex.trim(), 60);
+    const cleanSex = sanitizeClinicalInput(resolvedRawSex.trim(), 80);
     const cleanAddress = sanitizeClinicalInput(regAddress.trim(), 250);
     const cleanInsurance = sanitizeClinicalInput(regInsurance.trim(), 120);
     const cleanMemberId = sanitizeClinicalInput(regMemberId.trim(), 64);
@@ -1561,6 +1655,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const cleanPharmacy = sanitizeClinicalInput(regPharmacy.trim(), 200);
     const cleanEmergency = sanitizeClinicalInput(regEmergencyContact.trim(), 200);
     const cleanConcern = sanitizeClinicalInput(regPrimaryConcern.trim(), 240);
+    const cleanGuardianName = sanitizeClinicalInput(regGuardianName.trim(), 120);
 
     if (!cleanFullName || cleanFullName.toLowerCase() === 'patient') {
       setRegError('Please enter your Full Legal Name (First and Last Name).');
@@ -1572,6 +1667,22 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
     if (!cleanPhone || cleanPhone.length < 7) {
       setRegError('Please enter a valid mobile phone number.');
+      return;
+    }
+    if (!cleanSex) {
+      setRegError('Please select your gender or state your gender in the text box when selecting "Other".');
+      return;
+    }
+    if (isDobUnder18(cleanDob) && (!cleanGuardianName || !regGuardianConsent)) {
+      setRegError(
+        'For patients under age 18, a parent or legal guardian must enter their full legal name and check the guardian consent attestation (Texas Family Code Ch. 32).'
+      );
+      return;
+    }
+    if (!regHipaaConsent || !regTelehealthConsent || !regTcpaConsent) {
+      setRegError(
+        'Please review and check the required HIPAA/Texas HB 300 Privacy Notice, Texas Telehealth Informed Consent, and FCC/TCPA Notification checkboxes to continue.'
+      );
       return;
     }
 
@@ -1591,6 +1702,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         preferredPharmacy: cleanPharmacy,
         emergencyContact: cleanEmergency,
         primaryConcern: cleanConcern,
+        ...(cleanGuardianName ? { guardianName: cleanGuardianName } : {}),
+        consentsAcceptedAt: now,
         registrationCompleted: true,
         onboardingCompleted: true,
         updatedAt: now,
@@ -1635,7 +1748,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         senderName: cleanFullName,
         senderRole: 'patient' as const,
         subject: `Client Registration Record Completed: ${cleanFullName} (DOB: ${cleanDob})`,
-        body: `New Client Registration Record saved to system:\n• Full Legal Name: ${cleanFullName}\n• Date of Birth: ${cleanDob}\n• Biological Sex: ${cleanSex || 'Not specified'}\n• Phone: ${cleanPhone}\n• Email: ${portalUser.email}\n• Residential Address: ${cleanAddress || 'Texas (Telehealth)'}\n• Primary Insurance: ${cleanInsurance}${cleanMemberId ? ` (Member ID: ${cleanMemberId}${cleanGroupNumber ? `, Group: ${cleanGroupNumber}` : ''})` : ''}\n• Preferred Pharmacy: ${cleanPharmacy || 'To be confirmed'}\n• Emergency Contact: ${cleanEmergency || 'To be confirmed'}\n• Primary Clinical Reason: ${cleanConcern}`,
+        body: `New Client Registration Record saved to system:\n• Full Legal Name: ${cleanFullName}\n• Date of Birth: ${cleanDob}\n• Gender: ${cleanSex}\n• Phone: ${cleanPhone}\n• Email: ${portalUser.email}\n• Residential Address: ${cleanAddress || 'Texas (Telehealth)'}\n• Primary Insurance: ${cleanInsurance}${cleanMemberId ? ` (Member ID: ${cleanMemberId}${cleanGroupNumber ? `, Group: ${cleanGroupNumber}` : ''})` : ''}\n• Preferred Pharmacy: ${cleanPharmacy || 'To be confirmed'}\n• Emergency Contact: ${cleanEmergency || 'To be confirmed'}${cleanGuardianName ? `\n• Parent/Legal Guardian (Minor Consent): ${cleanGuardianName}` : ''}\n• Primary Clinical Reason: ${cleanConcern}\n• Legal Consents Accepted (HIPAA/TX HB 300, Telehealth, TCPA): ${now}`,
         read: false,
         createdAt: now,
       };
@@ -1671,6 +1784,56 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       setRegError('Unable to save registration details. Please check your connection and try again.');
     } finally {
       setRegSubmitting(false);
+    }
+  };
+
+  // Texas HB 300 & HB 4224 1-Click Electronic Medical Records Request Handler (15-Business-Day Fulfilment)
+  const handleRequestMedicalRecords = async () => {
+    if (!firebaseUser || !portalUser || recordsRequestSubmitting) return;
+    setRecordsRequestSubmitting(true);
+    const now = new Date().toISOString();
+    try {
+      await fetch('/api/email/records-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientName: portalUser.fullName,
+          patientEmail: portalUser.email,
+          patientPhone: portalUser.phone || '',
+          dateOfBirth: portalUser.dateOfBirth || '',
+          requestType: 'Complete Electronic Medical Record (Texas HB 300 / HB 4224)',
+          notes: 'Submitted via 1-Click Client Portal Electronic Medical Records Request tool.',
+        }),
+      }).catch(() => {});
+
+      const reqMsg = {
+        patientId: firebaseUser.uid,
+        patientName: portalUser.fullName,
+        senderId: firebaseUser.uid,
+        senderName: portalUser.fullName,
+        senderRole: 'patient' as const,
+        subject: `[Texas HB 300 / HB 4224] Electronic Medical Records Request — ${portalUser.fullName}`,
+        body: `Official Electronic Medical Records Request submitted by ${portalUser.fullName} (${portalUser.email}) pursuant to Texas Health & Safety Code § 181.102 (HB 300) and Texas HB 4224. Electronic copies will be delivered within 15 business days.`,
+        read: false,
+        createdAt: now,
+      };
+      fetch('/api/standalone/db/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collection: 'messages',
+          docId: `hb300_${firebaseUser.uid}_${Date.now()}`,
+          data: reqMsg,
+        }),
+      }).catch(() => {});
+      try {
+        await addDoc(collection(db, 'messages'), reqMsg);
+      } catch {
+        // Non-fatal
+      }
+      setRecordsRequestSent(true);
+    } finally {
+      setRecordsRequestSubmitting(false);
     }
   };
 
@@ -2796,65 +2959,134 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 aria-hidden="true"
               />
               {isRegistering && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Full Legal Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Jane Doe"
-                      value={fullNameInput}
-                      onChange={(e) => setFullNameInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-stone-700 block mb-1">
+                        Full Legal Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Jane Doe"
+                        value={fullNameInput}
+                        onChange={(e) => setFullNameInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-stone-700 block mb-1">
+                        Phone Number *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="(432) 555-0199"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-stone-700 block mb-1">
+                        Date of Birth *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={dobInput}
+                        onChange={(e) => setDobInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-stone-700 block mb-1">
+                        Gender *
+                      </label>
+                      <select
+                        value={genderInput}
+                        onChange={(e) =>
+                          setGenderInput(e.target.value as 'Female' | 'Male' | 'Other')
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      >
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                        <option value="Other">Other (Please State)</option>
+                      </select>
+                    </div>
+                    {genderInput === 'Other' && (
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-semibold text-[#9E7206] block mb-1">
+                          Please State Your Gender *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Please state your gender"
+                          value={customGenderInput}
+                          onChange={(e) => setCustomGenderInput(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37] text-xs focus:outline-none focus:border-[#9E7206]"
+                        />
+                      </div>
+                    )}
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-semibold text-stone-700 block mb-1">
+                        Primary Insurance *
+                      </label>
+                      <select
+                        value={insuranceInput}
+                        onChange={(e) => setInsuranceInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                      >
+                        <option value="Blue Cross Blue Shield (BCBS)">
+                          Blue Cross Blue Shield (BCBS)
+                        </option>
+                        <option value="Aetna">Aetna</option>
+                        <option value="Cigna / Evernorth">Cigna / Evernorth</option>
+                        <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
+                        <option value="Medicare">Medicare</option>
+                        <option value="Medicaid">Medicaid</option>
+                        <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="(432) 555-0199"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Date of Birth *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={dobInput}
-                      onChange={(e) => setDobInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Primary Insurance *
-                    </label>
-                    <select
-                      value={insuranceInput}
-                      onChange={(e) => setInsuranceInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                    >
-                      <option value="Blue Cross Blue Shield (BCBS)">
-                        Blue Cross Blue Shield (BCBS)
-                      </option>
-                      <option value="Aetna">Aetna</option>
-                      <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                      <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                      <option value="Medicare">Medicare</option>
-                      <option value="Medicaid">Medicaid</option>
-                      <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
-                    </select>
-                  </div>
+
+                  {/* Under-18 Minor Guardian Consent (Texas Family Code Chapter 32) */}
+                  {isDobUnder18(dobInput) && (
+                    <div className="p-3.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/60 space-y-2.5">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                        Minor Patient (Under Age 18) — Texas Family Code Ch. 32 Guardian Consent
+                      </p>
+                      <div>
+                        <label className="text-xs font-semibold text-stone-700 block mb-1">
+                          Parent or Legal Guardian Full Legal Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Full legal name of parent or court-appointed guardian"
+                          value={guardianNameInput}
+                          onChange={(e) => setGuardianNameInput(e.target.value)}
+                          className="w-full px-3 py-2 rounded-[10px] bg-white border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                        />
+                      </div>
+                      <label className="flex items-start gap-2 text-[11px] text-stone-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={guardianConsentInput}
+                          onChange={(e) => setGuardianConsentInput(e.target.checked)}
+                          className="mt-0.5 accent-[#9E7206] shrink-0"
+                        />
+                        <span>
+                          I attest under Texas Family Code Chapter 32 that I am the parent or legal
+                          guardian with legal authority to consent to psychiatric evaluation and
+                          telehealth treatment for this minor patient. *
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2946,6 +3178,57 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   </button>
                 ))}
               </div>
+
+              {isRegistering && (
+                <div className="p-3.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200/90 space-y-2 text-[11px] text-stone-700">
+                  <p className="font-bold uppercase tracking-wider text-[10px] text-[#9E7206]">
+                    Mandatory Texas &amp; Federal Healthcare Consents
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={signupHipaaConsent}
+                      onChange={(e) => setSignupHipaaConsent(e.target.checked)}
+                      className="mt-0.5 accent-[#9E7206] shrink-0"
+                    />
+                    <span>
+                      <strong>HIPAA, Texas HB 300 &amp; No Surprises Act Notice:</strong> I
+                      acknowledge the HIPAA &amp; Texas Medical Records Privacy Act (HB 300) Notice
+                      of Privacy Practices and my right to a Federal Good Faith Estimate. *
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={signupTelehealthConsent}
+                      onChange={(e) => setSignupTelehealthConsent(e.target.checked)}
+                      className="mt-0.5 accent-[#9E7206] shrink-0"
+                    />
+                    <span>
+                      <strong>Texas Telehealth Consent &amp; Location Attestation:</strong> I consent
+                      to telehealth psychiatric services with Brenda Hobyani, MSN, APRN, PMHNP-BC and
+                      confirm I will be physically located in the State of Texas during telehealth
+                      sessions (Tex. Occ. Code Ch. 111). *
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={signupTcpaConsent}
+                      onChange={(e) => setSignupTcpaConsent(e.target.checked)}
+                      className="mt-0.5 accent-[#9E7206] shrink-0"
+                    />
+                    <span>
+                      <strong>FCC / TCPA Transactional SMS &amp; Email Consent:</strong> I consent to
+                      receive appointment links, verification codes, and care reminders via SMS/email
+                      (reply STOP to opt out). *
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -3357,7 +3640,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       Because you signed up using the <strong>1-Click Login method</strong>, please
                       fill in the mandatory registration details below (
                       <strong>
-                        Full Legal Name, Mobile Phone Number, Date of Birth, and Primary Insurance
+                        Full Legal Name, Mobile Phone Number, Date of Birth, Gender, and Primary
+                        Insurance
                       </strong>
                       —the same required details that clients who register with a standard email
                       address must complete) before continuing to your Client Portal.
@@ -3366,7 +3650,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     <>
                       Please complete your required registration details below (
                       <strong>
-                        Full Legal Name, Mobile Phone Number, Date of Birth, and Primary Insurance
+                        Full Legal Name, Mobile Phone Number, Date of Birth, Gender, and Primary
+                        Insurance
                       </strong>
                       ) before continuing into your Client Portal.
                     </>
@@ -3385,7 +3670,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             {/* Section 1: Legal Identity & Date of Birth */}
             <div className="space-y-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#9E7206] border-b border-stone-200 pb-1.5">
-                1. Patient Legal Identity &amp; Date of Birth
+                1. Patient Legal Identity, Date of Birth &amp; Gender
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -3431,22 +3716,70 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
                 <div>
                   <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Biological Sex / Gender *
+                    Gender *
                   </label>
                   <select
                     value={regSex}
-                    onChange={(e) => setRegSex(e.target.value)}
+                    onChange={(e) => setRegSex(e.target.value as 'Female' | 'Male' | 'Other')}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
                   >
                     <option value="Female">Female</option>
                     <option value="Male">Male</option>
-                    <option value="Non-Binary">Non-Binary</option>
-                    <option value="Prefer to Discuss with Provider">
-                      Prefer to Discuss with Provider
-                    </option>
+                    <option value="Other">Other (Please State)</option>
                   </select>
                 </div>
+
+                {regSex === 'Other' && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-semibold text-[#9E7206] block mb-1">
+                      Please State Your Gender *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Please state your gender"
+                      value={regCustomSex}
+                      onChange={(e) => setRegCustomSex(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37] text-xs focus:outline-none focus:border-[#9E7206]"
+                    />
+                  </div>
+                )}
               </div>
+
+              {isDobUnder18(regDob) && (
+                <div className="p-4 rounded-[14px] bg-[#FAF6EA] border border-[#D4AF37]/60 space-y-2.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                    Minor Patient (Under Age 18) — Texas Family Code Chapter 32 Guardian Consent
+                  </p>
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Parent or Legal Guardian Full Legal Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Full legal name of parent or court-appointed guardian"
+                      value={regGuardianName}
+                      onChange={(e) => setRegGuardianName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-xs text-stone-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={regGuardianConsent}
+                      onChange={(e) => setRegGuardianConsent(e.target.checked)}
+                      className="mt-0.5 accent-[#9E7206] shrink-0"
+                    />
+                    <span>
+                      I attest under Texas Family Code Chapter 32 that I am the parent or legal
+                      guardian with legal authority to consent to psychiatric evaluation and
+                      telehealth treatment for this minor patient. *
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 block mb-1">
@@ -3577,6 +3910,58 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   </option>
                 </select>
               </div>
+            </div>
+
+            {/* Section 3: Mandatory Texas & Federal Healthcare Consents */}
+            <div className="p-4 rounded-[16px] bg-[#FAF9F5] border border-stone-200/90 space-y-2.5 text-xs text-stone-700">
+              <p className="font-bold uppercase tracking-wider text-[11px] text-[#9E7206]">
+                3. Mandatory Texas &amp; Federal Healthcare Consents
+              </p>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={regHipaaConsent}
+                  onChange={(e) => setRegHipaaConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>HIPAA, Texas HB 300 &amp; Federal No Surprises Act Notice:</strong> I
+                  acknowledge receipt of the Notice of Privacy Practices (HIPAA &amp; Texas Health
+                  &amp; Safety Code Ch. 181 / HB 300) and my right to receive a Good Faith Estimate
+                  under 45 C.F.R. § 149.610. *
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={regTelehealthConsent}
+                  onChange={(e) => setRegTelehealthConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>Texas Telehealth Informed Consent &amp; Location Attestation:</strong> I
+                  consent to telehealth psychiatric care with Brenda Hobyani, MSN, APRN, PMHNP-BC and
+                  attest that I am physically located in the State of Texas during telehealth
+                  consultations (Tex. Occupations Code Ch. 111). *
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={regTcpaConsent}
+                  onChange={(e) => setRegTcpaConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>FCC / TCPA Transactional SMS &amp; Email Consent:</strong> I authorize
+                  Golden Mind Psychiatry PLLC to send transactional appointment links, reminders, and
+                  portal notifications via SMS and email (reply STOP to opt out; message &amp; data
+                  rates may apply). *
+                </span>
+              </label>
             </div>
 
             <div className="pt-2">
@@ -5536,6 +5921,43 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Texas HB 300 & HB 4224 1-Click Electronic Medical Records Request Card */}
+                  <div className="bg-white portal-card p-6 space-y-3 border border-[#D4AF37]/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
+                        Texas HB 300 &amp; HB 4224 Patient Right
+                      </span>
+                      <FileText className="w-4 h-4 text-[#9E7206]" />
+                    </div>
+                    <h3 className="text-sm font-bold font-portal-heading text-stone-900">
+                      Request Electronic Medical Records
+                    </h3>
+                    <p className="text-xs text-stone-600 leading-relaxed">
+                      Under <strong>Texas Health &amp; Safety Code § 181.102 (HB 300)</strong> and{' '}
+                      <strong>Texas HB 4224</strong>, you may request an electronic copy of your
+                      psychiatric records at any time. Fulfilled within{' '}
+                      <strong>15 business days</strong>.
+                    </p>
+                    {recordsRequestSent ? (
+                      <div className="p-3 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
+                        ✓ Your official Texas HB 300 electronic medical records request has been
+                        logged and sent to Brenda Hobyani, PMHNP-BC. You will receive your records
+                        within 15 business days.
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={recordsRequestSubmitting}
+                        onClick={handleRequestMedicalRecords}
+                        className="w-full py-2.5 px-4 rounded-[12px] bg-[#FAF6EA] hover:bg-[#F3E9C6] border border-[#D4AF37] text-[#1C1917] font-bold text-xs cursor-pointer transition-colors disabled:opacity-60"
+                      >
+                        {recordsRequestSubmitting
+                          ? 'Submitting Official HB 300 Request...'
+                          : '1-Click Request My Electronic Medical Records'}
+                      </button>
+                    )}
                   </div>
 
                   {/* Support CTA Card in Dark Obsidian-Gold Background with Corner Ghost Icon */}

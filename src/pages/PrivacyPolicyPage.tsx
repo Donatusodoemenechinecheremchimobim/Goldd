@@ -141,7 +141,11 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
             </li>
             <li className="flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-[#B8860B] shrink-0 mt-1" />
-              <span><strong>SMS &amp; Email Communications Consent:</strong> By providing your phone number or email address, you consent to receive transactional appointment confirmations, telehealth video room links, verification codes, and password reset links. You may opt out of non-essential reminders at any time. Mobile opt-in data and phone numbers are never shared with third parties or affiliates for marketing.</span>
+              <span><strong>SMS &amp; Email Communications Consent (FCC TCPA &amp; A2P 10DLC):</strong> By providing your phone number or email address, you consent to receive transactional appointment confirmations, telehealth video room links, verification codes, and password reset links. Message and data rates may apply; reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for assistance at any time. Mobile opt-in data and phone numbers are never shared with third parties or affiliates for marketing.</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-[#B8860B] shrink-0 mt-1" />
+              <span><strong>Zero Third-Party Advertising Pixels (HHS OCR &amp; FTC Health Breach Rule Compliance):</strong> <code className="text-xs bg-stone-100 px-1 py-0.5 rounded">goldenmindpsychiatry.org</code> does <strong>not</strong> install Meta Pixel, TikTok Pixel, or third-party behavioral advertising trackers on any clinical intake, booking, or Client Portal page. Only strictly essential, encrypted first-party session storage is used to maintain your portal authentication.</span>
             </li>
           </ul>
         </div>
@@ -149,14 +153,14 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
         {/* Section 4: Your Rights Under Texas HB 300 & HIPAA */}
         <div className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-4">
           <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1C1917]">
-            4. Your Patient Rights Under Texas HB 300 (TMRPA) &amp; Federal HIPAA
+            4. Your Patient Rights Under Texas HB 300 (TMRPA), Texas HB 4224 &amp; Federal HIPAA
           </h2>
           <p className="text-sm text-[#44403C] leading-relaxed">
             As a patient of Golden Mind Psychiatry PLLC, you have the following enforceable legal rights regarding your medical and psychiatric records:
           </p>
           <ul className="space-y-3 text-sm text-[#44403C]">
             <li>
-              <strong>• Right to Electronic Copy Within 15 Business Days (Texas Health &amp; Safety Code § 181.102):</strong> Under Texas HB 300, when you submit a written request for your electronic health records maintained in our electronic health record system, we will provide an electronic copy within <strong>15 business days</strong> of receiving your request (faster than the 30-day federal HIPAA window).
+              <strong>• Right to Electronic Copy Within 15 Business Days (Texas Health &amp; Safety Code § 181.102):</strong> Under Texas HB 300, when you submit a written or electronic request for your health records maintained in our electronic health record system (including via the 1-Click Medical Records Request tool in your Client Portal), we will provide an electronic copy within <strong>15 business days</strong> of receiving your request (faster than the 30-day federal HIPAA window).
             </li>
             <li>
               <strong>• Right to Request Amendments:</strong> If you believe clinical information in your chart is inaccurate or incomplete, you may submit a written request to amend your record.
@@ -173,23 +177,24 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
           </ul>
         </div>
 
-        {/* Section 5: Texas Mandatory Complaint & Regulatory Contact Notice */}
+        {/* Section 5: Texas HB 4224 Mandatory Complaint & Regulatory Contact Notice */}
         <div className="bg-white rounded-2xl border border-[#D4AF37]/40 p-6 sm:p-8 shadow-xs space-y-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-[#B8860B]/15 text-[#9E7206]">
               <Building2 className="w-5 h-5" />
             </div>
             <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1C1917]">
-              5. Privacy Officer Contact &amp; Texas / Federal Complaint Procedures
+              5. Mandatory Texas HB 4224 Notice (Tex. Health &amp; Safety Code § 181.105): Medical Records &amp; Complaint Procedures
             </h2>
           </div>
           <p className="text-sm text-[#44403C] leading-relaxed">
-            If you have questions about this Notice of Privacy Practices, wish to request your records, or believe your privacy rights have been violated, please contact our Privacy Officer directly. You will never be retaliated against for filing a complaint.
+            Pursuant to <strong>Texas House Bill 4224 (Texas Health &amp; Safety Code § 181.105)</strong>, Golden Mind Psychiatry PLLC provides the following conspicuous instructions for requesting your health care records and contacting state regulatory and consumer protection authorities. You will never be retaliated against for filing a complaint.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
             <div className="p-4 rounded-xl bg-[#FAF7F0] border border-[#D4AF37]/30 space-y-1.5">
-              <p className="font-bold text-[#1C1917]">Golden Mind Psychiatry PLLC — Privacy Officer</p>
-              <p className="text-[#44403C]">Attn: Brenda Hobyani, MSN, APRN, PMHNP-BC</p>
+              <p className="font-bold text-[#1C1917]">1. Request Medical Records or Contact Our Privacy Officer</p>
+              <p className="text-[#44403C]">Golden Mind Psychiatry PLLC — Attn: Brenda Hobyani, MSN, APRN, PMHNP-BC</p>
+              <p className="text-[#44403C]">Use the <strong>1-Click Medical Records Request</strong> button in your Client Portal or contact:</p>
               <p className="text-[#44403C] flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-[#B8860B]" />
                 <a href="tel:+14329343185" className="text-[#9E7206] font-semibold hover:underline">+1 (432) 934-3185</a>
@@ -200,9 +205,10 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
               </p>
             </div>
             <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-xs text-[#44403C]">
-              <p className="font-bold text-[#1C1917]">Texas &amp; Federal Regulatory Agencies:</p>
+              <p className="font-bold text-[#1C1917]">2. Texas &amp; Federal Regulatory Agencies (HB 4224 Notice):</p>
               <p>• <strong>Texas Board of Nursing (APRN Licensing &amp; Complaints):</strong> 1801 Congress Ave, Suite 10-200, Austin, TX 78701 · (512) 305-7400 · <a href="https://www.bon.texas.gov" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">bon.texas.gov</a></p>
-              <p>• <strong>Office of the Texas Attorney General (Consumer Protection / HB 300):</strong> P.O. Box 12548, Austin, TX 78711 · 1-800-621-0508 · <a href="https://www.texasattorneygeneral.gov" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">texasattorneygeneral.gov</a></p>
+              <p>• <strong>Texas Health and Human Services Commission (HHSC):</strong> 4601 W. Guadalupe St, Austin, TX 78751 · 1-800-458-9858 · <a href="https://www.hhs.texas.gov" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">hhs.texas.gov</a></p>
+              <p>• <strong>Office of the Texas Attorney General (Consumer Protection Division):</strong> P.O. Box 12548, Austin, TX 78711 · 1-800-621-0508 · <a href="https://www.texasattorneygeneral.gov/consumer-protection" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">texasattorneygeneral.gov/consumer-protection</a></p>
               <p>• <strong>U.S. Dept. of Health &amp; Human Services — Office for Civil Rights (OCR):</strong> 200 Independence Ave SW, Washington, DC 20201 · 1-877-696-6775 · <a href="https://www.hhs.gov/ocr/privacy" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">hhs.gov/ocr/privacy</a></p>
             </div>
           </div>
@@ -212,7 +218,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
               onClick={() => onNavigate('terms')}
               className="text-xs sm:text-sm font-bold text-[#9E7206] hover:text-[#1C1917] underline cursor-pointer"
             >
-              View Terms of Service &amp; Texas Telehealth Informed Consent →
+              View Terms of Service, Telehealth Consent, No Surprises Act &amp; ADA Notice →
             </button>
             <button
               onClick={() => onNavigate('portal')}

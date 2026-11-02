@@ -1963,6 +1963,70 @@ async function startServer() {
     }
   });
 
+  // 4B. Texas HB 300 / HB 4224 Electronic Medical Records Request Endpoint (15-Business-Day Turnaround)
+  app.post('/api/email/records-request', async (req, res) => {
+    try {
+      const patientName = escapeHtml(req.body?.patientName || 'Patient');
+      const patientEmail = sanitizeEmailAddress(req.body?.patientEmail);
+      const patientDob = escapeHtml(req.body?.dateOfBirth || 'On File');
+      const patientPhone = escapeHtml(req.body?.phone || 'On File');
+      const requestScope = escapeHtml(
+        req.body?.requestScope || 'Complete Electronic Health Record Summary (Texas HB 300)'
+      );
+      const requestedAt = new Date().toISOString().split('T')[0];
+
+      if (patientEmail) {
+        const patientConfirmHtml = buildBrandedEmailHtml(
+          'Texas HB 300 Electronic Medical Records Request Confirmation',
+          `
+          <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Electronic Medical Records Request Received</h2>
+          <p style="margin:0 0 16px 0;">Hello <strong>${patientName}</strong>,</p>
+          <p style="margin:0 0 16px 0;">We have received your formal request for an electronic copy of your health records pursuant to <strong>Texas House Bill 300 (Texas Health &amp; Safety Code § 181.102)</strong> and <strong>Texas HB 4224</strong>.</p>
+          <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:14px;padding:16px;margin-bottom:20px;font-size:13px;color:#1C1917;">
+            <div><strong>Date Requested:</strong> ${requestedAt}</div>
+            <div><strong>Requested Record Scope:</strong> ${requestScope}</div>
+            <div><strong>Statutory Fulfillment Window:</strong> Within 15 business days (Texas HB 300)</div>
+          </div>
+          <p style="margin:0;font-size:13px;color:#44403C;">Brenda Hobyani, MSN, APRN, PMHNP-BC has been notified and will release your encrypted electronic records to your Client Portal and verified email within 15 business days.</p>
+          `
+        );
+        await sendClinicEmail({
+          to: patientEmail,
+          subject: 'Confirmation: Electronic Medical Records Request (Texas HB 300)',
+          html: patientConfirmHtml,
+        });
+      }
+
+      const providerAlertHtml = buildBrandedEmailHtml(
+        `[Texas HB 300 Medical Records Request] ${patientName}`,
+        `
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Electronic Medical Records Request (Texas HB 300)</h2>
+        <p style="margin:0 0 14px 0;"><strong>${patientName}</strong> has submitted a 1-click Electronic Medical Records Request inside the Client Portal.</p>
+        <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:14px;padding:16px;margin-bottom:20px;font-size:13px;color:#1C1917;line-height:1.7;">
+          <div><strong>Patient Name:</strong> ${patientName}</div>
+          <div><strong>Email:</strong> ${patientEmail || 'On File'}</div>
+          <div><strong>Date of Birth:</strong> ${patientDob}</div>
+          <div><strong>Phone:</strong> ${patientPhone}</div>
+          <div><strong>Requested Scope:</strong> ${requestScope}</div>
+          <div><strong>Statutory Turnaround (Tex. Health &amp; Safety Code § 181.102):</strong> 15 Business Days from ${requestedAt}</div>
+        </div>
+        `
+      );
+
+      const result = await sendClinicEmail({
+        to: DOCTOR_ALERT_RECIPIENTS,
+        replyTo: patientEmail || CLINIC_EMAIL,
+        subject: `[Texas HB 300 Records Request] ${patientName} (${requestedAt})`,
+        html: providerAlertHtml,
+      });
+
+      res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
+    } catch (error) {
+      console.error('Medical records request email error:', error);
+      res.status(200).json({ ok: true, deliveredViaSmtp: false });
+    }
+  });
+
   // ============================================================================
   // 5. BRUTE-FORCE ACCOUNT LOCKOUT ENDPOINTS (Synced with PostgreSQL & Disk)
   // ============================================================================

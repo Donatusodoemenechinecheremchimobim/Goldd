@@ -49,6 +49,8 @@ export interface AppointmentFormData {
   email: string;
   phone: string;
   dateOfBirth: string;
+  biologicalSex?: string;
+  guardianName?: string;
   serviceType: string;
   conditionReason: string;
   visitPreference: 'telehealth' | 'in-person';
@@ -77,6 +79,8 @@ export interface PortalUser {
   phone?: string;
   dateOfBirth?: string;
   biologicalSex?: string;
+  guardianName?: string;
+  consentsAcceptedAt?: string;
   address?: string;
   emergencyContact?: string;
   primaryConcern?: string;

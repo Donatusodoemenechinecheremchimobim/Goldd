@@ -1,101 +1,98 @@
-# Enterprise HIPAA & Infrastructure Security Hardening Plan
+# Texas & U.S. Federal Healthcare Compliance & Account Registration Enhancement Plan
 
-This plan delivers comprehensive, defense-in-depth security across the Golden Mind Psychiatry web application, PostgreSQL database, and Ubuntu production server to prevent API leaks, SQL injection, automated penetration scanning, brute-force attacks, database discovery, and technology stack fingerprinting.
+Bring **Golden Mind Psychiatry PLLC (`goldenmindpsychiatry.org`)** into 100% compliance with Texas state healthcare statutes, U.S. federal healthcare regulations, telecommunications/consumer privacy laws, and web accessibility standards, while upgrading account creation and patient intake to capture **Gender (`Male`, `Female`, `Other` — with an input to state/specify when `Other` is selected)**.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> All 12 security measures you selected in Phase 1 are incorporated into this plan and organized into three coordinated layers: **Application API & Payload Firewall**, **Technology Obfuscation & Scanner Traps**, and **Ubuntu Server Hardening & Live Intrusion Monitoring**.
+> All regulatory, privacy, and registration enhancements below have been confirmed and incorporated into this plan:
 
-- **Confirmed Decision 1 (API & Database Guards)**: Enforce strict JWT and admin-role verification on all sensitive database, backup, and account-management endpoints; add per-IP rate limiting with automatic temporary IP banning; inspect incoming requests with a SQL/XSS payload firewall; and mask all internal stack traces and database errors from public API responses.
-- **Confirmed Decision 2 (Anti-Fingerprinting & Scanner Blocking)**: Strip server/framework headers (`Server`, `X-Powered-By`, `Via`), block automated vulnerability scanners probing `.php`, `wp-admin`, `.env`, `.git`, `phpmyadmin`, or `actuator` paths, enforce strict CORS limited to `goldenmindpsychiatry.org`, and apply hardened Content-Security-Policy (CSP), HSTS, and anti-framing headers.
-- **Confirmed Decision 3 (Ubuntu Infrastructure & Live Audit Log)**: Bind PostgreSQL strictly to `127.0.0.1` (`localhost`), lock down external ports via UFW (`22`, `80`, `443` only), configure Fail2Ban for SSH and Nginx, send real-time security email alerts to Brenda (`beehobs@yahoo.com` & `info@goldenmindpsychiatry.org`) when attacks or lockouts occur, and add a live **Security & Intrusion Audit Log** inside Brenda's Provider Command Center.
+- **Account Creation & Profile Gender Selection (`Male`, `Female`, `Other` + Custom Specification)**: Both the initial **New Client Account Creation** form, the **1-Click Sign-Up Mandatory Profile Completion** screen, and the **Appointment Booking** form will require **Gender** selection with options for **Male**, **Female**, and **Other**—and whenever **Other** is selected, an immediate text field appears so the client can state their specific gender identity, saving it directly to their clinical chart and notifying Brenda Hobyani, PMHNP-BC.
+- **Mandatory Clickwrap Informed Consents**: Explicit checkboxes on Appointment Booking, Contact, and Portal Registration for **HIPAA & Texas HB 300 Privacy Notice**, **Texas Telehealth Physical Location Attestation**, **FCC/TCPA SMS & Email Transactional Notifications**, and **Under-18 Parent/Legal Guardian Consent** (Texas Family Code Ch. 32).
+- **Texas & Federal Healthcare Disclosures**: Conspicuous **Texas HB 4224** medical records & complaint notice, **Federal No Surprises Act Good Faith Estimate (GFE)** on the Insurance & Pricing page, **Texas APRN Licensure & Prescriptive Authority Disclosure**, and a **1-Click Electronic Medical Records Request Tool (Texas HB 300)** inside the Client Portal.
+- **Web Accessibility & Consumer Data Privacy**: **ADA WCAG 2.1 AA & ACA Section 1557 Non-Discrimination Notice**, plus a dismissible **HIPAA & Texas TDPSA Zero-Ad-Tracker Privacy Banner**.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Protects patient clinical data (PHI) and practice infrastructure with zero-trust API authorization, an active Web Application Firewall (WAF) middleware layer, automated scanner honeypots, technology-stack masking, and real-time intrusion auditing.
-- **Target Audience / Persona**: **Brenda Hobyani, MSN, APRN, PMHNP-BC** (Practice Owner & Clinical Director) managing the practice from the Provider Command Center, and patients accessing the HIPAA-encrypted Client Portal.
-- **Key Value**: Eliminates unauthorized API data exposure, stops credential stuffing and vulnerability scanners before they reach database routes, hides the underlying server/database architecture from reconnaissance tools, and gives the provider full visibility and 1-click IP unban controls.
+- **What It Does**: Protects Golden Mind Psychiatry PLLC across all Texas and U.S. federal healthcare, telehealth, consumer privacy, and telecommunications laws while ensuring every new patient account captures complete demographic identity—including **Gender (`Male`, `Female`, `Other` with custom specification)**, Date of Birth (with automatic under-18 parent/guardian consent validation), and timestamped legal clickwrap consents.
+- **Target Audience / Persona**: Adults, teens, and parents/guardians across Texas seeking telepsychiatry care with **Brenda Hobyani, MSN, APRN, PMHNP-BC**, as well as regulatory auditors and health plan reviewers verifying clinic compliance.
+- **Key Value**: Eliminates statutory exposure under Texas HB 300, Texas HB 4224, the Federal No Surprises Act, HIPAA, TCPA, and ADA Title III while delivering a seamless, dignified "Warm Clinical Sanctuary" patient onboarding experience.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 - **Key User Flows**:
-  1. **Transparent Protection for Legitimate Patients**: Real patients signing in, verifying emails, and booking telehealth visits experience zero friction while malformed payloads, cross-origin scripts, and brute-force bots are silently blocked at the edge.
-  2. **Automated Scanner & Brute-Force Blocking**: Any IP address probing exploit paths (e.g., `/wp-admin`, `/.env`, `/phpmyadmin`, `/config.php`) or exceeding API/login rate thresholds is immediately blocked with a generic `403 Forbidden` or `429 Too Many Requests` JSON response (zero stack trace or server version disclosure), logged in the intrusion table, and triggers a security alert email to Brenda.
-  3. **Live Security & Intrusion Audit Panel (Provider Command Center)**: Inside Brenda's **Database & Backups / Security** workspace, a dedicated high-density security console displays blocked intrusion attempts, banned IPs, locked accounts, active firewall rules, and a 1-click **"Copy Ubuntu Hardening Script (UFW + Fail2Ban + Nginx + PostgreSQL)"** utility.
+  1. **Account Creation & 1-Click Onboarding Gender Flow**:
+     - When a client creates an account using Email & Password, or completes their mandatory profile after 1-Click Login (Google, Yahoo, Outlook, X, Facebook), they select their **Gender** (`Male`, `Female`, or `Other`).
+     - Selecting **`Other`** smoothly reveals a required **"Please state / specify your gender"** input field so the patient's exact stated gender is recorded in both the clinical database and provider notifications.
+  2. **Under-18 Minor Guardian Flow (Texas Family Code Ch. 32)**:
+     - Entering a Date of Birth under 18 years old automatically reveals a required **Parent / Legal Guardian Full Name, Relationship & Consent Attestation** box before the form can be submitted.
+  3. **Clickwrap Informed Consent Flow**:
+     - Before submitting an Appointment Request, Contact Inquiry, or Portal Registration, patients check clear, plain-language consent boxes for HIPAA/Texas HB 300 privacy practices, physical presence in Texas for telehealth, and transactional SMS/email alerts (`STOP` to opt out, `HELP` for assistance).
+  4. **1-Click Electronic Medical Records Request (Texas HB 300)**:
+     - Inside the Client Portal, patients can request a full electronic copy of their medical records with one click, triggering an immediate confirmation email and logging the 15-business-day statutory fulfillment window for the provider.
 - **Visual Identity & Theme**:
-  - *Aesthetic Direction*: Luxury clinical sanctuary and high-density enterprise command center matching Golden Mind Psychiatry's warm alabaster (`#FAF9F5`), obsidian (`#0A0A0A`), and champagne gold (`#D4AF37` / `#9E7206`) palette.
-  - *Typography & Hierarchy*: Crisp display headings paired with `tabular-nums` monospace (`font-mono`) for IP addresses, timestamps, HTTP status codes, and rate-limit counters.
-  - *Zero-Pill & Single-Elevation Discipline*: Flat 1px bordered panels (`border-stone-200`), unboxed inline metadata separated by `·`, and clear semantic status indicators (emerald for active shields, amber for rate-limit warnings, crimson for blocked intrusion events).
+  - *Aesthetic Direction*: Warm Clinical Sanctuary—calm, authoritative, and transparent.
+  - *Color Palette & Mood*: Warm alabaster/ivory surfaces (`#FAF7F0` and `#FFFFFF`), deep obsidian headers (`#0A0A0A`), charcoal body typography (`#1C1917`), and champagne gold accents (`#D4AF37` / `#9E7206`).
+  - *Typography & Hierarchy*: `Cormorant Garamond` for headings paired with `Plus Jakarta Sans` for crisp legal disclosures, form controls, and `tabular-nums` for dates, fees, and statutory timelines.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Zero-Trust Bearer Token & Role Authorization on Sensitive Endpoints**
-  - *Chosen Approach*: Require a valid signed JWT (`Authorization: Bearer <token>`) or verified admin session on all `/api/backup/*`, `/api/standalone/db/*`, and admin management routes; scope patient bootstrap queries strictly to the authenticated user's UID.
-  - *Why*: Prevents attackers from calling `/api/backup/download`, `/api/standalone/db/bootstrap`, or `/api/standalone/db/clean-test-data` directly via `curl` or Postman to leak or wipe database records.
-- **Decision 2: In-Memory + PostgreSQL Persistent WAF & IP Rate Limiter**
-  - *Chosen Approach*: Combine fast in-memory sliding-window rate counters (120 general API requests/min per IP; 10 auth requests/min per IP; immediate 30-minute IP ban on exploit-path probing or SQLi/XSS payload detection) with persistent logging in PostgreSQL (`security_events` table).
-  - *Why*: Rejects abusive traffic in sub-millisecond memory checks without overloading PostgreSQL during a flood, while keeping an auditable forensic log for Brenda.
-- **Decision 3: Complete Technology Stack Obfuscation & Generic Error Envelopes**
-  - *Chosen Approach*: Strip `X-Powered-By`, override `Server` headers, block `.map` source maps and dotfiles, and wrap all Express routes in a global error boundary that logs internal details server-side while returning only a sanitized `{ ok: false, error: "Request could not be processed." }` payload to the client.
-  - *Why*: Reconnaissance tools (Wappalyzer, Nmap, Burp Suite, SQLMap) rely on verbose error messages and response headers to identify Express, Node.js, or PostgreSQL versions.
+- **Decision 1: Inclusive yet Structured Gender Capture (`Male`, `Female`, `Other` + Free-Text Specification)**
+  - *Chosen Approach*: Provide a clear selector with `Male`, `Female`, and `Other`, and dynamically render a required text input (`"Please state your gender"`) whenever `Other` is chosen, storing the exact stated value in the patient's clinical record.
+  - *Why*: Ensures clean structured demographic reporting for insurance/clinical charts while allowing patients who select `Other` to state their exact gender without restriction.
+- **Decision 2: Affirmative Clickwrap Over Passive Footer Links**
+  - *Chosen Approach*: Require explicit checkbox attestation on booking, contact, and portal sign-up forms, and store the consent timestamp with the patient record.
+  - *Why*: Texas Telemedicine statutes, HIPAA/HB 300, and FCC TCPA rules require affirmative opt-in prior to initiating telehealth care or sending automated SMS/email reminders.
+- **Decision 3: Zero Third-Party Ad Trackers + Transparent TDPSA Banner**
+  - *Chosen Approach*: Confirm zero third-party ad pixels (no Meta/TikTok/retargeting trackers) on clinical pages and display a dismissible bottom notice explaining that only encrypted session storage is used.
+  - *Why*: Fully satisfies HHS OCR and FTC health breach guidance as well as the Texas Data Privacy and Security Act (TDPSA).
 
 ---
 
 ## 4. Technical Architecture & Data Strategy *(Technical Reference)*
 
-### Architecture & Defense-in-Depth Flow
-
+- **Architecture & Component Diagram**:
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                   Incoming HTTPS Request (Port 443)                        │
-└─────────────────────────────────────┬──────────────────────────────────────┘
-                                      ▼
+│                  PATIENT & VISITOR INTERACTION LAYER                       │
+├───────────────────────┬──────────────────────────┬─────────────────────────┤
+│  Client Portal Auth   │   Appointment & Contact  │  Public Compliance UI   │
+│  & Onboarding Gate    │   Interactive Forms      │  & Pricing Disclosures  │
+│  • Gender: Male /     │   • Gender + State Input │  • No Surprises Act GFE │
+│    Female / Other     │   • Minor (<18) Guardian │  • Texas HB 4224 Notice │
+│    (State if Other)   │     Attestation          │  • Texas APRN Licensure │
+│  • Clickwrap Consents │   • HIPAA / Telehealth / │  • ADA WCAG 2.1 & 1557  │
+│  • 1-Click HB 300     │     TCPA Checkboxes      │  • TDPSA Zero-Tracker   │
+│    Records Request    │                          │    Privacy Banner       │
+└───────────┬───────────┴────────────┬─────────────┴────────────┬────────────┘
+            │                        │                          │
+            ▼                        ▼                          ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ Layer 1: Ubuntu OS & Nginx Reverse Proxy                                   │
-│ • UFW Firewall: Only Ports 22, 80, 443 open (Port 5432 PostgreSQL closed)  │
-│ • Fail2Ban: Bans SSH & Nginx 4xx/scanner IPs at kernel iptables level      │
-│ • Nginx `server_tokens off;` + HSTS + TLS 1.2/1.3                          │
-└─────────────────────────────────────┬──────────────────────────────────────┘
-                                      ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Layer 2: Express WAF, Anti-Fingerprinting & Scanner Trap Middleware        │
-│ • Strips X-Powered-By / Server headers; enforces strict CORS & CSP         │
-│ • Honeypot Scanner Trap: Instant IP ban on .php, wp-admin, .env, .git      │
-│ • Sliding-Window Rate Limiter: 120 req/min general, 10 req/min auth        │
-│ • SQLi / XSS / Path-Traversal Deep Payload Inspector                       │
-└─────────────────────────────────────┬──────────────────────────────────────┘
-                                      ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Layer 3: Zero-Trust API Authentication & Role Guard                        │
-│ • Verifies HMAC-SHA256 JWT / Admin identity on /api/backup/* & /api/db/*   │
-│ • Enforces tenant isolation (patients can only read/write their own UID)   │
-│ • Parameterized SQL ($1, $2) + Sanitized Error Boundary (zero stack leaks) │
-└─────────────────────────────────────┬──────────────────────────────────────┘
-                                      ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Layer 4: Live Security Audit Log & Provider Alerting                       │
-│ • Persists blocked events to PostgreSQL `security_events` + disk           │
-│ • Dispatches throttled SMTP security alert emails to Brenda on attacks     │
-│ • Streams live blocked IPs & 1-click Unban controls to Provider Portal     │
-└────────────────────────────────────────────────────────────────────────────┘
+│               APPLICATION & CLINICAL AUTOMATION SERVICE                    │
+│  • Input Sanitization & Age (<18) Calculation                              │
+│  • Gender Formatter ("Male" | "Female" | "Other: <Stated Gender>")         │
+│  • Timestamped Consent Audit Stamp (HIPAA, TX HB 300, Telehealth, TCPA)    │
+└───────────────────────┬──────────────────────────────────┬─────────────────┘
+                        │                                  │
+                        ▼                                  ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────────┐
+│   PERSISTENCE LAYER                  │  │   CLINIC SMTP NOTIFICATION API   │
+│   • Cloud Firestore & Local Postgres │  │   • Verification & Reset Emails  │
+│   • Patient Demographic & Consent    │  │   • HB 300 Records Request Alert │
+│     Records                          │  │   • Provider Alerts to Brenda    │
+└──────────────────────────────────────┘  └──────────────────────────────────┘
 ```
 
-### Data Model & State
-
-- **`security_events` Table (PostgreSQL & In-Memory Ring Buffer)**:
-  - Stores `id`, `ip_address`, `event_type` (`scanner_probe`, `sqli_xss_blocked`, `rate_limit_exceeded`, `brute_force_lockout`, `unauthorized_api_access`), `path`, `method`, `reason`, `blocked_until`, and `created_at`.
-- **`bannedIps` Map**:
-  - Tracks banned IP addresses, expiration timestamps, ban reasons, and hit counts, with 1-click unban capability from Brenda's Provider Dashboard.
-
-### Interactive Component & State Mapping
-
-- **Provider Security & Intrusion Console (`ProviderDashboardView`)**:
-  - Displays real-time counters (`tabular-nums`) for Blocked Scanner Probes, Banned IPs, Locked Accounts, and Active WAF Rules.
-  - Provides interactive **Unban IP**, **Clear Security Log**, **Trigger Test Security Alert**, and **Copy One-Line Ubuntu Server Hardening Command (UFW + Fail2Ban + PostgreSQL Localhost Lock + Nginx Stealth)** buttons with instant feedback banners.
+- **Data Model & State**:
+  - **Patient Profile (`PortalUser`)**: Stores `fullName`, `dateOfBirth`, `phone`, `biologicalSex` (formatted as `Male`, `Female`, or `Other: [Stated Gender]`), `guardianName` (when under 18), `insuranceProvider`, and timestamped `consentsAcceptedAt` flags (`hipaaHb300Consent`, `texasTelehealthConsent`, `tcpaSmsEmailConsent`).
+  - **Medical Records Request (`records_requests` / Provider Notification)**: Logs patient UID, full name, email, delivery preference, request timestamp, and statutory 15-business-day deadline under Texas HB 300.
+- **Interactive Component & State Mapping**:
+  - Selecting `Other` in any Gender dropdown immediately sets `genderSelection = 'Other'` and reveals a required text input (`customGenderInput`) so validation prevents submission until the user states their gender.
+  - Entering a Date of Birth dynamically computes patient age; if `< 18`, the form reveals and requires `guardianFullName` and the parent/legal guardian consent checkbox before submission.
+  - Clicking **Request Electronic Medical Records (Texas HB 300)** in the Client Portal dispatches a POST request to `/api/email/records-request`, records the request in the patient's message history, and displays an instant confirmation banner.

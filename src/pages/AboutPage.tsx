@@ -111,7 +111,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
             {/* Certifications and Licensure */}
             <div className="pt-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9E7206] mb-3">
-                Licensure & Professional Credentials
+                Licensure &amp; Professional Credentials
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-[#44403C]">
                 {providerBrenda.certifications.map((cert, idx) => (
@@ -121,6 +121,17 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate, onOpenBooking 
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Texas Healing Arts Identification Act & APRN Prescriptive Authority Notice */}
+            <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#D4AF37]/40 text-xs text-[#44403C] space-y-1.5">
+              <div className="flex items-center gap-2 text-[#9E7206] font-bold uppercase tracking-wider text-[11px]">
+                <Shield className="w-4 h-4 text-[#B8860B] shrink-0" />
+                <span>Texas APRN Licensure &amp; Prescriptive Authority Disclosure</span>
+              </div>
+              <p className="leading-relaxed">
+                In accordance with the <strong>Texas Healing Arts Identification Act (Tex. Occupations Code § 104.003)</strong> and <strong>Tex. Occupations Code Chapter 157</strong>, psychiatric evaluations and medication management at Golden Mind Psychiatry PLLC are provided by <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong>, an Advanced Practice Registered Nurse (Psychiatric-Mental Health Nurse Practitioner) licensed by the Texas Board of Nursing and practicing in compliance with Texas prescriptive authority and collaborative physician delegation standards. Information regarding supervising/collaborating physician delegation is available to patients upon request at <a href="tel:+14329343185" className="text-[#9E7206] font-semibold">+1 (432) 934-3185</a>.
+              </p>
             </div>
 
             <div className="pt-4 flex items-center gap-4">

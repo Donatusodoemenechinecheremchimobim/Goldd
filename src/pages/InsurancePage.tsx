@@ -113,6 +113,40 @@ export const InsurancePage: React.FC<InsurancePageProps> = ({ onOpenBooking }) =
               If you have out-of-network insurance benefits, we provide detailed, coded medical receipts (Superbills) that you can easily submit to your insurer for direct reimbursement.
             </div>
           </div>
+
+          {/* Federal No Surprises Act — Good Faith Estimate Notice (45 C.F.R. § 149.610) */}
+          <div className="p-6 rounded-2xl bg-[#FAF8F5] border border-[#D4AF37]/40 space-y-3 text-xs text-[#44403C]">
+            <div className="flex items-center gap-2 text-[#9E7206] font-bold uppercase tracking-wider text-[11px]">
+              <Shield className="w-4 h-4 text-[#B8860B] shrink-0" />
+              <span>Federal “No Surprises Act” Notice (45 C.F.R. § 149.610)</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-serif font-bold text-[#1C1917]">
+              You Have the Right to Receive a “Good Faith Estimate” Explaining How Much Your Medical Care Will Cost
+            </h3>
+            <p className="leading-relaxed">
+              Under United States federal law, health care providers need to give patients who don’t have insurance or who are not using insurance an estimate of the bill for medical items and services before those items or services are provided.
+            </p>
+            <ul className="space-y-1.5 pl-4 list-disc">
+              <li>
+                You have the right to receive a <strong>Good Faith Estimate</strong> for the total expected cost of any non-emergency psychiatric evaluation or follow-up visit upon request or when scheduling at least 3 business days in advance.
+              </li>
+              <li>
+                If you receive a bill that is at least <strong>$400 more</strong> than your Good Faith Estimate, you can dispute the bill under the Federal Patient-Provider Dispute Resolution process.
+              </li>
+              <li>
+                Make sure to save a copy or picture of your Good Faith Estimate inside your Client Portal. For questions or more information about your right to a Good Faith Estimate, visit{' '}
+                <a
+                  href="https://www.cms.gov/nosurprises"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#9E7206] font-semibold underline"
+                >
+                  www.cms.gov/nosurprises
+                </a>{' '}
+                or call <strong>1-800-985-3059</strong>.
+              </li>
+            </ul>
+          </div>
         </div>
 
         {/* Booking CTA */}

@@ -181,17 +181,62 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
           </div>
         </div>
 
+        {/* Conspicuous Texas HB 4224 / Tex. Health & Safety Code § 181.105 & Texas APRN Disclosure Box */}
+        <div className="mt-12 p-5 rounded-2xl bg-[#FAF8F5] border border-[#D4AF37]/35 space-y-3 text-[11px] text-[#44403C]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2">
+            <span className="font-bold uppercase tracking-wider text-[#9E7206]">
+              Texas Mandatory Patient Notice (Texas HB 4224 · Tex. Health &amp; Safety Code § 181.105 · Tex. Occ. Code § 104.003)
+            </span>
+            <button
+              onClick={() => handleLink('portal')}
+              className="text-[#9E7206] font-bold underline cursor-pointer"
+            >
+              Request Electronic Medical Records in Client Portal (15-Day Turnaround) →
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 leading-relaxed">
+            <div>
+              <strong className="text-[#1C1917] block">1. How to Request Your Medical Records (Texas HB 300):</strong>
+              Patients may request an electronic copy of their health records at any time via the{' '}
+              <button onClick={() => handleLink('portal')} className="text-[#9E7206] font-semibold underline cursor-pointer">
+                Client Portal
+              </button>
+              , by emailing{' '}
+              <a href="mailto:info@goldenmindpsychiatry.org" className="text-[#9E7206] font-semibold underline">
+                info@goldenmindpsychiatry.org
+              </a>
+              , or by calling <a href="tel:+14329343185" className="text-[#9E7206] font-semibold">+1 (432) 934-3185</a>. Electronic records are delivered within 15 business days.
+            </div>
+            <div>
+              <strong className="text-[#1C1917] block">2. Licensing Council &amp; Regulatory Contact:</strong>
+              Brenda Hobyani, MSN, APRN, PMHNP-BC is licensed as an Advanced Practice Registered Nurse (Psychiatric Mental Health Nurse Practitioner) by the <strong>Texas Board of Nursing</strong> (1801 Congress Ave, Ste 10-200, Austin, TX 78701 · 512-305-7400 ·{' '}
+              <a href="https://www.bon.texas.gov" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">
+                bon.texas.gov
+              </a>
+              ) and Texas HHSC (<a href="https://www.hhs.texas.gov" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">hhs.texas.gov</a>).
+            </div>
+            <div>
+              <strong className="text-[#1C1917] block">3. Consumer Protection &amp; Privacy Complaints:</strong>
+              To file a consumer or medical privacy complaint under Texas HB 300 / HB 4224, contact the <strong>Office of the Texas Attorney General — Consumer Protection Division</strong> at 1-800-621-0508 or{' '}
+              <a href="https://www.texasattorneygeneral.gov/consumer-protection" target="_blank" rel="noreferrer" className="text-[#9E7206] underline">
+                texasattorneygeneral.gov/consumer-protection
+              </a>
+              .
+            </div>
+          </div>
+        </div>
+
         {/* Bottom Bar: Copyright & Medical Disclaimer */}
-        <div className="mt-14 pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-[#78716C]">
+        <div className="mt-8 pt-6 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-[#78716C]">
           <p>© {new Date().getFullYear()} Golden Mind Psychiatry PLLC. All Rights Reserved.</p>
           <div className="flex flex-wrap items-center justify-center gap-6">
             <span className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-[#B8860B]" />
-              <span>HIPAA &amp; Texas HB 300 Compliant</span>
+              <span>HIPAA, Texas HB 300 &amp; HB 4224 Compliant</span>
             </span>
             <span className="flex items-center gap-1.5">
               <Award className="w-3.5 h-3.5 text-[#B8860B]" />
-              <span>ANCC Board Certified</span>
+              <span>ANCC Board Certified · Zero Ad-Trackers</span>
             </span>
             <button
               onClick={() => handleLink('privacy')}
@@ -203,7 +248,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               onClick={() => handleLink('terms')}
               className="text-[#78716C] hover:text-[#9E7206] transition-colors underline underline-offset-2 cursor-pointer"
             >
-              Terms of Service
+              Terms, No Surprises Act &amp; ADA Notice
             </button>
             <a
               href="/sitemap.xml"
@@ -214,8 +259,13 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
           </div>
         </div>
 
-        <div className="mt-4 text-[10px] text-[#888] leading-relaxed text-center md:text-left">
-          Notice: Information provided on this website is for informational and educational purposes only and does not constitute a formal doctor-patient relationship until an initial clinical evaluation is conducted. For medical or psychiatric emergencies, call 911, dial 988, call Poison Control at 800-222-1222 (24/7), or visit the nearest emergency room.
+        <div className="mt-4 text-[10px] text-[#888] leading-relaxed text-center md:text-left space-y-1">
+          <p>
+            <strong>Medical, Telehealth &amp; APRN Disclosure:</strong> Information provided on this website is for informational and educational purposes only and does not constitute a formal clinician-patient relationship until an initial synchronous clinical evaluation is conducted. Clinical psychiatric evaluations and medication management are provided by Brenda Hobyani, MSN, APRN, PMHNP-BC in accordance with Texas Occupations Code Chapters 104, 111, and 157. For medical or psychiatric emergencies, call 911, dial 988, call Poison Control at 800-222-1222 (24/7), or visit the nearest emergency room.
+          </p>
+          <p>
+            <strong>ACA Section 1557 Non-Discrimination &amp; ADA WCAG 2.1 Accessibility Notice:</strong> Golden Mind Psychiatry PLLC complies with applicable Federal civil rights laws and does not discriminate on the basis of race, color, national origin, age, disability, or sex. Free language assistance and reasonable disability accommodations are available by calling +1 (432) 934-3185 or emailing info@goldenmindpsychiatry.org.
+          </p>
         </div>
       </div>
     </footer>

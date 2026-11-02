@@ -1,6 +1,6 @@
 {
-  "summary":  "Enterprise HIPAA & Infrastructure Security Hardening Plan covering API authentication/authorization guards, IP rate-limiting and automated IP banning, SQL/XSS payload firewall, stack-trace masking, scanner trap protection, CORS/CSP/Nginx technology obfuscation, Ubuntu UFW/PostgreSQL/Fail2Ban hardening, and a live Security & Intrusion Audit Log with email alerts inside Brenda's Provider Portal.",
-  "updatedAt":  "2026-11-02T00:42:48.839037156Z",
+  "summary":  "Updated the Texas & U.S. Federal Legal, Healthcare, Telehealth & Web Compliance Plan to include mandatory Gender selection (Male, Female, Other — with a custom text input to state/specify the gender when 'Other' is selected) during Client Portal Account Creation, 1-Click Sign-Up Profile Completion, and Appointment Booking, alongside all Texas & Federal healthcare, telehealth, TCPA, No Surprises Act, and ADA/TDPSA compliance protections.",
+  "updatedAt":  "2026-11-02T01:53:56.274715963Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

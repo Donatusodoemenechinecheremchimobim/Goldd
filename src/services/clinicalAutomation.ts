@@ -512,7 +512,12 @@ export function isPatientRegistrationComplete(user?: PortalUser | null): boolean
       user.insuranceProvider.trim() !== '' &&
       user.insuranceProvider.trim().toLowerCase() !== 'not provided'
   );
-  return hasDob && hasPhone && hasName && hasInsurance;
+  const hasSex = Boolean(
+    user.biologicalSex &&
+      user.biologicalSex.trim() !== '' &&
+      user.biologicalSex.trim().toLowerCase() !== 'not provided'
+  );
+  return hasDob && hasPhone && hasName && hasInsurance && hasSex;
 }
 
 /**
@@ -550,6 +555,7 @@ export async function ensurePatientOnboarding(
 
   const initialPhone = sanitizeClinicalInput(extraProfile?.phone || '', 40);
   const initialDob = sanitizeClinicalInput(extraProfile?.dateOfBirth || '', 20);
+  const initialSex = sanitizeClinicalInput(extraProfile?.biologicalSex || '', 80);
 
   // Real patient profile with zero fabricated insurance IDs or pharmacy placeholders
   let portalUser: PortalUser = {
@@ -558,7 +564,7 @@ export async function ensurePatientOnboarding(
     fullName: formattedName,
     phone: initialPhone,
     dateOfBirth: initialDob,
-    biologicalSex: sanitizeClinicalInput(extraProfile?.biologicalSex || '', 60),
+    biologicalSex: initialSex,
     address: sanitizeClinicalInput(extraProfile?.address || '', 250),
     emergencyContact: sanitizeClinicalInput(extraProfile?.emergencyContact || '', 200),
     primaryConcern: sanitizeClinicalInput(extraProfile?.primaryConcern || '', 240),
@@ -579,7 +585,8 @@ export async function ensurePatientOnboarding(
       extraProfile?.preferredPharmacy || '',
       200
     ),
-    registrationCompleted: isVerifiedProvider || Boolean(initialPhone && initialDob),
+    registrationCompleted:
+      isVerifiedProvider || Boolean(initialPhone && initialDob && initialSex),
     onboardingCompleted: isVerifiedProvider,
     createdAt: now,
     updatedAt: now,
@@ -615,6 +622,9 @@ export async function ensurePatientOnboarding(
     const mergedDob = extraProfile?.dateOfBirth?.trim()
       ? sanitizeClinicalInput(extraProfile.dateOfBirth, 20)
       : existing.dateOfBirth || '';
+    const mergedSex = extraProfile?.biologicalSex?.trim()
+      ? sanitizeClinicalInput(extraProfile.biologicalSex, 80)
+      : existing.biologicalSex || '';
     portalUser = {
       ...existing,
       fullName:
@@ -625,9 +635,7 @@ export async function ensurePatientOnboarding(
           : existing.fullName || formattedName,
       phone: mergedPhone,
       dateOfBirth: mergedDob,
-      biologicalSex: extraProfile?.biologicalSex?.trim()
-        ? sanitizeClinicalInput(extraProfile.biologicalSex, 60)
-        : existing.biologicalSex || '',
+      biologicalSex: mergedSex,
       address: extraProfile?.address?.trim()
         ? sanitizeClinicalInput(extraProfile.address, 250)
         : existing.address || '',
@@ -644,14 +652,15 @@ export async function ensurePatientOnboarding(
       insuranceGroupNumber: existing.insuranceGroupNumber || '',
       preferredPharmacy: existing.preferredPharmacy || '',
       registrationCompleted:
-        existing.registrationCompleted || Boolean(mergedPhone && mergedDob),
+        existing.registrationCompleted || Boolean(mergedPhone && mergedDob && mergedSex),
       role: resolvedRole,
     };
 
     if (
       existing.role !== resolvedRole ||
       (extraProfile?.phone?.trim() && existing.phone !== mergedPhone) ||
-      (extraProfile?.dateOfBirth?.trim() && existing.dateOfBirth !== mergedDob)
+      (extraProfile?.dateOfBirth?.trim() && existing.dateOfBirth !== mergedDob) ||
+      (extraProfile?.biologicalSex?.trim() && existing.biologicalSex !== mergedSex)
     ) {
       try {
         await updateDoc(userRef, {
@@ -659,6 +668,7 @@ export async function ensurePatientOnboarding(
           fullName: portalUser.fullName,
           phone: portalUser.phone,
           dateOfBirth: portalUser.dateOfBirth,
+          biologicalSex: portalUser.biologicalSex,
           insuranceProvider: portalUser.insuranceProvider,
           registrationCompleted: portalUser.registrationCompleted,
           updatedAt: now,

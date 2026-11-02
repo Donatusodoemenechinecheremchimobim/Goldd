@@ -8,6 +8,7 @@ interface ContactPageProps {
 export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,6 +18,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!consentChecked) return;
     setSending(true);
     try {
       await fetch('/api/email/contact', {
@@ -157,7 +159,11 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                     Thank you, {formData.name}. We have received your inquiry and will reach out to you shortly.
                   </p>
                   <button
-                    onClick={() => { setSent(false); setFormData({ name: '', email: '', phone: '', message: '' }); }}
+                    onClick={() => {
+                      setSent(false);
+                      setConsentChecked(false);
+                      setFormData({ name: '', email: '', phone: '', message: '' });
+                    }}
                     className="text-xs text-[#9E7206] font-semibold hover:underline pt-2 cursor-pointer"
                   >
                     Send another message
@@ -214,18 +220,42 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
                     ></textarea>
                   </div>
 
+                  <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200">
+                    <label className="flex items-start gap-2.5 text-[11px] text-[#44403C] cursor-pointer leading-relaxed">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={consentChecked}
+                        onChange={(e) => setConsentChecked(e.target.checked)}
+                        className="mt-0.5 accent-[#9E7206] shrink-0"
+                      />
+                      <span>
+                        I understand this form is for non-urgent inquiries only (for medical or
+                        psychiatric emergencies, call <strong>911</strong>, dial <strong>988</strong>,
+                        or call Poison Control at <strong>800-222-1222</strong>). I agree to the{' '}
+                        <a href="#privacy" className="text-[#9E7206] font-semibold underline">
+                          HIPAA &amp; Texas HB 300 Privacy Policy
+                        </a>{' '}
+                        and consent to receive follow-up communication by phone, SMS, or email from
+                        Golden Mind Psychiatry PLLC (reply <strong>STOP</strong> to opt out; never
+                        shared for marketing). *
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="pt-2">
                     <button
                       type="submit"
-                      className="w-full py-3.5 rounded-full font-bold text-xs sm:text-sm text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_16px_rgba(212,175,55,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                      disabled={sending}
+                      className="w-full py-3.5 rounded-full font-bold text-xs sm:text-sm text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_16px_rgba(212,175,55,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs disabled:opacity-60"
                     >
                       <Send className="w-4 h-4 text-[#1C1917]" />
-                      <span>Send Confidential Message</span>
+                      <span>{sending ? 'Sending...' : 'Send Confidential Message'}</span>
                     </button>
 
                     <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-[#78716C]">
                       <Shield className="w-3 h-3 text-[#B8860B]" />
-                      <span>Strict HIPAA Confidentiality Maintained</span>
+                      <span>Strict HIPAA &amp; Texas HB 300 Confidentiality Maintained</span>
                     </div>
                   </div>
                 </form>

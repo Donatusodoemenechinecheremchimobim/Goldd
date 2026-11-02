@@ -257,6 +257,23 @@ export default function App() {
     }
   };
 
+  const [privacyBannerAck, setPrivacyBannerAck] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('gmp_privacy_banner_ack_v1') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleAckPrivacyBanner = () => {
+    try {
+      window.localStorage.setItem('gmp_privacy_banner_ack_v1', '1');
+    } catch {
+      // ignore
+    }
+    setPrivacyBannerAck(true);
+  };
+
   const handleOpenBooking = (conditionName?: string) => {
     setPrefillCondition(conditionName);
     setBookingModalOpen(true);
@@ -368,6 +385,42 @@ export default function App() {
         onNavigate={handleNavigate}
         onOpenBooking={handleOpenBooking}
       />
+
+      {/* Dismissible HIPAA, Texas HB 300, TDPSA & Zero-Ad-Tracker Compliance Banner */}
+      {!privacyBannerAck && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0A0A0A]/95 backdrop-blur-md border-t border-[#D4AF37]/40 text-white px-4 py-3 shadow-2xl">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <p className="text-stone-300 leading-relaxed text-center sm:text-left">
+              <strong className="text-[#D4AF37]">HIPAA, Texas HB 300 &amp; TDPSA Privacy Notice:</strong>{' '}
+              This medical site uses strictly essential encrypted session storage and runs{' '}
+              <strong className="text-white">zero third-party advertising pixels</strong>. Review our{' '}
+              <button
+                type="button"
+                onClick={() => handleNavigate('privacy')}
+                className="text-[#D4AF37] font-semibold underline cursor-pointer"
+              >
+                Privacy Policy (HB 4224)
+              </button>{' '}
+              and{' '}
+              <button
+                type="button"
+                onClick={() => handleNavigate('terms')}
+                className="text-[#D4AF37] font-semibold underline cursor-pointer"
+              >
+                Telehealth Consent, No Surprises Act &amp; ADA Notice
+              </button>
+              .
+            </p>
+            <button
+              type="button"
+              onClick={handleAckPrivacyBanner}
+              className="px-4 py-1.5 rounded-full bg-gold-gradient text-[#1C1917] font-bold text-xs shrink-0 cursor-pointer hover:opacity-95"
+            >
+              Acknowledge &amp; Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Appointment Booking Modal */}
       <AppointmentModal

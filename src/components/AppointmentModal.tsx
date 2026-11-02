@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, CheckCircle2, Video, Shield, ShieldCheck } from 'lucide-react';
+import { X, Calendar, CheckCircle2, Video, Shield, ShieldCheck, AlertCircle } from 'lucide-react';
 import { conditionsData } from '../data/conditions';
 import { AppointmentFormData } from '../types';
 import { auth } from '../lib/firebase';
@@ -10,6 +10,19 @@ interface AppointmentModalProps {
   onClose: () => void;
   prefillCondition?: string;
   onNavigateToPortal?: () => void;
+}
+
+function calculateAgeFromDob(dobString: string): number | null {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  if (Number.isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
 }
 
 export const AppointmentModal: React.FC<AppointmentModalProps> = ({
@@ -23,6 +36,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     email: '',
     phone: '',
     dateOfBirth: '',
+    biologicalSex: 'Female',
+    guardianName: '',
     serviceType: 'Comprehensive Psychiatric Evaluation',
     conditionReason: prefillCondition || 'ADHD (Attention-Deficit / Hyperactivity Disorder)',
     visitPreference: 'telehealth',
@@ -32,9 +47,20 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     notes: '',
   });
 
+  const [genderSelection, setGenderSelection] = useState<'Female' | 'Male' | 'Other'>('Female');
+  const [customGenderText, setCustomGenderText] = useState('');
+  const [hipaaConsent, setHipaaConsent] = useState(false);
+  const [telehealthTexasConsent, setTelehealthTexasConsent] = useState(false);
+  const [tcpaSmsEmailConsent, setTcpaSmsEmailConsent] = useState(false);
+  const [minorGuardianConsent, setMinorGuardianConsent] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [provisionedRoomUrl, setProvisionedRoomUrl] = useState<string>('');
+
+  const patientAge = calculateAgeFromDob(formData.dateOfBirth);
+  const isMinorPatient = patientAge !== null && patientAge >= 0 && patientAge < 18;
 
   useEffect(() => {
     if (prefillCondition) {
@@ -54,20 +80,65 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   if (!isOpen) return null;
 
+  const resolvedGender =
+    genderSelection === 'Other'
+      ? customGenderText.trim()
+        ? `Other (${customGenderText.trim()})`
+        : 'Other'
+      : genderSelection;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    if (genderSelection === 'Other' && !customGenderText.trim()) {
+      setFormError('Please state/specify your gender in the box provided.');
+      return;
+    }
+
+    if (isMinorPatient && (!formData.guardianName?.trim() || !minorGuardianConsent)) {
+      setFormError(
+        'For patients under 18 years of age (Texas Family Code Ch. 32), a parent or legal guardian must enter their full name and check the guardian consent box.'
+      );
+      return;
+    }
+
+    if (!hipaaConsent || !telehealthTexasConsent || !tcpaSmsEmailConsent) {
+      setFormError(
+        'Please review and check the required HIPAA/Texas HB 300, Texas Telehealth, and Appointment Notification consent boxes before confirming your visit.'
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const enrichedNotes = [
+        `Gender: ${resolvedGender}`,
+        isMinorPatient && formData.guardianName?.trim()
+          ? `Parent/Legal Guardian (Minor <18 Consent Verified): ${formData.guardianName.trim()}`
+          : '',
+        formData.notes?.trim() || '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      const submissionPayload: AppointmentFormData = {
+        ...formData,
+        biologicalSex: resolvedGender,
+        notes: enrichedNotes,
+      };
+
       let currentPortalUser = null;
       if (auth.currentUser) {
         currentPortalUser = await ensurePatientOnboarding(auth.currentUser, {
           fullName: formData.fullName,
           phone: formData.phone,
           dateOfBirth: formData.dateOfBirth,
+          biologicalSex: resolvedGender,
           insuranceProvider: formData.insuranceProvider,
         });
       }
-      const result = await createTelehealthAppointment(formData, currentPortalUser);
+      const result = await createTelehealthAppointment(submissionPayload, currentPortalUser);
       setProvisionedRoomUrl(result.telehealthUrl);
       setSubmitted(true);
     } catch (err) {
@@ -81,6 +152,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const resetAndClose = () => {
     setSubmitted(false);
     setProvisionedRoomUrl('');
+    setFormError(null);
     onClose();
   };
 
@@ -102,7 +174,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-serif text-[#1C1917] font-bold">
-              100% Telehealth Visit Confirmed & Provisioned
+              100% Telehealth Visit Confirmed &amp; Provisioned
             </h3>
             <p className="text-sm text-[#57534E] max-w-md mx-auto leading-relaxed">
               Thank you, <span className="text-[#1C1917] font-semibold">{formData.fullName}</span>.
@@ -117,11 +189,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 <span className="text-[#1C1917] font-medium">{formData.conditionReason}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-stone-200">
+                <span className="text-[#78716C]">Gender:</span>
+                <span className="text-[#1C1917] font-medium">{resolvedGender}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-stone-200">
                 <span className="text-[#78716C]">Visit Format:</span>
                 <span className="text-[#1C1917]">100% Telehealth Video Visit (Texas)</span>
               </div>
               <div className="flex justify-between py-1 border-b border-stone-200 font-mono tabular-nums">
-                <span className="text-[#78716C]">Date & Window:</span>
+                <span className="text-[#78716C]">Date &amp; Window:</span>
                 <span className="text-[#1C1917]">
                   {formData.preferredDate || 'Next Available'} · {formData.preferredTime}
                 </span>
@@ -157,7 +233,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                   className="px-6 py-2.5 rounded-full bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm hover:bg-stone-800 transition-all cursor-pointer flex items-center gap-2"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Open Client Portal & Intake Forms</span>
+                  <span>Open Client Portal &amp; Intake Forms</span>
                 </button>
               )}
               <button
@@ -169,7 +245,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Header */}
             <div className="text-center space-y-1.5 pb-2 border-b border-stone-100">
               <span className="text-[11px] font-semibold tracking-widest text-[#9E7206] uppercase">
@@ -179,9 +255,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 Book a 100% Telehealth Consultation
               </h2>
               <p className="text-xs text-[#78716C]">
-                With Brenda Hobyani, PMHNP-BC · Adults, Teens & Children Across Texas
+                With Brenda Hobyani, MSN, APRN, PMHNP-BC · Adults, Teens &amp; Children Across Texas
               </p>
             </div>
+
+            {formError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
 
             {/* Visit Format Badge (100% Telehealth) */}
             <div className="space-y-2">
@@ -195,7 +278,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     100% Telehealth Video Visit (No In-Person Visits Needed)
                   </p>
                   <p className="text-[11px] text-[#78716C] mt-0.5">
-                    Available Anywhere Across Texas for Children, Teens & Adults · Automatic HIPAA
+                    Available Anywhere Across Texas for Children, Teens &amp; Adults · Automatic HIPAA
                     Video Link Provisioning
                   </p>
                 </div>
@@ -249,15 +332,18 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             {/* Patient Personal Information */}
             <div className="space-y-3 pt-1">
               <label className="text-xs font-semibold text-[#9E7206] uppercase tracking-wider block">
-                3. Patient Details
+                3. Patient Details &amp; Gender
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Full Legal Name *
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="Full Legal Name *"
+                    placeholder="First & Last Name *"
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none placeholder-[#888]"
@@ -265,6 +351,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 </div>
 
                 <div>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Date of Birth *
+                  </label>
                   <input
                     type="date"
                     required
@@ -276,29 +365,118 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 </div>
               </div>
 
+              {/* Gender Selector: Male / Female / Other (+ State if Other) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Gender *
+                  </label>
+                  <select
+                    value={genderSelection}
+                    onChange={(e) =>
+                      setGenderSelection(e.target.value as 'Female' | 'Male' | 'Other')
+                    }
+                    className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none"
+                  >
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other (Please State)</option>
+                  </select>
+                </div>
+
+                {genderSelection === 'Other' ? (
+                  <div>
+                    <label className="text-[11px] text-[#9E7206] block mb-1 font-semibold">
+                      Please State Your Gender *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="State your gender..."
+                      value={customGenderText}
+                      onChange={(e) => setCustomGenderText(e.target.value)}
+                      className="w-full bg-[#FAF6EA] border border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                      Mobile Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="(432) 555-0199 *"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none placeholder-[#888]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={genderSelection === 'Other' ? '' : 'sm:col-span-2'}>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Email Address (Links to Client Portal) *
+                  </label>
                   <input
                     type="email"
                     required
-                    placeholder="Email Address (Links to Client Portal) *"
+                    placeholder="name@example.com *"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none placeholder-[#888]"
                   />
                 </div>
 
-                <div>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="Phone Number *"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none placeholder-[#888]"
-                  />
-                </div>
+                {genderSelection === 'Other' && (
+                  <div>
+                    <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                      Mobile Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="(432) 555-0199 *"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none placeholder-[#888]"
+                    />
+                  </div>
+                )}
               </div>
+
+              {/* Automatic Under-18 Minor Parent / Guardian Attestation (Texas Family Code Ch. 32) */}
+              {isMinorPatient && (
+                <div className="p-3.5 rounded-2xl bg-[#FAF6EA] border border-[#D4AF37] space-y-2.5">
+                  <p className="text-[11px] font-bold text-[#9E7206] uppercase tracking-wider">
+                    Minor Patient Under 18 (Age: {patientAge}) — Texas Family Code Ch. 32 Guardian Consent
+                  </p>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Parent or Legal Guardian Full Legal Name & Relationship *"
+                    value={formData.guardianName || ''}
+                    onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
+                    className="w-full bg-white border border-stone-300 focus:border-[#D4AF37] rounded-xl px-3.5 py-2 text-xs text-[#1C1917] focus:outline-none"
+                  />
+                  <label className="flex items-start gap-2 text-[11px] text-[#44403C] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={minorGuardianConsent}
+                      onChange={(e) => setMinorGuardianConsent(e.target.checked)}
+                      className="mt-0.5 accent-[#9E7206]"
+                    />
+                    <span>
+                      I attest under Texas Family Code Chapter 32 that I am the parent, managing
+                      conservator, or legal guardian with authority to consent to psychiatric
+                      evaluation and telepsychiatry treatment for this minor child. *
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Date & Time Preferences */}
@@ -348,8 +526,81 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               ></textarea>
             </div>
 
+            {/* Mandatory Legal & Regulatory Clickwrap Checkboxes (HIPAA/TX HB 300, Texas Telehealth, FCC TCPA) */}
+            <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200 space-y-2.5 text-[11px] text-[#44403C]">
+              <p className="font-bold text-[#9E7206] uppercase tracking-wider text-[10px]">
+                4. Required Texas &amp; Federal Healthcare Informed Consents
+              </p>
+
+              <label className="flex items-start gap-2.5 cursor-pointer leading-relaxed">
+                <input
+                  type="checkbox"
+                  required
+                  checked={hipaaConsent}
+                  onChange={(e) => setHipaaConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>HIPAA &amp; Texas HB 300 Privacy Notice:</strong> I acknowledge receipt of
+                  the{' '}
+                  <a
+                    href="#privacy"
+                    onClick={resetAndClose}
+                    className="text-[#9E7206] font-semibold underline"
+                  >
+                    Notice of Privacy Practices (HIPAA &amp; Texas HB 300)
+                  </a>{' '}
+                  and{' '}
+                  <a
+                    href="#terms"
+                    onClick={resetAndClose}
+                    className="text-[#9E7206] font-semibold underline"
+                  >
+                    Terms of Service
+                  </a>
+                  , including my right to receive a Federal <strong>Good Faith Estimate</strong> under
+                  the No Surprises Act (45 C.F.R. § 149.610). *
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer leading-relaxed">
+                <input
+                  type="checkbox"
+                  required
+                  checked={telehealthTexasConsent}
+                  onChange={(e) => setTelehealthTexasConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>Texas Telehealth Consent &amp; Location Attestation:</strong> Pursuant to
+                  Texas Occupations Code Ch. 111, I consent to 100% telehealth psychiatric care,
+                  confirm I will be <strong>physically located in the State of Texas</strong> during my
+                  video sessions, and understand this is not an emergency service (for emergencies,
+                  call <strong>911</strong>, dial <strong>988</strong>, or call Poison Control at{' '}
+                  <strong>800-222-1222</strong>). *
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer leading-relaxed">
+                <input
+                  type="checkbox"
+                  required
+                  checked={tcpaSmsEmailConsent}
+                  onChange={(e) => setTcpaSmsEmailConsent(e.target.checked)}
+                  className="mt-0.5 accent-[#9E7206] shrink-0"
+                />
+                <span>
+                  <strong>FCC / TCPA Appointment SMS &amp; Email Consent:</strong> I consent to receive
+                  transactional appointment confirmations, HIPAA telehealth video links, and portal
+                  security alerts from Golden Mind Psychiatry PLLC via email and SMS. Msg &amp; data
+                  rates may apply; reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for
+                  help. Mobile opt-in data is never sold or shared for marketing. *
+                </span>
+              </label>
+            </div>
+
             {/* Submit Button */}
-            <div className="pt-2">
+            <div className="pt-1">
               <button
                 type="submit"
                 disabled={submitting}
@@ -365,7 +616,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
               <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-[#78716C]">
                 <Shield className="w-3 h-3 text-[#B8860B]" />
-                <span>100% Encrypted & HIPAA Compliant · Instant Portal Sync</span>
+                <span>100% Encrypted · HIPAA, Texas HB 300 &amp; No Surprises Act Compliant</span>
               </div>
             </div>
           </form>
@@ -374,3 +625,4 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     </div>
   );
 };
+
