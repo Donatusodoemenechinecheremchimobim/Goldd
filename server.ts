@@ -807,7 +807,6 @@ interface BannedIpRecord {
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 const bannedIps = new Map<string, BannedIpRecord>();
 const securityEventsLog: SecurityEventRecord[] = [];
-const securityEmailAlertCooldown = new Map<string, number>();
 
 const securityStats = {
   blockedScanners: 0,
@@ -1192,7 +1191,7 @@ async function startServer() {
   // Allow up to 10MB JSON payloads for full clinical database backup & restore snapshots
   app.use(express.json({ limit: '10mb' }));
 
-  // Helper to log security intrusions to PostgreSQL + memory ring buffer, ban attacker IPs, & alert Brenda via SMTP
+  // Helper to silently block & log security intrusions to PostgreSQL + memory ring buffer and ban attacker IPs (Zero email/notification spam)
   async function recordSecurityIntrusion(params: {
     ip: string;
     eventType: SecurityEventRecord['eventType'];
@@ -1263,40 +1262,6 @@ async function startServer() {
           ]
         )
         .catch(() => {});
-    }
-
-    // Send throttled Security Alert Email to Brenda (max 1 email per 10 mins per IP/type so attackers cannot flood inbox)
-    if (params.sendEmailAlert !== false) {
-      const alertKey = `${cleanIp}:${params.eventType}`;
-      const lastSent = securityEmailAlertCooldown.get(alertKey) || 0;
-      if (now - lastSent > 10 * 60 * 1000) {
-        securityEmailAlertCooldown.set(alertKey, now);
-        const alertHtml = buildBrandedEmailHtml(
-          `Security Firewall Alert: Blocked ${params.eventType.replace(/_/g, ' ').toUpperCase()}`,
-          `
-          <h2 style="margin:0 0 12px 0;color:#991B1B;font-size:18px;">Automated Security Firewall Blocked an Intrusion Attempt</h2>
-          <p style="margin:0 0 16px 0;">Your Golden Mind Psychiatry PLLC Web Application Firewall automatically intercepted and blocked a suspicious request before it could reach your database.</p>
-          <table width="100%" cellpadding="8" cellspacing="0" style="background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;font-size:13px;">
-            <tr><td><strong>Threat Classification:</strong></td><td>${escapeHtml(params.eventType, 80)}</td></tr>
-            <tr><td><strong>Reason / Signature:</strong></td><td>${escapeHtml(params.reason, 240)}</td></tr>
-            <tr><td><strong>Source IP Address:</strong></td><td><code>${escapeHtml(cleanIp, 64)}</code></td></tr>
-            <tr><td><strong>Target Path:</strong></td><td><code>${escapeHtml(params.method, 12)} ${escapeHtml(params.path, 200)}</code></td></tr>
-            <tr><td><strong>Firewall Action:</strong></td><td>${
-              blockedUntilIso
-                ? `Blocked (403) &amp; IP Banned until ${blockedUntilIso.replace('T', ' ').slice(0, 19)} UTC`
-                : 'Blocked Immediately'
-            }</td></tr>
-            <tr><td><strong>Timestamp (UTC):</strong></td><td>${nowIso.replace('T', ' ').slice(0, 19)} UTC</td></tr>
-          </table>
-          <p style="margin:16px 0 0 0;font-size:12px;color:#57534E;">You can view live blocked events and manage banned IPs inside your Provider Command Center under <strong>Backups &amp; Security</strong>.</p>
-          `
-        );
-        void sendClinicEmail({
-          to: DOCTOR_ALERT_RECIPIENTS,
-          subject: `[Security Alert] Blocked ${params.eventType} from IP ${cleanIp}`,
-          html: alertHtml,
-        });
-      }
     }
   }
 
@@ -3649,22 +3614,21 @@ async function startServer() {
       return;
     }
     const testIp = '198.51.100.42 (Simulated Verification Probe)';
-    securityEmailAlertCooldown.delete(`${testIp}:security_test_alert`);
     await recordSecurityIntrusion({
       ip: testIp,
       eventType: 'security_test_alert',
-      path: '/wp-admin/setup-config.php (Security Alert Verification)',
+      path: '/wp-admin/setup-config.php (Security Firewall Verification)',
       method: 'GET',
       reason:
-        'Manual verification test triggered from Brenda Hobyani Provider Security Console — confirming WAF intrusion logging and real-time email alerts.',
+        'Manual verification test triggered from Provider Security Console — confirming silent WAF intrusion blocking and IP ban enforcement.',
       banMinutes: 1,
-      sendEmailAlert: true,
+      sendEmailAlert: false,
     });
     bannedIps.delete(testIp);
     res.json({
       ok: true,
       message:
-        'Security intrusion alert logged and emailed to beehobs@yahoo.com and info@goldenmindpsychiatry.org.',
+        'Simulated intrusion attempt silently blocked and logged in WAF (no emails sent).',
     });
   });
 

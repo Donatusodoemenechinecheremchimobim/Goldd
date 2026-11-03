@@ -920,19 +920,13 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const handleTestSecurityAlert = async () => {
     setTestingSecurityAlert(true);
     try {
-      const res = await fetch('/api/security/test-alert', {
+      await fetch('/api/security/test-alert', {
         method: 'POST',
         headers: getAdminHeaders(),
       });
-      const data = await res.json();
       await refreshBackupAndLockoutStatus();
-      if (data?.ok) {
-        showBanner(
-          'Simulated scanner probe blocked & security alert email sent to beehobs@yahoo.com and info@goldenmindpsychiatry.org!'
-        );
-      }
     } catch {
-      showBanner('Triggered security alert test.');
+      // ignore
     } finally {
       setTestingSecurityAlert(false);
     }
@@ -4418,25 +4412,15 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                       Zero-Trust WAF · Anti-Fingerprinting · SQLi/XSS Firewall
                     </span>
                     <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Live Security &amp; Intrusion Audit Log (Automated Scanner &amp; Brute-Force Defense)
+                      Live Security &amp; Intrusion Audit Log (Silent Auto-Block &amp; IP Ban)
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
                       Server headers masked (<code>Server: Protected</code>) · PostgreSQL locked to{' '}
                       <code>127.0.0.1</code> · CORS locked to <code>goldenmindpsychiatry.org</code> ·
-                      Real-time email alerts to <strong>beehobs@yahoo.com</strong>
+                      Silent auto-blocking active (zero email spam)
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={testingSecurityAlert}
-                      onClick={handleTestSecurityAlert}
-                      className="px-3.5 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer hover:bg-stone-800 disabled:opacity-60"
-                    >
-                      {testingSecurityAlert
-                        ? 'Sending Alert...'
-                        : 'Test Intrusion & Email Alert'}
-                    </button>
                     {securityEvents.length > 0 && (
                       <button
                         type="button"
@@ -4536,7 +4520,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                     <div className="p-4 rounded-[14px] bg-[#FAF9F5] border border-stone-200 text-xs text-stone-600">
                       Zero unmitigated intrusions recorded. Any scanner probing <code>.env</code>,{' '}
                       <code>.php</code>, <code>wp-admin</code>, SQL injection payloads, or brute-force
-                      attempts will appear here immediately and trigger an email alert to Brenda.
+                      attempts is silently blocked and IP-banned automatically without sending email notifications.
                     </div>
                   ) : (
                     <div className="divide-y divide-stone-200 max-h-64 overflow-y-auto border border-stone-200 rounded-[14px] px-4 bg-[#FAF9F5]">
