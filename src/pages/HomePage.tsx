@@ -169,13 +169,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-            {/* Picture of the Head Owner: Brenda Hobyani, PMHNP-BC */}
+            {/* Picture of the Owner: Brenda Hobyani, PMHNP-BC */}
             <div className="lg:col-span-5 flex flex-col items-center">
               <div className="relative w-full max-w-[360px] aspect-[4/5] rounded-3xl overflow-hidden border-2 border-[#D4AF37]/50 shadow-xl group bg-white">
                 {/* Provider Portrait */}
                 <img
                   src="/brenda_hobyani.jpg"
-                  alt="Brenda Hobyani, PMHNP-BC - Board-Certified Psychiatric Mental Health Nurse Practitioner and Head Owner of Golden Mind Psychiatry"
+                  alt="Brenda Hobyani, PMHNP-BC - Board-Certified Psychiatric Mental Health Nurse Practitioner and Owner of Golden Mind Psychiatry"
                   className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-102"
                 />
               </div>
@@ -186,7 +186,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
                   Brenda Hobyani, <span className="text-[#9E7206]">PMHNP-BC</span>
                 </h3>
                 <p className="text-xs text-[#57534E] mt-1 font-medium">
-                  Head Owner & Lead Psychiatric Clinician
+                  Owner & Lead Psychiatric Clinician
                 </p>
                 <div className="mt-2.5 pt-2.5 border-t border-[#D4AF37]/25 flex items-center justify-center gap-1.5 text-[11px] text-[#44403C]">
                   <Award className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />

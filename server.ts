@@ -168,6 +168,9 @@ async function initPostgresPool(): Promise<void> {
           role VARCHAR(32) DEFAULT 'patient',
           phone VARCHAR(64),
           date_of_birth VARCHAR(32),
+          biological_sex VARCHAR(128),
+          guardian_name VARCHAR(255),
+          consents_accepted_at VARCHAR(64),
           state VARCHAR(64) DEFAULT 'Texas',
           address VARCHAR(500),
           insurance_provider VARCHAR(255),
@@ -181,6 +184,9 @@ async function initPostgresPool(): Promise<void> {
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS biological_sex VARCHAR(128);
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS guardian_name VARCHAR(255);
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS consents_accepted_at VARCHAR(64);
         CREATE TABLE IF NOT EXISTS appointments (
           id VARCHAR(128) PRIMARY KEY,
           patient_uid VARCHAR(128) NOT NULL,
@@ -360,17 +366,21 @@ async function upsertClinicalRecordToPostgres(
       const email = String(data.email || `${uid}@goldenmindpsychiatry.org`).toLowerCase();
       await pgPool.query(
         `INSERT INTO users (
-          uid, email, full_name, role, phone, date_of_birth, state, address,
+          uid, email, full_name, role, phone, date_of_birth, biological_sex,
+          guardian_name, consents_accepted_at, state, address,
           insurance_provider, insurance_member_id, insurance_group_number,
           preferred_pharmacy, emergency_contact, primary_concern,
           registration_completed, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
         ON CONFLICT (uid) DO UPDATE SET
           email = EXCLUDED.email,
           full_name = EXCLUDED.full_name,
           role = EXCLUDED.role,
           phone = EXCLUDED.phone,
           date_of_birth = EXCLUDED.date_of_birth,
+          biological_sex = COALESCE(NULLIF(EXCLUDED.biological_sex, ''), users.biological_sex),
+          guardian_name = COALESCE(NULLIF(EXCLUDED.guardian_name, ''), users.guardian_name),
+          consents_accepted_at = COALESCE(NULLIF(EXCLUDED.consents_accepted_at, ''), users.consents_accepted_at),
           address = EXCLUDED.address,
           insurance_provider = EXCLUDED.insurance_provider,
           insurance_member_id = EXCLUDED.insurance_member_id,
@@ -387,6 +397,9 @@ async function upsertClinicalRecordToPostgres(
           String(data.role || 'patient'),
           String(data.phone || ''),
           String(data.dateOfBirth || ''),
+          String(data.biologicalSex || ''),
+          String(data.guardianName || ''),
+          String(data.consentsAcceptedAt || ''),
           'Texas',
           String(data.address || ''),
           String(data.insuranceProvider || ''),
