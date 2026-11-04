@@ -2924,17 +2924,22 @@ async function startServer() {
     return true;
   };
 
-  const getTwitterClientId = () =>
+  const getXClientId = () =>
     String(
-      process.env.TWITTER_CLIENT_ID || 'RmdCTHZhTzgtSEY3dmZXd3hldlI6MTpjaQ'
+      process.env.X_CLIENT_ID ||
+        process.env.TWITTER_CLIENT_ID ||
+        'RmdCTHZhTzgtSEY3dmZXd3hldlI6MTpjaQ'
     ).trim();
-  const getTwitterClientSecret = () =>
+  const getXClientSecret = () =>
     String(
-      process.env.TWITTER_CLIENT_SECRET ||
+      process.env.X_CLIENT_SECRET ||
+        process.env.TWITTER_CLIENT_SECRET ||
         'AJ8KD_IQzjNE2QFuAflWW1A6KHLI9ztt_Z8IAm_Si7OSOe94yA'
     ).trim();
 
   app.get('/api/standalone/oauth/config', (_req, res) => {
+    const xEnabled =
+      isRealOAuthEnv(getXClientId()) && isRealOAuthEnv(getXClientSecret());
     res.json({
       ok: true,
       providers: {
@@ -2947,9 +2952,8 @@ async function startServer() {
         microsoft:
           isRealOAuthEnv(process.env.MICROSOFT_CLIENT_ID) &&
           isRealOAuthEnv(process.env.MICROSOFT_CLIENT_SECRET),
-        twitter:
-          isRealOAuthEnv(getTwitterClientId()) &&
-          isRealOAuthEnv(getTwitterClientSecret()),
+        x: xEnabled,
+        twitter: xEnabled,
         facebook:
           isRealOAuthEnv(process.env.FACEBOOK_CLIENT_ID) &&
           isRealOAuthEnv(process.env.FACEBOOK_CLIENT_SECRET),
@@ -2958,7 +2962,8 @@ async function startServer() {
   });
 
   app.get('/api/standalone/oauth/start/:provider', (req, res) => {
-    const provider = String(req.params.provider || '').toLowerCase();
+    const rawProvider = String(req.params.provider || '').toLowerCase();
+    const provider = rawProvider === 'twitter' ? 'x' : rawProvider;
     const rawOrigin = String(req.query.origin || '').trim().replace(/\/+$/, '');
     const clientOrigin = getSafeClientOrigin(rawOrigin);
     // Always use HTTPS on goldenmindpsychiatry.org for OAuth provider redirect_uri matching
@@ -3008,7 +3013,7 @@ async function startServer() {
       return;
     }
 
-    if (provider === 'twitter' && isRealOAuthEnv(getTwitterClientId())) {
+    if ((provider === 'x' || provider === 'twitter') && isRealOAuthEnv(getXClientId())) {
       const codeVerifier = crypto
         .createHmac('sha256', RESET_HMAC_SECRET)
         .update(`x_oauth2_pkce_${redirectUri}`)
@@ -3017,13 +3022,15 @@ async function startServer() {
         .createHash('sha256')
         .update(codeVerifier)
         .digest('base64url');
-      const url = new URL('https://twitter.com/i/oauth2/authorize');
+      const url = new URL('https://x.com/i/oauth2/authorize');
       url.searchParams.set('response_type', 'code');
-      url.searchParams.set('client_id', getTwitterClientId());
+      url.searchParams.set('client_id', getXClientId());
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set(
         'scope',
-        process.env.TWITTER_OAUTH_SCOPE?.trim() || 'users.read tweet.read'
+        process.env.X_OAUTH_SCOPE?.trim() ||
+          process.env.TWITTER_OAUTH_SCOPE?.trim() ||
+          'users.read tweet.read'
       );
       url.searchParams.set('state', state);
       url.searchParams.set('code_challenge', codeChallenge);
@@ -3170,15 +3177,15 @@ async function startServer() {
               .toLowerCase();
             fullName = String(userData.displayName || '').trim();
           }
-        } else if (provider === 'twitter') {
+        } else if (provider === 'x' || provider === 'twitter') {
           const codeVerifier = crypto
             .createHmac('sha256', RESET_HMAC_SECRET)
             .update(`x_oauth2_pkce_${redirectUri}`)
             .digest('base64url');
           const basicAuth = Buffer.from(
-            `${getTwitterClientId()}:${getTwitterClientSecret()}`
+            `${getXClientId()}:${getXClientSecret()}`
           ).toString('base64');
-          const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
+          const tokenRes = await fetch('https://api.x.com/2/oauth2/token', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
@@ -3187,7 +3194,7 @@ async function startServer() {
             body: new URLSearchParams({
               code,
               grant_type: 'authorization_code',
-              client_id: getTwitterClientId(),
+              client_id: getXClientId(),
               redirect_uri: redirectUri,
               code_verifier: codeVerifier,
             }),
@@ -3195,7 +3202,7 @@ async function startServer() {
           const tokenData = (await tokenRes.json()) as { access_token?: string };
           if (tokenData.access_token) {
             let userRes = await fetch(
-              'https://api.twitter.com/2/users/me?user.fields=id,name,username,confirmed_email',
+              'https://api.x.com/2/users/me?user.fields=id,name,username,confirmed_email',
               {
                 headers: { Authorization: `Bearer ${tokenData.access_token}` },
               }
@@ -3210,7 +3217,7 @@ async function startServer() {
             };
             if (!userJson?.data) {
               userRes = await fetch(
-                'https://api.twitter.com/2/users/me?user.fields=id,name,username',
+                'https://api.x.com/2/users/me?user.fields=id,name,username',
                 {
                   headers: { Authorization: `Bearer ${tokenData.access_token}` },
                 }

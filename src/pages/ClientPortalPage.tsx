@@ -1556,8 +1556,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               ok?: boolean;
               providers?: Record<string, boolean>;
             };
-            if (cfgData.providers?.[providerType]) {
-              window.location.href = `/api/standalone/oauth/start/${providerType}?origin=${encodeURIComponent(window.location.origin)}`;
+            if (cfgData.providers?.[providerType] || (providerType === 'twitter' && cfgData.providers?.x)) {
+              const routeSlug = providerType === 'twitter' ? 'x' : providerType;
+              window.location.href = `/api/standalone/oauth/start/${routeSlug}?origin=${encodeURIComponent(window.location.origin)}`;
               return;
             }
           }
