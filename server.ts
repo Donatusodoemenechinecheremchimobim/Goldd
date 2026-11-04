@@ -2924,6 +2924,16 @@ async function startServer() {
     return true;
   };
 
+  const getTwitterClientId = () =>
+    String(
+      process.env.TWITTER_CLIENT_ID || 'RmdCTHZhTzgtSEY3dmZXd3hldlI6MTpjaQ'
+    ).trim();
+  const getTwitterClientSecret = () =>
+    String(
+      process.env.TWITTER_CLIENT_SECRET ||
+        'AJ8KD_IQzjNE2QFuAflWW1A6KHLI9ztt_Z8IAm_Si7OSOe94yA'
+    ).trim();
+
   app.get('/api/standalone/oauth/config', (_req, res) => {
     res.json({
       ok: true,
@@ -2938,8 +2948,8 @@ async function startServer() {
           isRealOAuthEnv(process.env.MICROSOFT_CLIENT_ID) &&
           isRealOAuthEnv(process.env.MICROSOFT_CLIENT_SECRET),
         twitter:
-          isRealOAuthEnv(process.env.TWITTER_CLIENT_ID) &&
-          isRealOAuthEnv(process.env.TWITTER_CLIENT_SECRET),
+          isRealOAuthEnv(getTwitterClientId()) &&
+          isRealOAuthEnv(getTwitterClientSecret()),
         facebook:
           isRealOAuthEnv(process.env.FACEBOOK_CLIENT_ID) &&
           isRealOAuthEnv(process.env.FACEBOOK_CLIENT_SECRET),
@@ -2998,6 +3008,30 @@ async function startServer() {
       return;
     }
 
+    if (provider === 'twitter' && isRealOAuthEnv(getTwitterClientId())) {
+      const codeVerifier = crypto
+        .createHmac('sha256', RESET_HMAC_SECRET)
+        .update(`x_oauth2_pkce_${redirectUri}`)
+        .digest('base64url');
+      const codeChallenge = crypto
+        .createHash('sha256')
+        .update(codeVerifier)
+        .digest('base64url');
+      const url = new URL('https://twitter.com/i/oauth2/authorize');
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('client_id', getTwitterClientId());
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set(
+        'scope',
+        process.env.TWITTER_OAUTH_SCOPE?.trim() || 'users.read tweet.read'
+      );
+      url.searchParams.set('state', state);
+      url.searchParams.set('code_challenge', codeChallenge);
+      url.searchParams.set('code_challenge_method', 'S256');
+      res.redirect(url.toString());
+      return;
+    }
+
     if (provider === 'facebook' && isRealOAuthEnv(process.env.FACEBOOK_CLIENT_ID)) {
       const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
       url.searchParams.set('client_id', process.env.FACEBOOK_CLIENT_ID!.trim());
@@ -3012,178 +3046,247 @@ async function startServer() {
     res.redirect(`${clientOrigin}/?page=portal`);
   });
 
-  app.get('/api/standalone/oauth/callback/:provider', async (req, res) => {
-    const provider = String(req.params.provider || '').toLowerCase();
-    const code = String(req.query.code || '').trim();
-    let baseOrigin = getSafeClientOrigin(undefined);
-    let oauthBaseOrigin = 'https://goldenmindpsychiatry.org';
-    try {
-      if (typeof req.query.state === 'string' && req.query.state) {
-        const parsed = JSON.parse(Buffer.from(req.query.state, 'base64url').toString('utf8'));
-        if (parsed?.origin) baseOrigin = getSafeClientOrigin(parsed.origin);
-        if (parsed?.oauthBaseOrigin) oauthBaseOrigin = getSafeClientOrigin(parsed.oauthBaseOrigin);
-      }
-    } catch {
-      // ignore state decode error
-    }
-
-    if (!code) {
-      res.redirect(`${baseOrigin}/?page=portal`);
-      return;
-    }
-
-    const redirectUri = `${oauthBaseOrigin}/api/standalone/oauth/callback/${provider}`;
-    let email = '';
-    let fullName = '';
-
-    try {
-      if (provider === 'google') {
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            code,
-            client_id: String(process.env.GOOGLE_CLIENT_ID || '').trim(),
-            client_secret: String(process.env.GOOGLE_CLIENT_SECRET || '').trim(),
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code',
-          }),
-        });
-        const tokenData = (await tokenRes.json()) as { access_token?: string };
-        if (tokenData.access_token) {
-          const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-          });
-          const userData = (await userRes.json()) as { email?: string; name?: string };
-          email = String(userData.email || '').trim().toLowerCase();
-          fullName = String(userData.name || '').trim();
+  app.get(
+    ['/api/standalone/oauth/callback/:provider', '/api/standalone/oauth/callback/:provider/'],
+    async (req, res) => {
+      const provider = String(req.params.provider || '').toLowerCase();
+      const code = String(req.query.code || '').trim();
+      let baseOrigin = getSafeClientOrigin(undefined);
+      let oauthBaseOrigin = 'https://goldenmindpsychiatry.org';
+      try {
+        if (typeof req.query.state === 'string' && req.query.state) {
+          const parsed = JSON.parse(Buffer.from(req.query.state, 'base64url').toString('utf8'));
+          if (parsed?.origin) baseOrigin = getSafeClientOrigin(parsed.origin);
+          if (parsed?.oauthBaseOrigin) oauthBaseOrigin = getSafeClientOrigin(parsed.oauthBaseOrigin);
         }
-      } else if (provider === 'yahoo') {
-        const basicAuth = Buffer.from(
-          `${String(process.env.YAHOO_CLIENT_ID || '').trim()}:${String(process.env.YAHOO_CLIENT_SECRET || '').trim()}`
-        ).toString('base64');
-        const tokenRes = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Authorization: `Basic ${basicAuth}`,
-          },
-          body: new URLSearchParams({
-            code,
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code',
-          }),
-        });
-        const tokenData = (await tokenRes.json()) as {
-          access_token?: string;
-          id_token?: string;
-        };
-        if (tokenData.id_token) {
-          try {
-            const payloadPart = tokenData.id_token.split('.')[1];
-            if (payloadPart) {
-              const idClaims = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8')) as {
-                email?: string;
-                name?: string;
-                given_name?: string;
-                family_name?: string;
-              };
-              if (idClaims.email) email = String(idClaims.email).trim().toLowerCase();
-              if (idClaims.name) {
-                fullName = String(idClaims.name).trim();
-              } else if (idClaims.given_name || idClaims.family_name) {
-                fullName = `${idClaims.given_name || ''} ${idClaims.family_name || ''}`.trim();
-              }
-            }
-          } catch {
-            // ignore id_token parse error
-          }
-        }
-        if (tokenData.access_token && (!email || !fullName)) {
-          const userRes = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-          });
-          const userData = (await userRes.json()) as { email?: string; name?: string };
-          if (!email && userData.email) email = String(userData.email).trim().toLowerCase();
-          if (!fullName && userData.name) fullName = String(userData.name).trim();
-        }
-      } else if (provider === 'microsoft') {
-        const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            code,
-            client_id: String(process.env.MICROSOFT_CLIENT_ID || '').trim(),
-            client_secret: String(process.env.MICROSOFT_CLIENT_SECRET || '').trim(),
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code',
-          }),
-        });
-        const tokenData = (await tokenRes.json()) as { access_token?: string };
-        if (tokenData.access_token) {
-          const userRes = await fetch('https://graph.microsoft.com/v1.0/me', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-          });
-          const userData = (await userRes.json()) as {
-            mail?: string;
-            userPrincipalName?: string;
-            displayName?: string;
-          };
-          email = String(userData.mail || userData.userPrincipalName || '')
-            .trim()
-            .toLowerCase();
-          fullName = String(userData.displayName || '').trim();
-        }
-      } else if (provider === 'facebook') {
-        const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
-        tokenUrl.searchParams.set('client_id', String(process.env.FACEBOOK_CLIENT_ID || '').trim());
-        tokenUrl.searchParams.set('client_secret', String(process.env.FACEBOOK_CLIENT_SECRET || '').trim());
-        tokenUrl.searchParams.set('redirect_uri', redirectUri);
-        tokenUrl.searchParams.set('code', code);
-        const tokenRes = await fetch(tokenUrl.toString());
-        const tokenData = (await tokenRes.json()) as { access_token?: string };
-        if (tokenData.access_token) {
-          const userRes = await fetch(
-            `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(tokenData.access_token)}`
-          );
-          const userData = (await userRes.json()) as { email?: string; name?: string };
-          email = String(userData.email || '').trim().toLowerCase();
-          fullName = String(userData.name || '').trim();
-        }
+      } catch {
+        // ignore state decode error
       }
 
-      if (email && email.includes('@')) {
-        persistEmailVerified(email);
-        await syncAccountToPostgres({
-          email,
-          authProvider: provider,
-          emailVerified: true,
-          failedAttempts: 0,
-          lockedUntil: null,
-          lastIp: extractClientIp(req),
-        });
-        const userProfile = await ensureStandalonePostgresUser({
-          email,
-          fullName,
-          authProvider: provider,
-          emailVerified: true,
-        });
-        const jwtToken = signStandaloneJwt({
-          uid: String(userProfile.uid),
-          email,
-          role: String(userProfile.role || 'patient'),
-        });
-        res.redirect(
-          `${baseOrigin}/?page=portal&standaloneToken=${encodeURIComponent(jwtToken)}&verifiedEmail=${encodeURIComponent(email)}`
-        );
+      if (!code) {
+        res.redirect(`${baseOrigin}/?page=portal`);
         return;
       }
-    } catch (err) {
-      console.warn(`Standalone OAuth (${provider}) callback error:`, err);
-    }
 
-    res.redirect(`${baseOrigin}/?page=portal`);
-  });
+      const redirectUri = `${oauthBaseOrigin}/api/standalone/oauth/callback/${provider}`;
+      let email = '';
+      let fullName = '';
+
+      try {
+        if (provider === 'google') {
+          const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              code,
+              client_id: String(process.env.GOOGLE_CLIENT_ID || '').trim(),
+              client_secret: String(process.env.GOOGLE_CLIENT_SECRET || '').trim(),
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code',
+            }),
+          });
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenData.access_token}` },
+            });
+            const userData = (await userRes.json()) as { email?: string; name?: string };
+            email = String(userData.email || '').trim().toLowerCase();
+            fullName = String(userData.name || '').trim();
+          }
+        } else if (provider === 'yahoo') {
+          const basicAuth = Buffer.from(
+            `${String(process.env.YAHOO_CLIENT_ID || '').trim()}:${String(process.env.YAHOO_CLIENT_SECRET || '').trim()}`
+          ).toString('base64');
+          const tokenRes = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              Authorization: `Basic ${basicAuth}`,
+            },
+            body: new URLSearchParams({
+              code,
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code',
+            }),
+          });
+          const tokenData = (await tokenRes.json()) as {
+            access_token?: string;
+            id_token?: string;
+          };
+          if (tokenData.id_token) {
+            try {
+              const payloadPart = tokenData.id_token.split('.')[1];
+              if (payloadPart) {
+                const idClaims = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8')) as {
+                  email?: string;
+                  name?: string;
+                  given_name?: string;
+                  family_name?: string;
+                };
+                if (idClaims.email) email = String(idClaims.email).trim().toLowerCase();
+                if (idClaims.name) {
+                  fullName = String(idClaims.name).trim();
+                } else if (idClaims.given_name || idClaims.family_name) {
+                  fullName = `${idClaims.given_name || ''} ${idClaims.family_name || ''}`.trim();
+                }
+              }
+            } catch {
+              // ignore id_token parse error
+            }
+          }
+          if (tokenData.access_token && (!email || !fullName)) {
+            const userRes = await fetch('https://api.login.yahoo.com/openid/v1/userinfo', {
+              headers: { Authorization: `Bearer ${tokenData.access_token}` },
+            });
+            const userData = (await userRes.json()) as { email?: string; name?: string };
+            if (!email && userData.email) email = String(userData.email).trim().toLowerCase();
+            if (!fullName && userData.name) fullName = String(userData.name).trim();
+          }
+        } else if (provider === 'microsoft') {
+          const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              code,
+              client_id: String(process.env.MICROSOFT_CLIENT_ID || '').trim(),
+              client_secret: String(process.env.MICROSOFT_CLIENT_SECRET || '').trim(),
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code',
+            }),
+          });
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            const userRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+              headers: { Authorization: `Bearer ${tokenData.access_token}` },
+            });
+            const userData = (await userRes.json()) as {
+              mail?: string;
+              userPrincipalName?: string;
+              displayName?: string;
+            };
+            email = String(userData.mail || userData.userPrincipalName || '')
+              .trim()
+              .toLowerCase();
+            fullName = String(userData.displayName || '').trim();
+          }
+        } else if (provider === 'twitter') {
+          const codeVerifier = crypto
+            .createHmac('sha256', RESET_HMAC_SECRET)
+            .update(`x_oauth2_pkce_${redirectUri}`)
+            .digest('base64url');
+          const basicAuth = Buffer.from(
+            `${getTwitterClientId()}:${getTwitterClientSecret()}`
+          ).toString('base64');
+          const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              Authorization: `Basic ${basicAuth}`,
+            },
+            body: new URLSearchParams({
+              code,
+              grant_type: 'authorization_code',
+              client_id: getTwitterClientId(),
+              redirect_uri: redirectUri,
+              code_verifier: codeVerifier,
+            }),
+          });
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            let userRes = await fetch(
+              'https://api.twitter.com/2/users/me?user.fields=id,name,username,confirmed_email',
+              {
+                headers: { Authorization: `Bearer ${tokenData.access_token}` },
+              }
+            );
+            let userJson = (await userRes.json()) as {
+              data?: {
+                id?: string;
+                name?: string;
+                username?: string;
+                confirmed_email?: string;
+              };
+            };
+            if (!userJson?.data) {
+              userRes = await fetch(
+                'https://api.twitter.com/2/users/me?user.fields=id,name,username',
+                {
+                  headers: { Authorization: `Bearer ${tokenData.access_token}` },
+                }
+              );
+              userJson = (await userRes.json()) as {
+                data?: {
+                  id?: string;
+                  name?: string;
+                  username?: string;
+                  confirmed_email?: string;
+                };
+              };
+            }
+            const xUser = userJson?.data;
+            if (xUser) {
+              const cleanUsername = String(xUser.username || xUser.id || 'user')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9._-]/g, '');
+              email = String(xUser.confirmed_email || `${cleanUsername}@x.com`)
+                .trim()
+                .toLowerCase();
+              fullName = String(xUser.name || xUser.username || 'X Client').trim();
+            }
+          }
+        } else if (provider === 'facebook') {
+          const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+          tokenUrl.searchParams.set('client_id', String(process.env.FACEBOOK_CLIENT_ID || '').trim());
+          tokenUrl.searchParams.set('client_secret', String(process.env.FACEBOOK_CLIENT_SECRET || '').trim());
+          tokenUrl.searchParams.set('redirect_uri', redirectUri);
+          tokenUrl.searchParams.set('code', code);
+          const tokenRes = await fetch(tokenUrl.toString());
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            const userRes = await fetch(
+              `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(tokenData.access_token)}`
+            );
+            const userData = (await userRes.json()) as { email?: string; name?: string };
+            email = String(userData.email || '').trim().toLowerCase();
+            fullName = String(userData.name || '').trim();
+          }
+        }
+
+        if (email && email.includes('@')) {
+          persistEmailVerified(email);
+          await syncAccountToPostgres({
+            email,
+            authProvider: provider,
+            emailVerified: true,
+            failedAttempts: 0,
+            lockedUntil: null,
+            lastIp: extractClientIp(req),
+          });
+          const userProfile = await ensureStandalonePostgresUser({
+            email,
+            fullName,
+            authProvider: provider,
+            emailVerified: true,
+          });
+          const jwtToken = signStandaloneJwt({
+            uid: String(userProfile.uid),
+            email,
+            role: String(userProfile.role || 'patient'),
+          });
+          res.redirect(
+            `${baseOrigin}/?page=portal&standaloneToken=${encodeURIComponent(jwtToken)}&verifiedEmail=${encodeURIComponent(email)}`
+          );
+          return;
+        }
+      } catch (err) {
+        console.warn(`Standalone OAuth (${provider}) callback error:`, err);
+      }
+
+      res.redirect(`${baseOrigin}/?page=portal`);
+    }
+  );
 
   // 7D. Load Clinical Tables Directly from Ubuntu PostgreSQL (`goldenmind_db`) — Zero-Trust Guarded
   app.get('/api/standalone/db/bootstrap', async (req, res) => {
