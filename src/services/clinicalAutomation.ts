@@ -89,12 +89,24 @@ export async function computeAccountPasswordHash(
 }
 
 /**
- * Registers or updates a user's email hash (and optional passwordHash / emailVerified) in `/account_directory/{emailHash}` in Firestore.
+ * Computes a salted SHA-256 hash of a 6-digit verification code for `/account_directory/{emailHash}`.
+ */
+export async function computeAccountVerificationCodeHash(
+  rawEmail: string,
+  rawCode: string
+): Promise<string> {
+  const normalized = normalizePortalEmail(rawEmail);
+  return sha256Hex(`gmp_vcode_v1_${normalized}:${rawCode.trim()}`);
+}
+
+/**
+ * Registers or updates a user's email hash (and optional passwordHash / emailVerified / verificationCodeHash) in `/account_directory/{emailHash}` in Firestore.
  */
 export async function registerEmailInAccountDirectory(
   rawEmail?: string | null,
   rawPassword?: string,
-  emailVerified?: boolean
+  emailVerified?: boolean,
+  verificationCodeHash?: string
 ): Promise<void> {
   const cleanEmail = normalizePortalEmail(rawEmail);
   if (!cleanEmail || !cleanEmail.includes('@')) return;
@@ -103,6 +115,7 @@ export async function registerEmailInAccountDirectory(
     const dirRef = doc(db, 'account_directory', emailHash);
     let existingPasswordHash: string | undefined;
     let existingEmailVerified: boolean | undefined;
+    let existingVerificationCodeHash: string | undefined;
     try {
       const snap = await getDoc(dirRef);
       if (snap.exists()) {
@@ -112,6 +125,9 @@ export async function registerEmailInAccountDirectory(
         }
         if (typeof data?.emailVerified === 'boolean') {
           existingEmailVerified = data.emailVerified;
+        }
+        if (typeof data?.verificationCodeHash === 'string') {
+          existingVerificationCodeHash = data.verificationCodeHash;
         }
       }
     } catch {
@@ -131,10 +147,88 @@ export async function registerEmailInAccountDirectory(
     } else if (typeof existingEmailVerified === 'boolean') {
       payload.emailVerified = existingEmailVerified;
     }
+    if (verificationCodeHash && verificationCodeHash.length >= 16) {
+      payload.verificationCodeHash = verificationCodeHash;
+    } else if (existingVerificationCodeHash && payload.emailVerified !== true) {
+      payload.verificationCodeHash = existingVerificationCodeHash;
+    }
     await setDoc(dirRef, payload);
   } catch {
     // Non-fatal
   }
+}
+
+/**
+ * Verifies a 6-digit verification code against PostgreSQL + Server Store (`/api/email/verify-code`) and Cloud Firestore (`/account_directory/{emailHash}`).
+ */
+export async function verifyEmailCodeInAccountDirectory(
+  rawEmail: string,
+  rawCode: string
+): Promise<{
+  verified: boolean;
+  token?: string;
+  user?: PortalUser | null;
+  error?: string;
+}> {
+  const cleanEmail = normalizePortalEmail(rawEmail);
+  const cleanCode = rawCode.replace(/\D/g, '').trim();
+  if (!cleanEmail || cleanCode.length !== 6) {
+    return {
+      verified: false,
+      error: 'Please enter the complete 6-digit verification code sent to your email.',
+    };
+  }
+
+  // 1. Verify against Server + Ubuntu PostgreSQL + Firestore REST via /api/email/verify-code
+  try {
+    const resp = await fetch('/api/email/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, code: cleanCode }),
+    });
+    const data = await resp.json();
+    if (resp.ok && data?.verified) {
+      try {
+        window.sessionStorage.removeItem(`gmp_pending_verify_${cleanEmail}`);
+        window.localStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+        window.sessionStorage.setItem(`gmp_verified_email_${cleanEmail}`, '1');
+      } catch {
+        // ignore
+      }
+      await registerEmailInAccountDirectory(cleanEmail, undefined, true);
+      return {
+        verified: true,
+        token: typeof data.token === 'string' ? data.token : undefined,
+        user: (data.user as PortalUser) || null,
+      };
+    }
+  } catch {
+    // Fallback to direct Firestore check below
+  }
+
+  // 2. Fallback check directly in Cloud Firestore `/account_directory/{emailHash}`
+  try {
+    const [emailHash, expectedCodeHash] = await Promise.all([
+      computeEmailDirectoryHash(cleanEmail),
+      computeAccountVerificationCodeHash(cleanEmail, cleanCode),
+    ]);
+    const snap = await getDoc(doc(db, 'account_directory', emailHash));
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data?.verificationCodeHash === expectedCodeHash) {
+        await markEmailVerifiedInAccountDirectory(cleanEmail);
+        return { verified: true };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    verified: false,
+    error:
+      'Invalid or expired 6-digit verification code. Please check your email inbox or click "Resend New 6-Digit Code".',
+  };
 }
 
 /**

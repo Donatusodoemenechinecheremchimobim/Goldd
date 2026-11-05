@@ -54,9 +54,15 @@ interface LockoutRecord {
   lastIp?: string;
 }
 
+interface VerificationCodeRecord {
+  code: string;
+  expiresAt: number;
+}
+
 const verifiedResetPasswords = new Map<string, string>();
 const verifiedEmailAddresses = new Set<string>();
 const accountLockouts = new Map<string, LockoutRecord>();
+const emailVerificationCodes = new Map<string, VerificationCodeRecord>();
 
 try {
   if (fs.existsSync(CREDENTIALS_STORE_PATH)) {
@@ -74,8 +80,20 @@ try {
           }
         }
       }
+      if (rawStore.__verificationCodes && typeof rawStore.__verificationCodes === 'object') {
+        for (const [k, v] of Object.entries(rawStore.__verificationCodes)) {
+          if (v && typeof v === 'object') {
+            emailVerificationCodes.set(k.toLowerCase(), v as VerificationCodeRecord);
+          }
+        }
+      }
       for (const [k, v] of Object.entries(rawStore)) {
-        if (k !== '__verifiedEmails' && k !== '__lockouts' && typeof v === 'string') {
+        if (
+          k !== '__verifiedEmails' &&
+          k !== '__lockouts' &&
+          k !== '__verificationCodes' &&
+          typeof v === 'string'
+        ) {
           verifiedResetPasswords.set(k.toLowerCase(), v);
         }
       }
@@ -91,9 +109,16 @@ function saveCredentialsStoreToDisk(): void {
     for (const [k, v] of accountLockouts.entries()) {
       lockoutsObj[k] = v;
     }
+    const codesObj: Record<string, VerificationCodeRecord> = {};
+    for (const [k, v] of emailVerificationCodes.entries()) {
+      if (v.expiresAt > Date.now()) {
+        codesObj[k] = v;
+      }
+    }
     const obj: Record<string, unknown> = {
       __verifiedEmails: Array.from(verifiedEmailAddresses),
       __lockouts: lockoutsObj,
+      __verificationCodes: codesObj,
     };
     for (const [k, v] of verifiedResetPasswords.entries()) {
       obj[k] = v;
@@ -155,12 +180,16 @@ async function initPostgresPool(): Promise<void> {
           password_hash VARCHAR(255),
           auth_provider VARCHAR(64) DEFAULT 'password',
           email_verified BOOLEAN DEFAULT FALSE,
+          verification_code VARCHAR(16),
+          verification_code_expires_at TIMESTAMPTZ DEFAULT NULL,
           failed_login_attempts INT DEFAULT 0,
           locked_until TIMESTAMPTZ DEFAULT NULL,
           last_login_ip VARCHAR(64),
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+        ALTER TABLE account_directory ADD COLUMN IF NOT EXISTS verification_code VARCHAR(16);
+        ALTER TABLE account_directory ADD COLUMN IF NOT EXISTS verification_code_expires_at TIMESTAMPTZ DEFAULT NULL;
         CREATE TABLE IF NOT EXISTS users (
           uid VARCHAR(128) PRIMARY KEY,
           email VARCHAR(255) UNIQUE NOT NULL,
@@ -413,7 +442,7 @@ async function upsertClinicalRecordToPostgres(
       );
       await syncAccountToPostgres({
         email,
-        emailVerified: true,
+        emailVerified: verifiedEmailAddresses.has(email),
       });
       return true;
     }
@@ -1548,7 +1577,113 @@ async function startServer() {
     }
   });
 
-  // 3. Branded Welcome & Verification Notification Email with Official Logo via SMTP
+  // Helper: Generate & store a 6-digit numeric verification code in Ubuntu PostgreSQL (`account_directory`) and disk store
+  async function generateAndStoreVerificationCode(rawEmail: string): Promise<string> {
+    const clean = rawEmail.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+    const code = String(crypto.randomInt(100000, 1000000));
+    const expiresAtMs = Date.now() + 15 * 60 * 1000; // Valid for 15 minutes
+    const expiresAtIso = new Date(expiresAtMs).toISOString();
+
+    emailVerificationCodes.set(clean, { code, expiresAt: expiresAtMs });
+    saveCredentialsStoreToDisk();
+
+    if (!pgConnected) {
+      await initPostgresPool();
+    }
+    if (pgPool && pgConnected) {
+      try {
+        const emailHash = crypto.createHash('sha256').update(`gmp_acct_${clean}`).digest('hex');
+        const pwHash = verifiedResetPasswords.get(clean) || null;
+        await pgPool.query(
+          `INSERT INTO account_directory (
+            email_hash, email, password_hash, auth_provider, email_verified,
+            verification_code, verification_code_expires_at, updated_at
+          ) VALUES ($1, $2, $3, 'password', FALSE, $4, $5, NOW())
+          ON CONFLICT (email_hash) DO UPDATE SET
+            email = EXCLUDED.email,
+            verification_code = EXCLUDED.verification_code,
+            verification_code_expires_at = EXCLUDED.verification_code_expires_at,
+            updated_at = NOW()`,
+          [emailHash, clean, pwHash, code, expiresAtIso]
+        );
+      } catch (err) {
+        pgLastError = err instanceof Error ? err.message : String(err);
+      }
+    }
+    return code;
+  }
+
+  // Helper: Validate a 6-digit verification code against Ubuntu PostgreSQL (`account_directory`) and server store
+  async function verifySixDigitEmailCode(rawEmail: string, rawCode: string): Promise<boolean> {
+    const clean = rawEmail.trim().toLowerCase().replace(/\+portal(?=@)/i, '');
+    const cleanCode = rawCode.replace(/\D/g, '').trim();
+    if (!clean || cleanCode.length !== 6) return false;
+
+    const now = Date.now();
+    let matched = false;
+
+    // 1. Check Ubuntu PostgreSQL `account_directory` table first
+    if (!pgConnected) {
+      await initPostgresPool();
+    }
+    if (pgPool && pgConnected) {
+      try {
+        const pgRes = await pgPool.query(
+          `SELECT verification_code, verification_code_expires_at
+           FROM account_directory
+           WHERE email = $1
+           LIMIT 1`,
+          [clean]
+        );
+        const row = pgRes.rows[0];
+        if (row?.verification_code) {
+          const dbCode = String(row.verification_code).trim();
+          const dbExp = row.verification_code_expires_at
+            ? new Date(row.verification_code_expires_at).getTime()
+            : now + 60_000;
+          if (dbCode === cleanCode && dbExp > now) {
+            matched = true;
+          }
+        }
+      } catch {
+        // Fall through to server store check
+      }
+    }
+
+    // 2. Also check in-memory / disk store
+    if (!matched) {
+      const memRecord = emailVerificationCodes.get(clean);
+      if (memRecord && memRecord.code === cleanCode && memRecord.expiresAt > now) {
+        matched = true;
+      }
+    }
+
+    if (!matched) return false;
+
+    // 3. Mark email verified in server store and Ubuntu PostgreSQL (`account_directory`)
+    emailVerificationCodes.delete(clean);
+    persistEmailVerified(clean);
+
+    if (pgPool && pgConnected) {
+      try {
+        await pgPool.query(
+          `UPDATE account_directory
+           SET email_verified = TRUE,
+               verification_code = NULL,
+               verification_code_expires_at = NULL,
+               updated_at = NOW()
+           WHERE email = $1`,
+          [clean]
+        );
+      } catch {
+        // non-fatal
+      }
+    }
+
+    return true;
+  }
+
+  // 3. Standalone 6-Digit Verification Code & Welcome Email via Clinic SMTP + Ubuntu PostgreSQL (Zero Firebase)
   app.post('/api/email/welcome-verify', async (req, res) => {
     try {
       const fullName = escapeHtml(req.body?.fullName, 160);
@@ -1557,9 +1692,9 @@ async function startServer() {
       const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
       const isResendOnly = Boolean(req.body?.resendOnly);
       const requireEmailVerification = Boolean(req.body?.requireEmailVerification);
-      const targetOrigin = getSafeClientOrigin(req.body?.clientOrigin);
+      const clinicAlertOnly = Boolean(req.body?.clinicAlertOnly);
 
-      if (email) {
+      if (email && !clinicAlertOnly) {
         const cleanEmail = email.replace(/\+portal(?=@)/i, '');
         if (requireEmailVerification && !AUTHORIZED_ADMINS.has(cleanEmail)) {
           verifiedEmailAddresses.delete(cleanEmail);
@@ -1569,21 +1704,22 @@ async function startServer() {
             emailVerified: false,
           });
         }
-        const verifyToken = createSignedResetToken(email);
-        const directVerifyUrl = `${targetOrigin}/?page=portal&mode=verifyEmail&email=${encodeURIComponent(
-          email
-        )}&verifyToken=${encodeURIComponent(verifyToken)}`;
+
+        const verificationCode = await generateAndStoreVerificationCode(cleanEmail);
 
         const clientHtml = buildBrandedEmailHtml(
-          'Verify Your Email & Welcome to Golden Mind Psychiatry PLLC',
+          `Your 6-Digit Verification Code: ${verificationCode} — Golden Mind Psychiatry PLLC`,
           `
           <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:20px;">Welcome to Golden Mind Psychiatry PLLC, ${fullName || 'Valued Client'}!</h2>
-          <p style="margin:0 0 16px 0;">Thank you for creating your HIPAA-encrypted Client Portal account associated with <strong>${email}</strong>. At Golden Mind Psychiatry PLLC, <em>“Where Every Mind Is Golden,”</em> we are honored to partner with you on your mental wellness journey.</p>
-          <p style="margin:0 0 16px 0;">Click the button below to <strong>verify your email address</strong> and enter your Client Portal immediately:</p>
+          <p style="margin:0 0 16px 0;">Thank you for creating or signing into your HIPAA-encrypted Client Portal account associated with <strong>${email}</strong>. At Golden Mind Psychiatry PLLC, <em>“Where Every Mind Is Golden,”</em> we are honored to partner with you on your mental wellness journey.</p>
+          <p style="margin:0 0 12px 0;">Please enter the <strong>6-digit verification code</strong> below on your Client Portal screen to verify your email address and unlock your portal immediately:</p>
           <div style="text-align:center;margin:24px 0;">
-            <a href="${directVerifyUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#F3E5AB 0%,#D4AF37 50%,#AA7C11 100%);color:#1C1917;font-weight:700;text-decoration:none;border-radius:12px;">
-              Verify My Email &amp; Enter Client Portal
-            </a>
+            <div style="display:inline-block;padding:18px 36px;background:#FAF6EA;border:2px solid #D4AF37;border-radius:16px;font-size:32px;font-weight:800;letter-spacing:8px;color:#1C1917;font-family:'Courier New',Courier,monospace;">
+              ${verificationCode}
+            </div>
+            <div style="font-size:12px;color:#57534E;margin-top:8px;">
+              This 6-digit verification code is valid for 15 minutes.
+            </div>
           </div>
           <div style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:16px;padding:18px 20px;margin:0 0 20px 0;">
             <div style="font-size:12px;font-weight:700;color:#9E7206;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;">
@@ -1591,17 +1727,16 @@ async function startServer() {
             </div>
             <ul style="margin:0;padding-left:18px;font-size:13px;color:#44403C;line-height:1.7;">
               <li><strong>Complete Your Digital Intake Forms:</strong> Fill out your Psychiatric Intake &amp; Consent prior to your session.</li>
-              <li><strong>Join 100% Telehealth Video Visits:</strong> Connect with Brenda Hobyani, MSN, APRN, PMHNP-BC from anywhere in Texas or New Mexico.</li>
+              <li><strong>Join 100% Telehealth Video Visits:</strong> Connect with Brenda Hobyani, MSN, APRN, PMHNP-BC from anywhere in Texas.</li>
               <li><strong>Track Progress &amp; Refills:</strong> Submit PHQ-9 / GAD-7 check-ins and request prescription refills with 1 click.</li>
               <li><strong>Direct Provider Messaging:</strong> Message your provider directly inside your encrypted portal.</li>
             </ul>
           </div>
-          <p style="margin:0;font-size:12px;color:#57534E;">Or copy and paste this verification link into your browser:<br /><a href="${directVerifyUrl}" style="color:#9E7206;word-break:break-all;">${directVerifyUrl}</a></p>
           `
         );
         const clientResult = await sendClinicEmail({
           to: email,
-          subject: 'Verify Your Email & Welcome to Golden Mind Psychiatry PLLC',
+          subject: `Your 6-Digit Verification Code: ${verificationCode} — Golden Mind Psychiatry PLLC`,
           html: clientHtml,
         });
 
@@ -1615,7 +1750,7 @@ async function startServer() {
         `New Client Portal Registration: ${fullName || email}`,
         `
         <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Portal Registration</h2>
-        <p><strong>${fullName || 'New Patient'}</strong> (${email} · ${phone || 'No phone provided'}${insuranceProvider ? ` · Insurance: ${insuranceProvider}` : ''}) has registered for a Client Portal account and was sent a Welcome &amp; Verification email.</p>
+        <p><strong>${fullName || 'New Patient'}</strong> (${email} · ${phone || 'No phone provided'}${insuranceProvider ? ` · Insurance: ${insuranceProvider}` : ''}) has registered for a Client Portal account and was sent a 6-digit verification code via SMTP.</p>
         `
       );
       const result = await sendClinicEmail({
@@ -1626,12 +1761,62 @@ async function startServer() {
 
       res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
     } catch (error) {
-      console.error('Welcome email dispatch error:', error);
+      console.error('Welcome verification code email dispatch error:', error);
       res.status(200).json({ ok: true, deliveredViaSmtp: false });
     }
   });
 
-  // 3A. Verify Email Token from Clinic SMTP Welcome/Verification Email & Persist in Database
+  // 3A. Verify 6-Digit Code from Clinic SMTP Against Ubuntu PostgreSQL (`account_directory`)
+  app.post('/api/email/verify-code', async (req, res) => {
+    const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+    if (!email || !code) {
+      res.status(400).json({
+        ok: false,
+        verified: false,
+        error: 'Please enter the 6-digit verification code sent to your email.',
+      });
+      return;
+    }
+
+    const isValid = await verifySixDigitEmailCode(email, code);
+    if (!isValid) {
+      res.status(400).json({
+        ok: false,
+        verified: false,
+        error:
+          'Invalid or expired 6-digit verification code. Please check the code in your email inbox or click "Resend New 6-Digit Code".',
+      });
+      return;
+    }
+
+    await syncEmailVerifiedToFirestoreRest(email);
+    let token = '';
+    let userProfile: Record<string, unknown> | null = null;
+    try {
+      userProfile = await ensureStandalonePostgresUser({
+        email,
+        emailVerified: true,
+      });
+      token = signStandaloneJwt({
+        uid: String(userProfile.uid),
+        email,
+        role: String(userProfile.role || 'patient'),
+      });
+    } catch {
+      // non-fatal
+    }
+
+    res.json({
+      ok: true,
+      verified: true,
+      email,
+      token,
+      user: userProfile,
+    });
+  });
+
+  // 3A-Legacy. Verify Email Token from Clinic SMTP Welcome/Verification Email & Persist in Database
   app.post('/api/email/verify-email-token', async (req, res) => {
     const email = sanitizeEmailAddress(req.body?.email).replace(/\+portal(?=@)/i, '');
     const verifyToken = typeof req.body?.verifyToken === 'string' ? req.body.verifyToken.trim() : '';

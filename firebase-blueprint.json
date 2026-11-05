@@ -208,11 +208,12 @@
     },
     "AccountDirectoryEntry": {
       "title": "AccountDirectoryEntry",
-      "description": "Zero-PII SHA-256 email hash registry, verification status, and password hash verifier for portal accounts",
+      "description": "Zero-PII SHA-256 email hash registry, verification status, 6-digit verification code hash, and password hash verifier for portal accounts",
       "type": "object",
       "properties": {
         "exists": { "type": "boolean", "description": "Always true for registered accounts" },
         "passwordHash": { "type": "string", "description": "Salted SHA-256 hex digest of the account password" },
+        "verificationCodeHash": { "type": "string", "description": "Salted SHA-256 hex digest of the 6-digit email verification code" },
         "emailVerified": { "type": "boolean", "description": "Whether the user has verified their email address" },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of registration or password update" }
       },

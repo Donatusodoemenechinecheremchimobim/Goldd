@@ -144,10 +144,11 @@ service cloud.firestore {
 
     function isValidAccountDirectoryEntry(data) {
       return data.keys().hasAll(['exists', 'updatedAt']) &&
-        data.keys().hasOnly(['exists', 'updatedAt', 'passwordHash', 'emailVerified']) &&
+        data.keys().hasOnly(['exists', 'updatedAt', 'passwordHash', 'emailVerified', 'verificationCodeHash']) &&
         data.exists == true &&
         isValidString(data.updatedAt, 1, 64) &&
         (!('passwordHash' in data) || isValidString(data.passwordHash, 16, 128)) &&
+        (!('verificationCodeHash' in data) || isValidString(data.verificationCodeHash, 16, 128)) &&
         (!('emailVerified' in data) || data.emailVerified is bool);
     }
 

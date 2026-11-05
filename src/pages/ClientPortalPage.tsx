@@ -156,6 +156,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   const [authError, setAuthError] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [verificationCodeInput, setVerificationCodeInput] = useState('');
+  const [verifyingCodeSubmitting, setVerifyingCodeSubmitting] = useState(false);
+  const [resendingCodeSubmitting, setResendingCodeSubmitting] = useState(false);
 
   // Auth Form State & Anti-Brute-Force / Bot Protection
   const [isRegistering, setIsRegistering] = useState(false);
@@ -904,7 +907,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Completes session onboarding after any Firebase Auth sign-in or registration
+  // Completes session onboarding after any sign-in or registration (Standalone 6-Digit Code via SMTP + PostgreSQL)
   const completeAuthenticatedSession = async (
     user: FirebaseUser,
     isNewAccount: boolean,
@@ -912,6 +915,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   ) => {
     const isProvider = isAuthorizedProviderEmail(user.email);
     const cleanNewEmail = normalizePortalEmail(user.email || '');
+    let alreadyVerifiedInDb = false;
+
     if (isOneClick) {
       if (cleanNewEmail) {
         window.sessionStorage.removeItem(`gmp_pending_verify_${cleanNewEmail}`);
@@ -924,7 +929,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         void registerEmailInAccountDirectory(user.email, undefined, true);
       }
     } else if (isNewAccount && !isProvider) {
-      // Brand-new email/password account MUST verify via email link before accessing the portal
+      // Brand-new email/password account MUST enter the 6-digit verification code from SMTP/PostgreSQL before accessing the portal
       window.sessionStorage.removeItem('gmp_used_oneclick');
       setUsedOneClickMethod(false);
       if (cleanNewEmail) {
@@ -937,16 +942,28 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       if (user.email) {
         void registerEmailInAccountDirectory(user.email, undefined, false);
       }
-    } else if (user.email) {
-      void registerEmailInAccountDirectory(user.email);
+    } else if (!isProvider && cleanNewEmail) {
+      alreadyVerifiedInDb = await checkEmailVerifiedInAccountDirectory(cleanNewEmail);
+      if (alreadyVerifiedInDb) {
+        window.sessionStorage.removeItem(`gmp_pending_verify_${cleanNewEmail}`);
+        window.sessionStorage.setItem(`gmp_oneclick_${user.uid}`, '1');
+        setOneClickVerifiedSession(true);
+      } else {
+        window.sessionStorage.setItem(`gmp_pending_verify_${cleanNewEmail}`, '1');
+        window.sessionStorage.removeItem(`gmp_oneclick_${user.uid}`);
+        setOneClickVerifiedSession(false);
+      }
+      if (user.email) {
+        void registerEmailInAccountDirectory(user.email);
+      }
     }
+
     if (isProvider) {
       setWorkspaceMode('provider');
-    } else if ((isNewAccount || !user.emailVerified) && !isOneClick) {
-      let smtpDelivered = false;
+    } else if ((isNewAccount || !alreadyVerifiedInDb) && !isOneClick) {
       if (user.email) {
         try {
-          const resp = await fetch('/api/email/welcome-verify', {
+          await fetch('/api/email/welcome-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -960,20 +977,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               clientOrigin: window.location.origin,
             }),
           });
-          const data = await resp.json();
-          smtpDelivered = Boolean(data?.deliveredViaSmtp);
         } catch {
           // ignore
         }
       }
-      const verifyErr = await safeSendVerificationEmail(user);
-      if (verifyErr && !smtpDelivered) {
-        setAuthError(verifyErr);
-      } else {
-        setVerificationNotice(
-          `Welcome! A verification link has been sent to ${user.email}. Please open your email inbox and click "Verify My Email & Enter Client Portal" to unlock your portal.`
-        );
-      }
+      setVerificationCodeInput('');
+      setVerificationNotice(
+        `We sent a 6-digit verification code to ${user.email}. Please check your email inbox and enter the 6-digit code below to unlock your Client Portal.`
+      );
     }
     const resolvedSignupGender =
       genderInput === 'Other'
@@ -1768,7 +1779,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         // Non-fatal
       }
 
-      // Dispatch clinic registration notification email
+      // Dispatch clinic registration notification email (without re-sending verification code)
       fetch('/api/email/welcome-verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1778,6 +1789,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
           phone: cleanPhone,
           dateOfBirth: cleanDob,
           insuranceProvider: cleanInsurance,
+          clinicAlertOnly: true,
         }),
       }).catch(() => {});
     } catch (err) {
@@ -2077,9 +2089,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const targetEmail = normalizePortalEmail(
       auth.currentUser?.email || firebaseUser?.email || portalUser?.email || emailInput
     );
-    if (!targetEmail) return;
+    if (!targetEmail || resendingCodeSubmitting) return;
 
-    let smtpDelivered = false;
+    setResendingCodeSubmitting(true);
     try {
       const resp = await fetch('/api/email/welcome-verify', {
         method: 'POST',
@@ -2092,70 +2104,83 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         }),
       });
       const data = await resp.json();
-      smtpDelivered = Boolean(data?.deliveredViaSmtp);
+      if (data?.ok) {
+        setVerificationCodeInput('');
+        setVerificationNotice(
+          `A new 6-digit verification code has been sent to ${targetEmail}. Please check your inbox (and Spam/Junk folder) and enter the 6-digit code below.`
+        );
+      } else {
+        setAuthError('Could not send a new verification code. Please try again in a moment.');
+      }
     } catch {
-      // ignore
-    }
-
-    let verifyErr: string | null = null;
-    if (auth.currentUser) {
-      verifyErr = await safeSendVerificationEmail(auth.currentUser);
-    }
-    if (verifyErr && !smtpDelivered) {
-      setAuthError(verifyErr);
-    } else {
-      setVerificationNotice(
-        `A fresh verification link has been sent to ${targetEmail}. Please check your inbox (and Spam/Junk folder) and click "Verify My Email & Enter Client Portal" to verify your account.`
-      );
+      setAuthError('Could not reach the server to resend your 6-digit verification code.');
+    } finally {
+      setResendingCodeSubmitting(false);
     }
   };
 
-  const handleRefreshVerification = async () => {
+  const handleVerifySixDigitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
     setAuthError(null);
     setVerificationNotice(null);
+
     const activeEmail = normalizePortalEmail(
       auth.currentUser?.email || firebaseUser?.email || portalUser?.email || emailInput
     );
+    const cleanCode = verificationCodeInput.replace(/\D/g, '').trim();
 
-    let isNowVerified = false;
-
-    if (auth.currentUser) {
-      try {
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          isNowVerified = true;
-          setFirebaseUser({ ...auth.currentUser });
-        }
-      } catch {
-        // ignore reload issues
-      }
+    if (!activeEmail) {
+      setAuthError('Unable to determine your account email address. Please sign in again.');
+      return;
     }
-
-    if (!isNowVerified && activeEmail) {
-      const verifiedInDir = await checkEmailVerifiedInAccountDirectory(activeEmail);
-      if (verifiedInDir) {
-        isNowVerified = true;
-      }
-    }
-
-    if (!isNowVerified) {
-      setAuthError(
-        `Your email address (${activeEmail}) has not been verified yet. Please open the verification email sent to ${activeEmail} (check your Inbox and Spam/Junk folder) and click "Verify My Email & Enter Client Portal" first.`
-      );
+    if (cleanCode.length !== 6) {
+      setAuthError('Please enter the 6-digit numeric verification code sent to your email.');
       return;
     }
 
-    if (auth.currentUser) {
-      window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
-    }
-    if (activeEmail) {
-      window.sessionStorage.removeItem(`gmp_pending_verify_${activeEmail}`);
-      await markEmailVerifiedInAccountDirectory(activeEmail);
-    }
+    setVerifyingCodeSubmitting(true);
+    try {
+      const resp = await fetch('/api/email/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: activeEmail,
+          code: cleanCode,
+        }),
+      });
+      const data = await resp.json();
 
-    setOneClickVerifiedSession(true);
-    setVerificationNotice('Your email address is verified! Welcome to your Client Portal.');
-    setTimeout(() => setVerificationNotice(null), 5000);
+      if (!resp.ok || !data?.ok || !data?.verified) {
+        setAuthError(
+          data?.error ||
+            'Invalid or expired 6-digit verification code. Please check the code in your email or click "Resend New 6-Digit Code" below.'
+        );
+        return;
+      }
+
+      if (data.token) {
+        window.localStorage.setItem('gmp_standalone_jwt', data.token);
+      }
+      if (auth.currentUser) {
+        window.sessionStorage.setItem(`gmp_oneclick_${auth.currentUser.uid}`, '1');
+      } else if (firebaseUser?.uid) {
+        window.sessionStorage.setItem(`gmp_oneclick_${firebaseUser.uid}`, '1');
+      }
+
+      window.sessionStorage.removeItem(`gmp_pending_verify_${activeEmail}`);
+      window.localStorage.setItem(`gmp_verified_email_${activeEmail}`, '1');
+      window.sessionStorage.setItem(`gmp_verified_email_${activeEmail}`, '1');
+      await markEmailVerifiedInAccountDirectory(activeEmail);
+
+      setVerificationCodeInput('');
+      setOneClickVerifiedSession(true);
+      setVerificationNotice('Your 6-digit code was verified! Welcome to your Client Portal.');
+      setTimeout(() => setVerificationNotice(null), 5000);
+    } catch {
+      setAuthError('Unable to verify your 6-digit code right now. Please check your connection and try again.');
+    } finally {
+      setVerifyingCodeSubmitting(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -2709,8 +2734,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    <strong>Mandatory Email Verification:</strong> Account registration dispatches a
-                    verification link directly to your email inbox before portal access is unlocked.
+                    <strong>Mandatory 6-Digit Email Verification:</strong> Account registration dispatches a
+                    6-digit verification code directly to your email inbox before portal access is unlocked.
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5">
@@ -3517,10 +3542,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     );
 
   // ============================================================================
-  // 2. STRICT EMAIL VERIFICATION GATE (Runs FIRST for All Email/Password Accounts!)
-  //    Blocks access until the verification link sent to the user's email is clicked.
+  // 2. STRICT 6-DIGIT EMAIL VERIFICATION CODE GATE (Standalone PostgreSQL + SMTP)
+  //    Blocks access until the 6-digit code sent via clinic SMTP is verified against PostgreSQL.
   // ============================================================================
-  if (!firebaseUser.emailVerified && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
+  if (!oneClickVerifiedSession && !isFederatedOAuthProvider && !isVerifiedProviderAccount) {
     return (
       <section className="min-h-[82vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 flex items-center justify-center font-portal-body">
         <div className="max-w-lg w-full bg-white border border-stone-200 rounded-[32px] p-8 sm:p-10 shadow-xl space-y-6 text-center">
@@ -3530,16 +3555,16 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
           <div className="space-y-2">
             <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
-              Step 1 of 2 · Email Verification Required
+              Step 1 of 2 · 6-Digit Email Verification Required
             </span>
             <h1 className="text-2xl font-bold font-portal-heading text-stone-900">
-              Verify Your Email Address
+              Enter Your 6-Digit Verification Code
             </h1>
             <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-              We have sent a verification email to{' '}
+              We have sent a 6-digit verification code to{' '}
               <strong className="text-stone-900">{firebaseUser.email || portalUser.email}</strong>.
-              For your HIPAA privacy and security, you cannot access your Client Portal until you
-              open your email inbox and click the verification link.
+              For your HIPAA privacy and security, please enter the 6-digit code from your email
+              below to verify your account and unlock your Client Portal.
             </p>
           </div>
 
@@ -3557,22 +3582,62 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             </div>
           )}
 
-          <div className="space-y-3 pt-2">
-            <button
-              type="button"
-              onClick={handleRefreshVerification}
-              className="w-full py-3.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>I Have Clicked the Link in My Email — Enter Portal</span>
-            </button>
+          <form onSubmit={handleVerifySixDigitCode} className="space-y-4 pt-2">
+            <div>
+              <label
+                htmlFor="portal-verification-code-input"
+                className="block text-[11px] font-bold uppercase tracking-widest text-stone-500 mb-2"
+              >
+                6-Digit Verification Code
+              </label>
+              <input
+                id="portal-verification-code-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={verificationCodeInput}
+                onChange={(e) => {
+                  const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setVerificationCodeInput(digitsOnly);
+                  if (authError) setAuthError(null);
+                }}
+                placeholder="000000"
+                className="w-full py-3.5 px-4 rounded-[14px] bg-[#FAF6EA] border-2 border-[#D4AF37] text-center text-2xl sm:text-3xl font-extrabold tracking-[0.45em] text-stone-900 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                required
+              />
+              <p className="text-[11px] text-stone-500 mt-1.5">
+                Code expires in 15 minutes · Check Inbox &amp; Spam/Junk folder
+              </p>
+            </div>
 
             <button
-              type="button"
-              onClick={handleResendVerification}
-              className="w-full py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs cursor-pointer hover:bg-[#f3ebd3] transition-colors"
+              type="submit"
+              disabled={verifyingCodeSubmitting || verificationCodeInput.replace(/\D/g, '').length !== 6}
+              className="w-full py-3.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-stone-800 transition-colors disabled:opacity-50"
             >
-              Resend Verification Email to {firebaseUser.email || portalUser.email}
+              <CheckCircle2 className="w-4 h-4" />
+              <span>
+                {verifyingCodeSubmitting
+                  ? 'Verifying 6-Digit Code...'
+                  : 'Verify 6-Digit Code & Enter Client Portal'}
+              </span>
+            </button>
+          </form>
+
+          <div className="space-y-2.5 pt-1">
+            <button
+              type="button"
+              disabled={resendingCodeSubmitting}
+              onClick={handleResendVerification}
+              className="w-full py-3 px-4 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[#9E7206] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-[#f3ebd3] transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${resendingCodeSubmitting ? 'animate-spin' : ''}`} />
+              <span>
+                {resendingCodeSubmitting
+                  ? 'Sending New 6-Digit Code...'
+                  : `Resend New 6-Digit Code to ${firebaseUser.email || portalUser.email}`}
+              </span>
             </button>
 
             <button
