@@ -54,6 +54,8 @@ import {
   MessageRecord,
   InvoiceRecord,
   SharedPatientResource,
+  ProviderUnavailableDateRecord,
+  BlockedTimeWindow,
 } from '../types';
 import {
   providerProcessRefill,
@@ -63,6 +65,7 @@ import {
   isAuthorizedProviderEmail,
   registerEmailInAccountDirectory,
   computeEmailDirectoryHash,
+  fetchProviderUnavailableDates,
 } from '../services/clinicalAutomation';
 import { PrintableSuperbillModal } from './BillingAndSuperbillModals';
 import { ProviderPatientNotesManager } from './ProviderPatientNotesManager';
@@ -201,6 +204,72 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [apptReason, setApptReason] = useState('Psychiatric Follow-Up & Medication Management');
   const [apptDate, setApptDate] = useState('');
   const [apptTime, setApptTime] = useState('Mon–Thu Morning (9:00 AM - 12:00 PM)');
+
+  // Brenda's Unavailable / Blocked Dates State (Reflected Live When Clients Book or Reschedule)
+  const [unavailableDates, setUnavailableDates] = useState<ProviderUnavailableDateRecord[]>([]);
+  const [blockStartDate, setBlockStartDate] = useState('');
+  const [blockEndDate, setBlockEndDate] = useState('');
+  const [blockWindow, setBlockWindow] = useState<BlockedTimeWindow>('All Day');
+  const [blockReason, setBlockReason] = useState('Provider Out of Office / Unavailable');
+  const [savingBlockedDate, setSavingBlockedDate] = useState(false);
+
+  useEffect(() => {
+    fetchProviderUnavailableDates().then((list) => setUnavailableDates(list));
+  }, []);
+
+  const handleAddUnavailableDate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blockStartDate) return;
+    setSavingBlockedDate(true);
+    const effectiveEnd = blockEndDate && blockEndDate >= blockStartDate ? blockEndDate : blockStartDate;
+    try {
+      const res = await fetch('/api/availability/unavailable-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: blockStartDate,
+          endDate: effectiveEnd,
+          blockedWindow: blockWindow,
+          reason: sanitizeClinicalInput(blockReason || 'Provider Out of Office / Unavailable', 180),
+          createdBy: currentUser.fullName || 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok && data.record) {
+        const created = data.record as ProviderUnavailableDateRecord;
+        setUnavailableDates((prev) =>
+          [...prev.filter((d) => d.id !== created.id), created].sort((a, b) =>
+            a.startDate.localeCompare(b.startDate)
+          )
+        );
+        setBlockStartDate('');
+        setBlockEndDate('');
+        showBanner(
+          `Blocked ${
+            created.startDate === created.endDate
+              ? created.startDate
+              : `${created.startDate} to ${created.endDate}`
+          } (${created.blockedWindow}) — clients will now see this date as unavailable when booking.`
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSavingBlockedDate(false);
+    }
+  };
+
+  const handleDeleteUnavailableDate = async (id: string) => {
+    try {
+      await fetch(`/api/availability/unavailable-dates/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      setUnavailableDates((prev) => prev.filter((d) => d.id !== id));
+      showBanner('Date unblocked — clients can now book appointments on that date.');
+    } catch {
+      // ignore
+    }
+  };
 
   // New Medication form state (Provider prescribing)
   const [rxPatientId, setRxPatientId] = useState('');
@@ -1417,6 +1486,12 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
         }),
       }).catch(() => {});
 
+      await fetch('/api/billing/notify-invoice-issued', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newInvoiceData),
+      }).catch(() => {});
+
       try {
         await setDoc(doc(db, 'invoices', invId), newInvoiceData);
       } catch {
@@ -1429,7 +1504,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
       showBanner(
         `Itemized statement (CPT ${cleanCpt} · Patient balance $${resp.toFixed(2)}) posted to ${
           targetPatient?.fullName || 'patient'
-        }'s portal.`
+        }'s portal & emailed to ${targetPatient?.email || 'client'}.`
       );
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'invoices');
@@ -3744,9 +3819,173 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
             </div>
           )}
 
-          {/* Sub-Tab 1: Engagement Requests & Payment History */}
+          {/* Sub-Tab 1: Engagement Requests, Provider Availability & Payment History */}
           {activeSubTab === 'queue' && (
             <>
+              {/* Brenda's Availability & Out-of-Office Date Blocker */}
+              <div className="bg-white portal-card p-6 space-y-4 border-2 border-[#D4AF37]/45">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] text-[10px] font-bold uppercase tracking-widest">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Real-Time Client Booking Calendar Control
+                    </span>
+                    <h3 className="text-lg font-bold font-portal-heading text-stone-900 mt-1">
+                      Brenda&apos;s Unavailable Dates &amp; Out-of-Office Blocker
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Select any date or date range below that you will not be available. Clients
+                      trying to book or reschedule an appointment on these dates will automatically
+                      be notified and prevented from booking that date/window.
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={handleAddUnavailableDate}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end pt-1"
+                >
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={blockStartDate}
+                      onChange={(e) => {
+                        setBlockStartDate(e.target.value);
+                        if (!blockEndDate || blockEndDate < e.target.value) {
+                          setBlockEndDate(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                      End Date (Same or Range)
+                    </label>
+                    <input
+                      type="date"
+                      min={blockStartDate || undefined}
+                      value={blockEndDate}
+                      onChange={(e) => setBlockEndDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                      Time Window to Block
+                    </label>
+                    <select
+                      value={blockWindow}
+                      onChange={(e) => setBlockWindow(e.target.value as BlockedTimeWindow)}
+                      className="w-full px-3 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-800"
+                    >
+                      <option value="All Day">All Day (Entire Date Unavailable)</option>
+                      <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
+                        Morning Only (8:00 AM - 12:00 PM)
+                      </option>
+                      <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
+                        Afternoon Only (12:00 PM - 4:00 PM)
+                      </option>
+                      <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
+                        Friday Window (9:00 AM - 1:00 PM)
+                      </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                      Public Notice / Reason
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Out of Office / Holiday"
+                      value={blockReason}
+                      onChange={(e) => setBlockReason(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={savingBlockedDate || !blockStartDate}
+                      className="w-full py-2.5 px-4 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs hover:bg-stone-800 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingBlockedDate ? 'Blocking...' : '+ Block Date(s)'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Quick Reason Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="text-stone-500 font-semibold">Quick Reasons:</span>
+                  {[
+                    'Provider Out of Office / Unavailable',
+                    'Holiday / Clinic Closed',
+                    'Schedule Fully Booked',
+                    'Continuing Medical Education (CME)',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setBlockReason(preset)}
+                      className="px-2.5 py-1 rounded-lg bg-[#FAF6EA] border border-[#D4AF37]/40 text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] font-semibold cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Active Blocked Dates List */}
+                <div className="pt-2 border-t border-stone-200">
+                  {unavailableDates.length === 0 ? (
+                    <p className="text-xs text-stone-500">
+                      No custom blocked dates currently set. Standard clinic hours (Mon–Thu 8:00 AM –
+                      4:00 PM, Fri 9:00 AM – 1:00 PM; Sat–Sun Closed) are active.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-stone-800">
+                        Currently Blocked Dates ({unavailableDates.length}):
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {unavailableDates.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 rounded-[14px] bg-[#FAF9F5] border border-stone-200 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-stone-900 font-mono">
+                                {item.startDate === item.endDate
+                                  ? item.startDate
+                                  : `${item.startDate} → ${item.endDate}`}
+                                <span className="ml-2 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-sans text-[10px] font-bold">
+                                  {item.blockedWindow}
+                                </span>
+                              </p>
+                              <p className="text-[11px] text-stone-600">{item.reason}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUnavailableDate(item.id)}
+                              className="px-3 py-1.5 rounded-[10px] bg-white border border-stone-300 text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 font-bold text-[11px] cursor-pointer shrink-0"
+                            >
+                              Unblock
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between px-1">
                   <div>

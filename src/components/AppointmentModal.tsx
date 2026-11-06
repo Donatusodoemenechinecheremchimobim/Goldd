@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, CheckCircle2, Video, Shield, ShieldCheck, AlertCircle } from 'lucide-react';
 import { conditionsData } from '../data/conditions';
-import { AppointmentFormData } from '../types';
+import {
+   AppointmentFormData,
+  ProviderUnavailableDateRecord,
+} from '../types';
 import { auth } from '../lib/firebase';
-import { createTelehealthAppointment, ensurePatientOnboarding } from '../services/clinicalAutomation';
+import {
+  createTelehealthAppointment,
+  ensurePatientOnboarding,
+  fetchProviderUnavailableDates,
+  evaluateDateAndWindowAvailability,
+} from '../services/clinicalAutomation';
 
 interface AppointmentModalProps {
   isOpen: boolean;
@@ -58,6 +66,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [provisionedRoomUrl, setProvisionedRoomUrl] = useState<string>('');
+  const [unavailableDates, setUnavailableDates] = useState<ProviderUnavailableDateRecord[]>([]);
 
   const patientAge = calculateAgeFromDob(formData.dateOfBirth);
   const isMinorPatient = patientAge !== null && patientAge >= 0 && patientAge < 18;
@@ -69,6 +78,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   }, [prefillCondition]);
 
   useEffect(() => {
+    if (isOpen) {
+      fetchProviderUnavailableDates().then((list) => setUnavailableDates(list));
+    }
     if (auth.currentUser) {
       setFormData((prev) => ({
         ...prev,
@@ -80,6 +92,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   if (!isOpen) return null;
 
+  const todayIso = new Date().toISOString().split('T')[0];
+  const upcomingBlockedDates = unavailableDates.filter(
+    (b) => (b.endDate || b.startDate) >= todayIso
+  );
+  const availabilityCheck = evaluateDateAndWindowAvailability(
+    formData.preferredDate,
+    formData.preferredTime,
+    unavailableDates
+  );
+
   const resolvedGender =
     genderSelection === 'Other'
       ? customGenderText.trim()
@@ -90,6 +112,14 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    if (availabilityCheck.isUnavailable) {
+      setFormError(
+        availabilityCheck.message ||
+          'The selected date or time window is unavailable. Please select another date.'
+      );
+      return;
+    }
 
     if (genderSelection === 'Other' && !customGenderText.trim()) {
       setFormError('Please state/specify your gender in the box provided.');
@@ -479,40 +509,84 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               )}
             </div>
 
-            {/* Date & Time Preferences */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
-                  Preferred Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.preferredDate}
-                  onChange={(e) => setFormData({ ...formData, preferredDate: e.target.value })}
-                  className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none font-mono tabular-nums"
-                />
+            {/* Date & Time Preferences (Live Synced with Brenda's Provider Availability) */}
+            <div className="space-y-3">
+              {upcomingBlockedDates.length > 0 && (
+                <div className="p-3 rounded-2xl bg-[#FAF6EA] border border-[#D4AF37]/55 text-[11px] text-[#44403C] space-y-1.5">
+                  <p className="font-bold text-[#9E7206] flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                    <span>Provider Unavailable Dates Notice (Brenda Hobyani, PMHNP-BC):</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {upcomingBlockedDates.map((b) => (
+                      <span
+                        key={b.id}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-[#D4AF37]/40 text-[10px] font-semibold text-stone-800"
+                      >
+                        {b.startDate === b.endDate
+                          ? b.startDate
+                          : `${b.startDate} to ${b.endDate}`}{' '}
+                        · {b.blockedWindow === 'All Day' ? 'Unavailable All Day' : b.blockedWindow}{' '}
+                        ({b.reason})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Preferred Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    min={todayIso}
+                    value={formData.preferredDate}
+                    onChange={(e) => setFormData({ ...formData, preferredDate: e.target.value })}
+                    className={`w-full bg-[#FAF8F5] border ${
+                      availabilityCheck.isUnavailable
+                        ? 'border-red-400 bg-red-50/40'
+                        : 'border-stone-200 focus:border-[#D4AF37]'
+                    } rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none font-mono tabular-nums`}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
+                    Preferred Time Window (Mon–Thu 8–4, Fri 9–1)
+                  </label>
+                  <select
+                    value={formData.preferredTime}
+                    onChange={(e) => setFormData({ ...formData, preferredTime: e.target.value })}
+                    className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none"
+                  >
+                    {[
+                      'Mon–Thu Morning (8:00 AM - 12:00 PM)',
+                      'Mon–Thu Afternoon (12:00 PM - 4:00 PM)',
+                      'Friday Morning / Midday (9:00 AM - 1:00 PM)',
+                    ].map((win) => {
+                      const isBlocked =
+                        availabilityCheck.isEntireDayBlocked ||
+                        availabilityCheck.blockedWindowsForDate.includes(win);
+                      return (
+                        <option key={win} value={win} disabled={isBlocked}>
+                          {win}
+                          {isBlocked ? ' — (Unavailable / Blocked)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="text-[11px] text-[#57534E] block mb-1 font-medium">
-                  Preferred Time Window (Mon–Thu 8–4, Fri 9–1)
-                </label>
-                <select
-                  value={formData.preferredTime}
-                  onChange={(e) => setFormData({ ...formData, preferredTime: e.target.value })}
-                  className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3.5 py-2.5 text-xs text-[#1C1917] focus:outline-none"
-                >
-                  <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
-                    Mon–Thu Morning (8:00 AM - 12:00 PM)
-                  </option>
-                  <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
-                    Mon–Thu Afternoon (12:00 PM - 4:00 PM)
-                  </option>
-                  <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
-                    Friday Morning / Midday (9:00 AM - 1:00 PM)
-                  </option>
-                </select>
-              </div>
+              {availabilityCheck.isUnavailable && availabilityCheck.message && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{availabilityCheck.message}</span>
+                </div>
+              )}
             </div>
 
             {/* Optional Notes */}
@@ -603,7 +677,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             <div className="pt-1">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || availabilityCheck.isUnavailable}
                 className="w-full py-3.5 rounded-full font-bold text-sm text-[#1C1917] bg-gold-gradient hover:shadow-[0_4px_20px_rgba(212,175,55,0.4)] transition-all transform active:scale-98 cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-60"
               >
                 <Calendar className="w-4 h-4 text-[#1C1917]" />

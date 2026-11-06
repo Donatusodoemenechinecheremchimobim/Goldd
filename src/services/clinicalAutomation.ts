@@ -18,6 +18,7 @@ import {
   AppointmentFormData,
   IntakeFormType,
   RefillStatus,
+  ProviderUnavailableDateRecord,
 } from '../types';
 
 export const CLINIC_OWNER_EMAIL = 'info@goldenmindpsychiatry.org';
@@ -1130,3 +1131,112 @@ export async function providerProcessRefill(params: {
     handleFirestoreError(err, OperationType.WRITE, `medications/${params.medicationId}`);
   }
 }
+
+/**
+ * Fetches Brenda's unavailable/blocked dates from the server (goldenmind_db)
+ */
+export async function fetchProviderUnavailableDates(): Promise<ProviderUnavailableDateRecord[]> {
+  try {
+    const res = await fetch('/api/availability/unavailable-dates');
+    const data = await res.json();
+    if (data?.ok && Array.isArray(data.unavailableDates)) {
+      return data.unavailableDates as ProviderUnavailableDateRecord[];
+    }
+  } catch {
+    // Ignore network error
+  }
+  return [];
+}
+
+/**
+ * Evaluates whether a chosen YYYY-MM-DD date and time window is available for booking/rescheduling
+ */
+export function evaluateDateAndWindowAvailability(
+  dateStr: string,
+  selectedWindow: string,
+  unavailableDates: ProviderUnavailableDateRecord[]
+): {
+  isUnavailable: boolean;
+  isEntireDayBlocked: boolean;
+  blockedWindowsForDate: string[];
+  message: string | null;
+} {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return {
+      isUnavailable: false,
+      isEntireDayBlocked: false,
+      blockedWindowsForDate: [],
+      message: null,
+    };
+  }
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  if (dateStr < todayIso) {
+    return {
+      isUnavailable: true,
+      isEntireDayBlocked: true,
+      blockedWindowsForDate: ['All Day'],
+      message: 'Please select today or a future date for your telehealth appointment.',
+    };
+  }
+
+  const parsedUtc = new Date(`${dateStr}T12:00:00Z`);
+  const dayOfWeek = parsedUtc.getUTCDay(); // 0 = Sun, 6 = Sat
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return {
+      isUnavailable: true,
+      isEntireDayBlocked: true,
+      blockedWindowsForDate: ['All Day'],
+      message:
+        'Golden Mind Psychiatry PLLC is closed on Saturdays and Sundays. Please select a Monday – Friday date (Mon–Thu 8:00 AM – 4:00 PM or Fri 9:00 AM – 1:00 PM).',
+    };
+  }
+
+  const matchingBlocks = unavailableDates.filter((b) => {
+    const start = b.startDate || '';
+    const end = b.endDate || b.startDate || '';
+    return start <= dateStr && dateStr <= end;
+  });
+
+  if (matchingBlocks.length === 0) {
+    return {
+      isUnavailable: false,
+      isEntireDayBlocked: false,
+      blockedWindowsForDate: [],
+      message: null,
+    };
+  }
+
+  const allDayBlock = matchingBlocks.find((b) => !b.blockedWindow || b.blockedWindow === 'All Day');
+  if (allDayBlock) {
+    return {
+      isUnavailable: true,
+      isEntireDayBlocked: true,
+      blockedWindowsForDate: ['All Day'],
+      message: `Brenda Hobyani, PMHNP-BC is unavailable on ${dateStr} (${
+        allDayBlock.reason || 'Provider Out of Office'
+      }). Please select another available date.`,
+    };
+  }
+
+  const blockedWindows = matchingBlocks.map((b) => b.blockedWindow);
+  const matchingWindowBlock = matchingBlocks.find((b) => b.blockedWindow === selectedWindow);
+  if (matchingWindowBlock) {
+    return {
+      isUnavailable: true,
+      isEntireDayBlocked: false,
+      blockedWindowsForDate: blockedWindows,
+      message: `The "${selectedWindow}" window on ${dateStr} is unavailable (${
+        matchingWindowBlock.reason || 'Blocked by Provider'
+      }). Please choose another time window or date.`,
+    };
+  }
+
+  return {
+    isUnavailable: false,
+    isEntireDayBlocked: false,
+    blockedWindowsForDate: blockedWindows,
+    message: null,
+  };
+}
+

@@ -337,11 +337,20 @@ async function initPostgresPool(): Promise<void> {
           blocked_until TIMESTAMPTZ,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS provider_unavailable_dates (
+          id VARCHAR(128) PRIMARY KEY,
+          start_date VARCHAR(64) NOT NULL,
+          end_date VARCHAR(64) NOT NULL,
+          blocked_window VARCHAR(128) NOT NULL DEFAULT 'All Day',
+          reason VARCHAR(255) NOT NULL DEFAULT 'Provider Out of Office / Unavailable',
+          created_by VARCHAR(255) NOT NULL DEFAULT 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
       `);
       pgPool = pool;
       pgConnected = true;
       pgLastError = '';
-      console.log('✅ Connected to Ubuntu PostgreSQL database (goldenmind_db) & verified all 10 tables (including invoices & provider_patient_notes).');
+      console.log('✅ Connected to Ubuntu PostgreSQL database (goldenmind_db) & verified all 11 tables (including invoices, provider_patient_notes & provider_unavailable_dates).');
     } finally {
       client.release();
     }
@@ -3561,6 +3570,7 @@ async function startServer() {
   // 7D. Load Clinical Tables Directly from Ubuntu PostgreSQL (`goldenmind_db`) — Zero-Trust Guarded
   app.get('/api/standalone/db/bootstrap', async (req, res) => {
     const uidFilter = typeof req.query.uid === 'string' ? req.query.uid.trim() : '';
+    const emailFilter = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
     const isAdmin = req.query.role === 'provider' && isAuthorizedAdminRequest(req);
 
     // Block unauthenticated full-database scrape attempts when neither admin nor patient UID is supplied
@@ -3626,6 +3636,11 @@ async function startServer() {
           : pgPool.query('SELECT * FROM messages WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
         isAdmin
           ? pgPool.query('SELECT * FROM invoices ORDER BY created_at DESC')
+          : emailFilter
+          ? pgPool.query(
+              'SELECT * FROM invoices WHERE patient_uid = $1 OR LOWER(COALESCE(patient_email, \'\')) = $2 ORDER BY created_at DESC',
+              [uidFilter, emailFilter]
+            )
           : pgPool.query('SELECT * FROM invoices WHERE patient_uid = $1 ORDER BY created_at DESC', [uidFilter]),
       ]);
 
@@ -4021,6 +4036,80 @@ async function startServer() {
   const inMemoryProviderNotes = new Map<string, Record<string, unknown>>();
   const sanitizeString = (val: unknown, maxLen = 500): string =>
     typeof val === 'string' ? val.trim().slice(0, maxLen) : '';
+
+  // 9A-0. Send Itemized Invoice & Good Faith Estimate Notification Email When Admin Issues a Charge
+  app.post('/api/billing/notify-invoice-issued', async (req, res) => {
+    try {
+      const invoiceId = sanitizeString(req.body?.id, 128) || `inv_${Date.now()}`;
+      const patientId = sanitizeString(req.body?.patientId, 128);
+      const patientName = sanitizeString(req.body?.patientName, 160) || 'Valued Client';
+      const patientEmail = sanitizeEmailAddress(req.body?.patientEmail);
+      const description =
+        sanitizeString(req.body?.description, 250) ||
+        'CPT 99214 — Psychiatric Medication Management & Follow-Up';
+      const cptCode = sanitizeString(req.body?.cptCode, 32) || '99214';
+      const serviceDate =
+        sanitizeString(req.body?.serviceDate, 32) || new Date().toISOString().slice(0, 10);
+      const totalAmount = Math.max(0, Number(req.body?.amount) || 0);
+      const insuranceCovered = Math.max(0, Number(req.body?.insuranceCoveredAmount) || 0);
+      const patientResponsibility = Math.max(
+        0,
+        Number(req.body?.patientResponsibility ?? totalAmount - insuranceCovered) || 0
+      );
+
+      await upsertClinicalRecordToPostgres('invoices', invoiceId, {
+        id: invoiceId,
+        patientId,
+        patientName,
+        patientEmail,
+        description,
+        cptCode,
+        serviceDate,
+        amount: totalAmount,
+        insuranceCoveredAmount: insuranceCovered,
+        patientResponsibility,
+        status: 'due',
+        createdAt: new Date().toISOString(),
+      });
+
+      const transporter = getSmtpTransporter();
+      if (transporter && patientEmail) {
+        const statementHtml = buildBrandedEmailHtml(
+          `New Itemized Billing Statement & Good Faith Estimate (#${invoiceId.slice(-8).toUpperCase()})`,
+          `
+          <h2 style="margin:0 0 10px 0;color:#1C1917;font-size:18px;">New Billing Statement Issued — Golden Mind Psychiatry PLLC</h2>
+          <p style="margin:0 0 14px 0;font-size:13px;color:#44403C;">Dear <strong>${patientName}</strong>, Brenda Hobyani, MSN, APRN, PMHNP-BC has posted an itemized billing statement to your secure Client Portal. In compliance with the <strong>Federal No Surprises Act (45 C.F.R. § 149.610)</strong>, your full CPT service breakdown and net balance due are shown below:</p>
+          <table width="100%" cellpadding="8" cellspacing="0" style="background:#FAF9F5;border:1px solid #D4AF37;border-radius:12px;font-size:13px;margin-bottom:16px;">
+            <tr><td><strong>Statement ID:</strong></td><td>#${invoiceId.slice(-8).toUpperCase()}</td></tr>
+            <tr><td><strong>Service Date:</strong></td><td>${serviceDate}</td></tr>
+            <tr><td><strong>CPT Code &amp; Clinical Service:</strong></td><td><strong>CPT ${cptCode}</strong> — ${description}</td></tr>
+            <tr><td><strong>Total Billed Charge:</strong></td><td>$${totalAmount.toFixed(2)} USD</td></tr>
+            <tr><td><strong>Insurance Network Adjustment / Coverage:</strong></td><td>-$${insuranceCovered.toFixed(2)} USD</td></tr>
+            <tr><td style="border-top:1px solid #E7E5E4;"><strong>Exact Amount Due (Client Responsibility):</strong></td><td style="border-top:1px solid #E7E5E4;color:#9E7206;font-weight:bold;font-size:15px;">$${patientResponsibility.toFixed(2)} USD</td></tr>
+          </table>
+          <div style="text-align:center;margin:20px 0;">
+            <a href="${SITE_URL}/?page=portal" style="display:inline-block;padding:12px 24px;background:#0A0A0A;color:#D4AF37;font-weight:bold;text-decoration:none;border-radius:10px;font-size:13px;">Open Client Portal to Review &amp; Pay $${patientResponsibility.toFixed(2)}</a>
+          </div>
+          <p style="margin:0;font-size:12px;color:#57534E;">You may pay securely using any Credit/Debit Card, HSA/FSA Medical Card, Apple Pay, or Google Pay after reviewing the Good Faith Estimate disclosure in your portal.</p>
+          `
+        );
+
+        await transporter
+          .sendMail({
+            from: process.env.SMTP_FROM || `Golden Mind Psychiatry PLLC <${CLINIC_EMAIL}>`,
+            to: [patientEmail, ...DOCTOR_ALERT_RECIPIENTS].join(', '),
+            subject: `[Billing Statement Due: $${patientResponsibility.toFixed(2)}] Golden Mind Psychiatry PLLC`,
+            html: statementHtml,
+          })
+          .catch(() => {});
+      }
+
+      res.json({ ok: true, invoiceId });
+    } catch (err) {
+      console.error('Notify invoice issued error:', err);
+      res.status(500).json({ ok: false });
+    }
+  });
 
   // 9A. Create Stripe Checkout Session (Cards, HSA/FSA, Apple Pay, Google Pay) with HIPAA-Sanitized Descriptor
   app.post('/api/billing/create-checkout-session', async (req, res) => {
@@ -4435,6 +4524,116 @@ async function startServer() {
       res.json({ ok: true });
     } catch {
       res.status(500).json({ ok: false, error: 'Unable to delete note.' });
+    }
+  });
+
+  // ============================================================================
+  // 10. PROVIDER AVAILABILITY & BLOCKED DATES (Reflected Live in Client Booking)
+  // ============================================================================
+  const inMemoryUnavailableDates = new Map<string, Record<string, unknown>>();
+
+  app.get('/api/availability/unavailable-dates', async (_req, res) => {
+    try {
+      if (!pgConnected) {
+        await initPostgresPool();
+      }
+      if (pgPool && pgConnected) {
+        const qRes = await pgPool.query(
+          'SELECT * FROM provider_unavailable_dates ORDER BY start_date ASC, created_at DESC'
+        );
+        const rows = qRes.rows.map((r) => ({
+          id: r.id,
+          startDate: r.start_date,
+          endDate: r.end_date || r.start_date,
+          blockedWindow: r.blocked_window || 'All Day',
+          reason: r.reason || 'Provider Out of Office / Unavailable',
+          createdBy: r.created_by || 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
+          createdAt: r.created_at
+            ? new Date(r.created_at).toISOString()
+            : new Date().toISOString(),
+        }));
+        for (const item of rows) {
+          inMemoryUnavailableDates.set(item.id, item);
+        }
+        res.json({ ok: true, unavailableDates: rows });
+        return;
+      }
+      const fallbackList = Array.from(inMemoryUnavailableDates.values()).sort((a, b) =>
+        String(a.startDate || '').localeCompare(String(b.startDate || ''))
+      );
+      res.json({ ok: true, unavailableDates: fallbackList });
+    } catch (err) {
+      console.error('Load unavailable dates error:', err);
+      res.json({ ok: true, unavailableDates: Array.from(inMemoryUnavailableDates.values()) });
+    }
+  });
+
+  app.post('/api/availability/unavailable-dates', async (req, res) => {
+    try {
+      const id =
+        sanitizeString(req.body?.id, 128) ||
+        `block_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      const startDate = sanitizeString(req.body?.startDate, 32);
+      const rawEndDate = sanitizeString(req.body?.endDate, 32) || startDate;
+      const endDate = rawEndDate >= startDate ? rawEndDate : startDate;
+      const blockedWindow = sanitizeString(req.body?.blockedWindow, 120) || 'All Day';
+      const reason =
+        sanitizeString(req.body?.reason, 220) || 'Provider Out of Office / Unavailable';
+      const createdBy =
+        sanitizeString(req.body?.createdBy, 160) || 'Brenda Hobyani, MSN, APRN, PMHNP-BC';
+      const createdAt = new Date().toISOString();
+
+      if (!startDate) {
+        res.status(400).json({ ok: false, error: 'Start date is required.' });
+        return;
+      }
+
+      const record = {
+        id,
+        startDate,
+        endDate,
+        blockedWindow,
+        reason,
+        createdBy,
+        createdAt,
+      };
+
+      inMemoryUnavailableDates.set(id, record);
+
+      if (!pgConnected) {
+        await initPostgresPool();
+      }
+      if (pgPool && pgConnected) {
+        await pgPool.query(
+          `INSERT INTO provider_unavailable_dates (
+            id, start_date, end_date, blocked_window, reason, created_by, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          ON CONFLICT (id) DO UPDATE SET
+            start_date = EXCLUDED.start_date,
+            end_date = EXCLUDED.end_date,
+            blocked_window = EXCLUDED.blocked_window,
+            reason = EXCLUDED.reason`,
+          [id, startDate, endDate, blockedWindow, reason, createdBy]
+        );
+      }
+
+      res.json({ ok: true, record });
+    } catch (err) {
+      console.error('Save unavailable date error:', err);
+      res.status(500).json({ ok: false, error: 'Unable to save blocked date.' });
+    }
+  });
+
+  app.delete('/api/availability/unavailable-dates/:id', async (req, res) => {
+    try {
+      const id = sanitizeString(req.params.id, 128);
+      inMemoryUnavailableDates.delete(id);
+      if (pgPool && pgConnected && id) {
+        await pgPool.query('DELETE FROM provider_unavailable_dates WHERE id = $1', [id]);
+      }
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false, error: 'Unable to remove blocked date.' });
     }
   });
 

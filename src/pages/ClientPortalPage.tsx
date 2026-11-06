@@ -78,6 +78,7 @@ import {
   MedicationRecord,
   MessageRecord,
   InvoiceRecord,
+  ProviderUnavailableDateRecord,
 } from '../types';
 import {
   ensurePatientOnboarding,
@@ -102,6 +103,8 @@ import {
   normalizePortalEmail,
   checkAccountLockout,
   recordLoginAttempt,
+  fetchProviderUnavailableDates,
+  evaluateDateAndWindowAvailability,
 } from '../services/clinicalAutomation';
 import { TelehealthRoomModal } from '../components/TelehealthRoomModal';
 import {
@@ -274,6 +277,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [reschedulingApptId, setReschedulingApptId] = useState<string | null>(null);
   const [newApptDate, setNewApptDate] = useState('');
   const [newApptTime, setNewApptTime] = useState('Mon–Thu Morning (8:00 AM - 12:00 PM)');
+  const [unavailableDates, setUnavailableDates] = useState<ProviderUnavailableDateRecord[]>([]);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   // PHQ-9 / GAD-7 / Daily Mood State
   const [activeScaleTab, setActiveScaleTab] = useState<'PHQ-9' | 'GAD-7' | 'DAILY-MOOD'>('PHQ-9');
@@ -312,6 +317,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
   // Handle incoming Firebase or Clinic SMTP Email Action Links (?mode=verifyEmail or ?mode=resetPassword)
   useEffect(() => {
+    fetchProviderUnavailableDates().then((list) => setUnavailableDates(list));
     const params = new URLSearchParams(window.location.search);
     const modeParam = params.get('mode');
     const oobParam = params.get('oobCode');
@@ -867,13 +873,35 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
 
     const unsubInvoices = onSnapshot(
       query(collection(db, 'invoices'), where('patientId', '==', uid)),
-      (snap) => {
-        const list = snap.docs.map((d) => ({
+      async (snap) => {
+        const fsList = snap.docs.map((d) => ({
           id: d.id,
           ...(d.data() as Omit<InvoiceRecord, 'id'>),
         }));
-        list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        setInvoices(list);
+        try {
+          const emailParam = encodeURIComponent((firebaseUser.email || '').toLowerCase());
+          const pgRes = await fetch(
+            `/api/standalone/db/bootstrap?uid=${encodeURIComponent(uid)}&email=${emailParam}`
+          );
+          const pgData = await pgRes.json();
+          if (pgData?.ok && Array.isArray(pgData.invoices)) {
+            const mergedMap = new Map<string, InvoiceRecord>();
+            for (const inv of pgData.invoices as InvoiceRecord[]) {
+              mergedMap.set(inv.id, inv);
+            }
+            for (const inv of fsList) {
+              mergedMap.set(inv.id, inv);
+            }
+            const combined = Array.from(mergedMap.values());
+            combined.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+            setInvoices(combined);
+            return;
+          }
+        } catch {
+          // Fallback to Firestore list
+        }
+        fsList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setInvoices(fsList);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'invoices')
     );
@@ -2285,9 +2313,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Reschedule or Cancel Appointment (100% Real-Time Firestore)
+  // Reschedule or Cancel Appointment (100% Real-Time Firestore & Availability Checked)
   const handleSaveReschedule = async (apptId: string) => {
     if (!newApptDate || !portalUser || !firebaseUser) return;
+    const check = evaluateDateAndWindowAvailability(newApptDate, newApptTime, unavailableDates);
+    if (check.isUnavailable) {
+      setRescheduleError(
+        check.message || 'The selected date or time window is unavailable. Please select another date.'
+      );
+      return;
+    }
+    setRescheduleError(null);
     const now = new Date().toISOString();
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
@@ -5083,6 +5119,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                                           setReschedulingApptId(appt.id);
                                           setNewApptDate(appt.preferredDate);
                                           setNewApptTime(appt.preferredTime);
+                                          setRescheduleError(null);
+                                          fetchProviderUnavailableDates().then((list) =>
+                                            setUnavailableDates(list)
+                                          );
                                         }}
                                         className="px-3.5 py-2.5 rounded-[12px] border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-semibold cursor-pointer"
                                       >
@@ -5100,50 +5140,86 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                               </div>
 
                               {reschedulingApptId === appt.id && (
-                                <div className="pt-4 border-t border-stone-200 flex flex-wrap items-end gap-3">
-                                  <div>
-                                    <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                      New Preferred Date
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={newApptDate}
-                                      onChange={(e) => setNewApptDate(e.target.value)}
-                                      className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[11px] font-semibold text-stone-600 block mb-1">
-                                      New Time Window (Mon–Thu 8–4, Fri 9–1)
-                                    </label>
-                                    <select
-                                      value={newApptTime}
-                                      onChange={(e) => setNewApptTime(e.target.value)}
-                                      className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                                    >
-                                      <option value="Mon–Thu Morning (8:00 AM - 12:00 PM)">
-                                        Mon–Thu Morning (8:00 AM - 12:00 PM)
-                                      </option>
-                                      <option value="Mon–Thu Afternoon (12:00 PM - 4:00 PM)">
-                                        Mon–Thu Afternoon (12:00 PM - 4:00 PM)
-                                      </option>
-                                      <option value="Friday Morning / Midday (9:00 AM - 1:00 PM)">
-                                        Friday Morning / Midday (9:00 AM - 1:00 PM)
-                                      </option>
-                                    </select>
-                                  </div>
-                                  <button
-                                    onClick={() => handleSaveReschedule(appt.id)}
-                                    className="px-4 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                                  >
-                                    Confirm New Date
-                                  </button>
-                                  <button
-                                    onClick={() => setReschedulingApptId(null)}
-                                    className="px-3 py-2 rounded-[12px] text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
+                                <div className="pt-4 border-t border-stone-200 space-y-3">
+                                  {(() => {
+                                    const rescheduleCheck = evaluateDateAndWindowAvailability(
+                                      newApptDate,
+                                      newApptTime,
+                                      unavailableDates
+                                    );
+                                    const todayIso = new Date().toISOString().split('T')[0];
+                                    return (
+                                      <>
+                                        <div className="flex flex-wrap items-end gap-3">
+                                          <div>
+                                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                              New Preferred Date
+                                            </label>
+                                            <input
+                                              type="date"
+                                              min={todayIso}
+                                              value={newApptDate}
+                                              onChange={(e) => {
+                                                setNewApptDate(e.target.value);
+                                                setRescheduleError(null);
+                                              }}
+                                              className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-[11px] font-semibold text-stone-600 block mb-1">
+                                              New Time Window (Mon–Thu 8–4, Fri 9–1)
+                                            </label>
+                                            <select
+                                              value={newApptTime}
+                                              onChange={(e) => {
+                                                setNewApptTime(e.target.value);
+                                                setRescheduleError(null);
+                                              }}
+                                              className="px-3.5 py-2 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                                            >
+                                              {[
+                                                'Mon–Thu Morning (8:00 AM - 12:00 PM)',
+                                                'Mon–Thu Afternoon (12:00 PM - 4:00 PM)',
+                                                'Friday Morning / Midday (9:00 AM - 1:00 PM)',
+                                              ].map((win) => {
+                                                const isBlocked =
+                                                  rescheduleCheck.isEntireDayBlocked ||
+                                                  rescheduleCheck.blockedWindowsForDate.includes(win);
+                                                return (
+                                                  <option key={win} value={win} disabled={isBlocked}>
+                                                    {win}
+                                                    {isBlocked ? ' — (Unavailable / Blocked)' : ''}
+                                                  </option>
+                                                );
+                                              })}
+                                            </select>
+                                          </div>
+                                          <button
+                                            disabled={rescheduleCheck.isUnavailable}
+                                            onClick={() => handleSaveReschedule(appt.id)}
+                                            className="px-4 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer disabled:opacity-50"
+                                          >
+                                            Confirm New Date
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setReschedulingApptId(null);
+                                              setRescheduleError(null);
+                                            }}
+                                            className="px-3 py-2 rounded-[12px] text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                        {(rescheduleCheck.message || rescheduleError) && (
+                                          <p className="text-xs text-red-600 font-semibold">
+                                            {rescheduleCheck.message || rescheduleError}
+                                          </p>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               )}
                             </div>

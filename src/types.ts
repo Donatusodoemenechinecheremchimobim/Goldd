@@ -248,3 +248,20 @@ export interface ProviderPatientNoteRecord {
   updatedAt: string;
 }
 
+export type BlockedTimeWindow =
+  | 'All Day'
+  | 'Mon–Thu Morning (8:00 AM - 12:00 PM)'
+  | 'Mon–Thu Afternoon (12:00 PM - 4:00 PM)'
+  | 'Friday Morning / Midday (9:00 AM - 1:00 PM)';
+
+export interface ProviderUnavailableDateRecord {
+  id: string;
+  startDate: string;
+  endDate: string;
+  blockedWindow: BlockedTimeWindow;
+  reason: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+
