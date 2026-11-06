@@ -109,6 +109,10 @@ import {
   AdminSubTab,
   renderTextWithClickableLinks,
 } from '../components/ProviderDashboardView';
+import {
+  PrePaymentConsentModal,
+  PrintableSuperbillModal,
+} from '../components/BillingAndSuperbillModals';
 
 interface ClientPortalPageProps {
   onOpenBooking: (prefillCondition?: string) => void;
@@ -297,6 +301,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const [insGroupId, setInsGroupId] = useState('');
   const [prefPharmacy, setPrefPharmacy] = useState('');
   const [profileSavedNotice, setProfileSavedNotice] = useState(false);
+
+  // HIPAA, Federal No Surprises Act & Stripe Billing Modals State
+  const [activeCheckoutInvoice, setActiveCheckoutInvoice] = useState<InvoiceRecord | null>(null);
+  const [activeSuperbillInvoice, setActiveSuperbillInvoice] = useState<InvoiceRecord | null>(null);
+  const [billingFeedbackBanner, setBillingFeedbackBanner] = useState<string | null>(null);
+  const [upfrontServicePreset, setUpfrontServicePreset] = useState<'99205' | '99214' | '90833'>('99214');
+  const [upfrontPayMode, setUpfrontPayMode] = useState<'copay' | 'selfpay'>('copay');
+  const [creatingUpfrontInvoice, setCreatingUpfrontInvoice] = useState(false);
 
   // Handle incoming Firebase or Clinic SMTP Email Action Links (?mode=verifyEmail or ?mode=resetPassword)
   useEffect(() => {
@@ -503,6 +515,43 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       if (resetTokenParam) setResetCustomToken(resetTokenParam);
       if (emailParam) setResetTargetEmail(emailParam.trim().toLowerCase());
       setShowResetPasswordPage(false);
+    }
+
+    // Handle Stripe Checkout return (?billing_success=1&invoice_id=...&session_id=...)
+    const billingSuccessParam = params.get('billing_success');
+    const billingInvoiceId = params.get('invoice_id');
+    const billingSessionId = params.get('session_id');
+    if (billingSuccessParam === '1' && billingInvoiceId) {
+      setActiveTab('billing');
+      fetch('/api/billing/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: billingInvoiceId,
+          sessionId: billingSessionId || undefined,
+        }),
+      })
+        .then((r) => r.json())
+        .then(async (data) => {
+          if (data?.ok) {
+            try {
+              await updateDoc(doc(db, 'invoices', billingInvoiceId), {
+                status: 'paid',
+                paidAt: data.paidAt || new Date().toISOString(),
+                transactionId: data.transactionId || billingSessionId || '',
+              });
+            } catch {
+              // Standalone PostgreSQL already updated
+            }
+            setBillingFeedbackBanner(
+              `Payment confirmed (Receipt #${data.transactionId || billingInvoiceId})! An itemized receipt and Superbill have been saved to your portal and emailed.`
+            );
+          }
+          window.history.replaceState({}, document.title, '/?page=portal');
+        })
+        .catch(() => {
+          window.history.replaceState({}, document.title, '/?page=portal');
+        });
     }
   }, []);
 
@@ -2397,18 +2446,99 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Pay Copay Statement in 1 click (100% Real-Time Firestore)
-  const handlePayInvoice = async (invoiceId: string) => {
-    if (!portalUser || !firebaseUser) return;
-    const now = new Date().toISOString();
+  // Open Pre-Payment Good Faith Estimate & Itemized CPT Consent Modal
+  const handlePayInvoice = (invoice: InvoiceRecord) => {
+    setActiveCheckoutInvoice(invoice);
+  };
+
+  // Complete Verified Payment & Sync to Firestore + PostgreSQL + Open Superbill
+  const handlePaymentSuccess = async (updatedInvoice: InvoiceRecord) => {
     try {
-      await updateDoc(doc(db, 'invoices', invoiceId), {
-        status: 'paid',
-        paidAt: now,
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `invoices/${invoiceId}`);
+      await setDoc(doc(db, 'invoices', updatedInvoice.id), updatedInvoice, { merge: true });
+    } catch {
+      // Fallback if running standalone
     }
+
+    setInvoices((prev) => {
+      const exists = prev.some((i) => i.id === updatedInvoice.id);
+      if (exists) {
+        return prev.map((i) => (i.id === updatedInvoice.id ? updatedInvoice : i));
+      }
+      return [updatedInvoice, ...prev];
+    });
+
+    setActiveCheckoutInvoice(null);
+    setBillingFeedbackBanner(
+      `Payment of $${Number(updatedInvoice.patientResponsibility || 0).toFixed(2)} processed via ${updatedInvoice.paymentMethod || 'Stripe'} (Ref: ${updatedInvoice.transactionId || updatedInvoice.id}). Your official receipt and printable Superbill are ready below and have been emailed to you.`
+    );
+    setActiveSuperbillInvoice(updatedInvoice);
+  };
+
+  // Generate & Open Upfront Appointment Co-Pay or Self-Pay Statement
+  const handleCreateUpfrontStatement = async () => {
+    if (!portalUser) return;
+    setCreatingUpfrontInvoice(true);
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString();
+    const presetMap = {
+      '99205': {
+        cptCode: '99205',
+        description: 'CPT 99205 — Initial Comprehensive Psychiatric Diagnostic Evaluation (60 mins)',
+        totalBilled: 275,
+        copayAmount: 45,
+      },
+      '99214': {
+        cptCode: '99214',
+        description: 'CPT 99214 — Psychiatric Medication Management & Follow-Up Visit (30 mins)',
+        totalBilled: 165,
+        copayAmount: 35,
+      },
+      '90833': {
+        cptCode: '90833',
+        description: 'CPT 99214 + 90833 — Medication Management with Supportive Psychotherapy Add-On',
+        totalBilled: 210,
+        copayAmount: 40,
+      },
+    };
+    const chosen = presetMap[upfrontServicePreset];
+    const isSelfPay = upfrontPayMode === 'selfpay';
+    const patientResp = isSelfPay ? chosen.totalBilled : chosen.copayAmount;
+    const insAdjustment = isSelfPay ? 0 : chosen.totalBilled - chosen.copayAmount;
+    const newId = `inv_${Date.now()}`;
+
+    const newInvoice: InvoiceRecord = {
+      id: newId,
+      patientId: portalUser.uid,
+      patientName: portalUser.fullName,
+      patientEmail: portalUser.email,
+      serviceDate: today,
+      cptCode: chosen.cptCode,
+      description: chosen.description,
+      amount: chosen.totalBilled,
+      insuranceCoveredAmount: insAdjustment,
+      patientResponsibility: patientResp,
+      status: 'due',
+      createdAt: now,
+    };
+
+    try {
+      await setDoc(doc(db, 'invoices', newId), newInvoice, { merge: true });
+    } catch {
+      // Continues in standalone mode
+    }
+    try {
+      await fetch('/api/clinical/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collectionName: 'invoices', record: newInvoice }),
+      });
+    } catch {
+      // Ignore network sync error
+    }
+
+    setInvoices((prev) => [newInvoice, ...prev.filter((i) => i.id !== newId)]);
+    setCreatingUpfrontInvoice(false);
+    setActiveCheckoutInvoice(newInvoice);
   };
 
   if (authLoading) {
@@ -4686,15 +4816,25 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                                     </td>
                                     <td className="py-4 px-5 text-right">
                                       {inv.status === 'paid' ? (
-                                        <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
-                                          Disbursed / Paid
-                                        </span>
+                                        <div className="inline-flex items-center gap-2">
+                                          <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
+                                            Paid
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setActiveSuperbillInvoice(inv)}
+                                            className="px-3 py-1.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                                          >
+                                            Superbill
+                                          </button>
+                                        </div>
                                       ) : (
                                         <button
-                                          onClick={() => handlePayInvoice(inv.id)}
+                                          type="button"
+                                          onClick={() => handlePayInvoice(inv)}
                                           className="px-3.5 py-1.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
                                         >
-                                          Pay ${inv.patientResponsibility.toFixed(2)}
+                                          Review &amp; Pay ${inv.patientResponsibility.toFixed(2)}
                                         </button>
                                       )}
                                     </td>
@@ -5771,17 +5911,149 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                      ============================================================ */}
                   {activeTab === 'billing' && (
                     <div className="space-y-6">
+                      {billingFeedbackBanner && (
+                        <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>{billingFeedbackBanner}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setBillingFeedbackBanner(null)}
+                            className="text-emerald-700 underline cursor-pointer shrink-0"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Federal No Surprises Act & HIPAA Financial Transparency Header */}
+                      <div className="bg-[#0A0A0A] text-white rounded-[28px] p-6 border border-[#D4AF37]/40 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold uppercase tracking-widest">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              HIPAA · PCI-DSS · Federal No Surprises Act (45 C.F.R. § 149.610)
+                            </span>
+                            <h2 className="text-lg font-bold font-portal-heading text-white mt-1.5">
+                              Transparent Patient Billing, Stripe Checkout &amp; Medical Superbills
+                            </h2>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-[#D4AF37]">
+                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Cards</span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white/10">HSA / FSA Medical</span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Apple Pay</span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Google Pay</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-stone-300 leading-relaxed">
+                          Before any payment is processed, you will review a complete{' '}
+                          <strong className="text-[#D4AF37]">
+                            Itemized CPT Service Breakdown &amp; Good Faith Estimate
+                          </strong>{' '}
+                          showing the total billed charge, your insurance network adjustment, and
+                          your exact copay or self-pay balance. Every payment automatically
+                          generates an official printable{' '}
+                          <strong className="text-[#D4AF37]">Medical Superbill &amp; Receipt</strong>{' '}
+                          and emails a copy to you and Brenda Hobyani, PMHNP-BC.
+                        </p>
+                      </div>
+
+                      {/* Optional Upfront Appointment Co-Pay / Self-Pay Generator */}
+                      <div className="bg-white portal-card p-6 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                              Pay Upfront Visit Co-Pay or Self-Pay Telehealth Statement
+                            </h3>
+                            <p className="text-xs text-stone-500">
+                              Going into an upcoming telehealth evaluation or follow-up? Generate
+                              your itemized Good Faith Estimate statement below to review disclosures
+                              and pay your co-pay or self-pay deposit now.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                              Select Clinical CPT Service Type
+                            </label>
+                            <select
+                              value={upfrontServicePreset}
+                              onChange={(e) =>
+                                setUpfrontServicePreset(
+                                  e.target.value as '99205' | '99214' | '90833'
+                                )
+                              }
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-800"
+                            >
+                              <option value="99214">
+                                CPT 99214 — Psychiatric Medication Management Follow-Up ($35 Copay / $165 Self-Pay)
+                              </option>
+                              <option value="99205">
+                                CPT 99205 — Initial Psychiatric Diagnostic Evaluation ($45 Copay / $275 Self-Pay)
+                              </option>
+                              <option value="90833">
+                                CPT 99214+90833 — Med Management + Supportive Psychotherapy ($40 Copay / $210 Self-Pay)
+                              </option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                              Coverage Responsibility Type
+                            </label>
+                            <select
+                              value={upfrontPayMode}
+                              onChange={(e) =>
+                                setUpfrontPayMode(e.target.value as 'copay' | 'selfpay')
+                              }
+                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-800"
+                            >
+                              <option value="copay">In-Network Insurance Co-Pay</option>
+                              <option value="selfpay">Self-Pay / Out-of-Network Rate</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            disabled={creatingUpfrontInvoice}
+                            onClick={handleCreateUpfrontStatement}
+                            className="px-5 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs hover:bg-stone-800 cursor-pointer flex items-center gap-2"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>
+                              {creatingUpfrontInvoice
+                                ? 'Preparing Good Faith Estimate...'
+                                : 'Review Itemized Good Faith Estimate & Pay'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Provider-Issued & Self-Generated Billing Ledger */}
                       <div className="bg-white portal-card overflow-hidden">
-                        <div className="px-6 py-5 border-b border-stone-200">
-                          <h2 className="text-lg font-bold font-portal-heading text-stone-900">
-                            Billing Statements & Copay Ledger
-                          </h2>
+                        <div className="px-6 py-5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h2 className="text-lg font-bold font-portal-heading text-stone-900">
+                              Billing Statements, Receipts &amp; Superbill Ledger
+                            </h2>
+                            <p className="text-xs text-stone-500">
+                              Click &ldquo;Review &amp; Pay&rdquo; on any due balance to inspect the
+                              itemized CPT breakdown before paying, or &ldquo;Superbill &amp;
+                              Receipt&rdquo; on paid statements to print or save as PDF.
+                            </p>
+                          </div>
                         </div>
                         <div className="divide-y divide-stone-200 p-6">
                           {invoices.length === 0 ? (
                             <p className="text-xs text-stone-500 text-center py-4">
                               No billing statements have been issued yet. Statements appear here in
-                              real time once posted by your provider.
+                              real time once posted by your provider, or you can generate an upfront
+                              visit co-pay statement above.
                             </p>
                           ) : (
                             invoices.map((inv) => (
@@ -5790,34 +6062,87 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                                 className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
                               >
                                 <div className="space-y-1">
-                                  <p className="font-bold font-portal-heading text-stone-900 text-sm">
-                                    {inv.description}
-                                  </p>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[10px]">
+                                      CPT {inv.cptCode || '99214'}
+                                    </span>
+                                    <p className="font-bold font-portal-heading text-stone-900 text-sm">
+                                      {inv.description}
+                                    </p>
+                                  </div>
                                   <p className="text-stone-500 font-portal-heading tabular-nums">
-                                    Service Date: {inv.serviceDate} · Billed: $
-                                    {inv.amount.toFixed(2)} · Insurance Adjustment: -$
-                                    {inv.insuranceCoveredAmount.toFixed(2)}
+                                    Service Date: {inv.serviceDate} · Total Billed: $
+                                    {Number(inv.amount || 0).toFixed(2)} · Insurance Adjustment: -$
+                                    {Number(inv.insuranceCoveredAmount || 0).toFixed(2)}
                                   </p>
+                                  {inv.transactionId && (
+                                    <p className="text-[11px] text-emerald-700 font-semibold">
+                                      Paid via {inv.paymentMethod || 'Stripe'} · Ref:{' '}
+                                      {inv.transactionId}
+                                    </p>
+                                  )}
+                                  {inv.status === 'refunded' && (
+                                    <p className="text-[11px] text-amber-700 font-semibold">
+                                      Refunded (${Number(inv.refundAmount || inv.patientResponsibility || 0).toFixed(2)}){' '}
+                                      {inv.refundReason ? `— ${inv.refundReason}` : ''}
+                                    </p>
+                                  )}
                                 </div>
 
-                                <div className="flex items-center gap-4 shrink-0">
+                                <div className="flex flex-wrap items-center gap-3 shrink-0">
                                   <div className="text-right font-portal-heading tabular-nums">
-                                    <p className="text-[11px] text-stone-500">Your Copay / Balance</p>
+                                    <p className="text-[11px] text-stone-500">
+                                      Your Copay / Balance
+                                    </p>
                                     <p className="text-base font-bold text-stone-900">
-                                      ${inv.patientResponsibility.toFixed(2)}
+                                      ${Number(inv.patientResponsibility || 0).toFixed(2)}
                                     </p>
                                   </div>
                                   {inv.status === 'paid' ? (
-                                    <span className="px-3.5 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-xs uppercase">
-                                      Disbursed / Paid
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-3 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
+                                        Paid
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSuperbillInvoice(inv)}
+                                        className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs hover:bg-stone-800 cursor-pointer flex items-center gap-1.5"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        <span>Superbill &amp; Receipt</span>
+                                      </button>
+                                    </div>
+                                  ) : inv.status === 'refunded' ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-3 py-2 rounded-[12px] bg-amber-100 text-amber-800 font-bold text-[11px] uppercase">
+                                        Refunded
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSuperbillInvoice(inv)}
+                                        className="px-3.5 py-2 rounded-[12px] bg-stone-100 text-stone-800 font-bold text-xs hover:bg-stone-200 cursor-pointer"
+                                      >
+                                        View Superbill
+                                      </button>
+                                    </div>
                                   ) : (
-                                    <button
-                                      onClick={() => handlePayInvoice(inv.id)}
-                                      className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                                    >
-                                      Pay ${inv.patientResponsibility.toFixed(2)}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSuperbillInvoice(inv)}
+                                        className="px-3 py-2.5 rounded-[12px] bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs cursor-pointer"
+                                      >
+                                        Preview GFE
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePayInvoice(inv)}
+                                        className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-sm"
+                                      >
+                                        Review &amp; Pay $
+                                        {Number(inv.patientResponsibility || 0).toFixed(2)}
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -6080,6 +6405,28 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         onClose={() => setActiveTelehealthAppt(null)}
         viewerRole={isVerifiedProviderAccount ? 'provider' : 'patient'}
       />
+
+      {/* HIPAA & Federal No Surprises Act Pre-Payment Good Faith Estimate & Consent Modal */}
+      {activeCheckoutInvoice && (
+        <PrePaymentConsentModal
+          invoice={activeCheckoutInvoice}
+          patientEmail={portalUser?.email}
+          onClose={() => setActiveCheckoutInvoice(null)}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {/* Printable Medical Superbill & Official Payment Receipt Modal */}
+      {activeSuperbillInvoice && (
+        <PrintableSuperbillModal
+          invoice={activeSuperbillInvoice}
+          patientEmail={portalUser?.email}
+          patientDob={portalUser?.dateOfBirth}
+          patientInsurance={portalUser?.insuranceProvider}
+          patientMemberId={portalUser?.insuranceMemberId}
+          onClose={() => setActiveSuperbillInvoice(null)}
+        />
+      )}
     </div>
   );
 };

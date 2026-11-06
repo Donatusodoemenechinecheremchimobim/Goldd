@@ -206,12 +206,45 @@ export interface InvoiceRecord {
   id: string;
   patientId: string;
   patientName: string;
+  patientEmail?: string;
   description: string;
+  cptCode?: string;
   serviceDate: string;
   amount: number;
   insuranceCoveredAmount: number;
   patientResponsibility: number;
-  status: 'paid' | 'due' | 'processing';
+  status: 'paid' | 'due' | 'processing' | 'refunded';
   paidAt?: string;
+  paymentMethod?: string;
+  transactionId?: string;
+  financialConsentAcceptedAt?: string;
+  refundedAt?: string;
+  refundAmount?: number;
+  refundReason?: string;
   createdAt: string;
 }
+
+export type ProviderNoteCategory =
+  | 'SOAP / Session Note'
+  | 'Psychotherapy Process Note (HIPAA § 164.501 Private)'
+  | 'Medication & Side-Effect Log'
+  | 'Risk & Safety Assessment Log'
+  | 'Phone / Care Coordination Log'
+  | 'Billing / Administrative Log';
+
+export interface ProviderPatientNoteRecord {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientEmail?: string;
+  category: ProviderNoteCategory;
+  sessionDate: string;
+  cptCode?: string;
+  diagnosisCode?: string;
+  title: string;
+  noteBody: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

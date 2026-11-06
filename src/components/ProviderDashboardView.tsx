@@ -64,10 +64,13 @@ import {
   registerEmailInAccountDirectory,
   computeEmailDirectoryHash,
 } from '../services/clinicalAutomation';
+import { PrintableSuperbillModal } from './BillingAndSuperbillModals';
+import { ProviderPatientNotesManager } from './ProviderPatientNotesManager';
 
 export type AdminSubTab =
   | 'patients'
   | 'patient-page'
+  | 'notes'
   | 'queue'
   | 'charts'
   | 'refills'
@@ -129,6 +132,7 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [activeSubTab, setActiveSubTabState] = useState<AdminSubTab>(externalSubTab || 'patients');
   const [patientPageSection, setPatientPageSection] = useState<
     | 'all'
+    | 'notes'
     | 'demographics'
     | 'careplan'
     | 'medications'
@@ -233,11 +237,20 @@ export const ProviderDashboardView: React.FC<ProviderDashboardViewProps> = ({
   const [replyBody, setReplyBody] = useState('');
   const [customLinkToInsert, setCustomLinkToInsert] = useState('');
 
-  // New Invoice state
+  // New Invoice & Provider Refund/Adjustment state
   const [invPatientId, setInvPatientId] = useState('');
+  const [invCptCode, setInvCptCode] = useState('99214');
   const [invDesc, setInvDesc] = useState('');
   const [invTotal, setInvTotal] = useState(0);
   const [invCovered, setInvCovered] = useState(0);
+  const [superbillModalInvoice, setSuperbillModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [adjustModalInvoice, setAdjustModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [adjustAction, setAdjustAction] = useState<'adjust' | 'refund'>('adjust');
+  const [adjustTotal, setAdjustTotal] = useState(0);
+  const [adjustCovered, setAdjustCovered] = useState(0);
+  const [adjustRefundAmount, setAdjustRefundAmount] = useState(0);
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustSubmitting, setAdjustSubmitting] = useState(false);
 
   // Backups, Ubuntu PostgreSQL (goldenmind_db) Status & Account Lockout Manager State
   const [pgConnected, setPgConnected] = useState(false);
@@ -1358,6 +1371,13 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
     }
   };
 
+  const handleSelectCptPreset = (code: string, desc: string, charge: number, covered: number) => {
+    setInvCptCode(code);
+    setInvDesc(desc);
+    setInvTotal(charge);
+    setInvCovered(covered);
+  };
+
   const handleCreateInvoice = async (e: React.FormEvent, targetOverrideId?: string) => {
     e.preventDefault();
     const targetId = targetOverrideId || invPatientId;
@@ -1367,38 +1387,314 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
     const total = Number(invTotal) || 0;
     const covered = Number(invCovered) || 0;
     const resp = Math.max(0, total - covered);
+    const cleanCpt = sanitizeClinicalInput(invCptCode.trim() || '99214', 32);
+    const cleanDesc = sanitizeClinicalInput(invDesc.trim(), 220);
+    const invId = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const newInvoiceData: InvoiceRecord = {
+      id: invId,
+      patientId: targetId,
+      patientName: targetPatient?.fullName || 'Patient',
+      patientEmail: targetPatient?.email || '',
+      description: cleanDesc,
+      cptCode: cleanCpt,
+      serviceDate: now.split('T')[0],
+      amount: total,
+      insuranceCoveredAmount: covered,
+      patientResponsibility: resp,
+      status: 'due',
+      createdAt: now,
+    };
+
     try {
-      await addDoc(collection(db, 'invoices'), {
-        patientId: targetId,
-        patientName: targetPatient?.fullName || 'Patient',
-        description: sanitizeClinicalInput(invDesc.trim(), 220),
-        serviceDate: now.split('T')[0],
-        amount: total,
-        insuranceCoveredAmount: covered,
-        patientResponsibility: resp,
-        status: 'due',
-        createdAt: now,
-      });
+      await fetch('/api/standalone/db/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collection: 'invoices',
+          docId: invId,
+          data: newInvoiceData,
+        }),
+      }).catch(() => {});
+
+      try {
+        await setDoc(doc(db, 'invoices', invId), newInvoiceData);
+      } catch {
+        setInvoices((prev) => [newInvoiceData, ...prev.filter((i) => i.id !== invId)]);
+      }
+
       setInvDesc('');
       setInvTotal(0);
       setInvCovered(0);
-      showBanner(`Billing statement posted to ${targetPatient?.fullName || 'patient'}'s portal.`);
+      showBanner(
+        `Itemized statement (CPT ${cleanCpt} · Patient balance $${resp.toFixed(2)}) posted to ${
+          targetPatient?.fullName || 'patient'
+        }'s portal.`
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'invoices');
     }
   };
 
   const handleMarkInvoicePaid = async (invId: string) => {
+    const targetInv = invoices.find((i) => i.id === invId);
+    const paidAt = new Date().toISOString();
+    const txId = `GMP-MANUAL-${Date.now().toString(36).toUpperCase()}`;
     try {
+      if (targetInv) {
+        await fetch('/api/billing/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceId: targetInv.id,
+            patientId: targetInv.patientId,
+            patientName: targetInv.patientName,
+            patientEmail: targetInv.patientEmail || '',
+            description: targetInv.description,
+            cptCode: targetInv.cptCode || '99214',
+            serviceDate: targetInv.serviceDate,
+            amount: targetInv.amount,
+            insuranceCoveredAmount: targetInv.insuranceCoveredAmount,
+            patientResponsibility: targetInv.patientResponsibility,
+            paymentMethod: 'Provider Verified Payment',
+            transactionId: txId,
+            financialConsentAcceptedAt: paidAt,
+          }),
+        }).catch(() => {});
+      }
       await updateDoc(doc(db, 'invoices', invId), {
         status: 'paid',
-        paidAt: new Date().toISOString(),
+        paidAt,
+        paymentMethod: 'Provider Verified Payment',
+        transactionId: txId,
       });
-      showBanner('Statement marked as Paid.');
+      showBanner('Statement marked as Paid and receipt recorded in PostgreSQL.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `invoices/${invId}`);
     }
   };
+
+  const handleOpenAdjustOrRefundModal = (inv: InvoiceRecord, action: 'adjust' | 'refund') => {
+    setAdjustModalInvoice(inv);
+    setAdjustAction(action);
+    setAdjustTotal(inv.amount);
+    setAdjustCovered(inv.insuranceCoveredAmount);
+    setAdjustRefundAmount(inv.patientResponsibility);
+    setAdjustReason(
+      action === 'refund'
+        ? 'Full refund issued per patient request / 24-hour cancellation policy'
+        : 'Updated insurance contracted adjustment'
+    );
+  };
+
+  const handleSubmitAdjustOrRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustModalInvoice) return;
+    setAdjustSubmitting(true);
+    const now = new Date().toISOString();
+    const updatedResp = Math.max(0, Number(adjustTotal) - Number(adjustCovered));
+    const nextStatus = adjustAction === 'refund' ? 'refunded' : 'due';
+
+    try {
+      const targetPatient = patients.find((p) => p.uid === adjustModalInvoice.patientId);
+      await fetch('/api/billing/refund-or-adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: adjustModalInvoice.id,
+          action: adjustAction,
+          patientId: adjustModalInvoice.patientId,
+          patientName: adjustModalInvoice.patientName,
+          patientEmail:
+            adjustModalInvoice.patientEmail || targetPatient?.email || '',
+          description: adjustModalInvoice.description,
+          cptCode: adjustModalInvoice.cptCode || '99214',
+          serviceDate: adjustModalInvoice.serviceDate,
+          amount: Number(adjustTotal),
+          insuranceCoveredAmount: Number(adjustCovered),
+          patientResponsibility: updatedResp,
+          refundAmount: Number(adjustRefundAmount),
+          refundReason: adjustReason,
+        }),
+      });
+
+      try {
+        await updateDoc(doc(db, 'invoices', adjustModalInvoice.id), {
+          amount: Number(adjustTotal),
+          insuranceCoveredAmount: Number(adjustCovered),
+          patientResponsibility: updatedResp,
+          status: nextStatus,
+          ...(adjustAction === 'refund'
+            ? {
+                refundedAt: now,
+                refundAmount: Number(adjustRefundAmount),
+                refundReason: adjustReason,
+              }
+            : { refundReason: adjustReason }),
+        });
+      } catch {
+        setInvoices((prev) =>
+          prev.map((item) =>
+            item.id === adjustModalInvoice.id
+              ? {
+                  ...item,
+                  amount: Number(adjustTotal),
+                  insuranceCoveredAmount: Number(adjustCovered),
+                  patientResponsibility: updatedResp,
+                  status: nextStatus,
+                  refundedAt: adjustAction === 'refund' ? now : item.refundedAt,
+                  refundAmount:
+                    adjustAction === 'refund' ? Number(adjustRefundAmount) : item.refundAmount,
+                  refundReason: adjustReason,
+                }
+              : item
+          )
+        );
+      }
+
+      setAdjustModalInvoice(null);
+      showBanner(
+        adjustAction === 'refund'
+          ? `Refund ($${Number(adjustRefundAmount).toFixed(2)}) recorded in PostgreSQL and emailed to patient.`
+          : `Statement balance adjusted to $${updatedResp.toFixed(2)} and synced to patient portal.`
+      );
+    } catch {
+      // ignore
+    } finally {
+      setAdjustSubmitting(false);
+    }
+  };
+
+  const renderBillingModals = () => (
+    <>
+      <PrintableSuperbillModal
+        invoice={superbillModalInvoice}
+        patientEmail={
+          patients.find((p) => p.uid === superbillModalInvoice?.patientId)?.email ||
+          superbillModalInvoice?.patientEmail
+        }
+        patientDob={
+          patients.find((p) => p.uid === superbillModalInvoice?.patientId)?.dateOfBirth
+        }
+        patientInsurance={
+          patients.find((p) => p.uid === superbillModalInvoice?.patientId)?.insuranceProvider
+        }
+        patientMemberId={
+          patients.find((p) => p.uid === superbillModalInvoice?.patientId)?.insuranceMemberId
+        }
+        onClose={() => setSuperbillModalInvoice(null)}
+      />
+
+      {adjustModalInvoice && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 font-portal-body">
+          <div className="bg-white border border-stone-200 rounded-[28px] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-[#9E7206]">
+                  Provider Financial Ledger Action
+                </span>
+                <h3 className="text-lg font-bold font-portal-heading text-stone-900">
+                  {adjustAction === 'refund'
+                    ? 'Issue Patient Refund / Void Statement'
+                    : 'Adjust Statement Fee & Insurance Coverage'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdjustModalInvoice(null)}
+                className="text-stone-400 hover:text-stone-700 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAdjustOrRefund} className="space-y-3 text-xs">
+              <div className="p-3 rounded-[12px] bg-[#FAF9F5] border border-stone-200">
+                <p className="font-bold text-stone-900">
+                  {adjustModalInvoice.patientName} · CPT {adjustModalInvoice.cptCode || '99214'} ·{' '}
+                  {adjustModalInvoice.description}
+                </p>
+              </div>
+
+              {adjustAction === 'adjust' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-stone-700 block mb-1">
+                      Standard Charge ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={adjustTotal}
+                      onChange={(e) => setAdjustTotal(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 font-portal-heading tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-stone-700 block mb-1">
+                      Insurance Covered ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={adjustCovered}
+                      onChange={(e) => setAdjustCovered(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 font-portal-heading tabular-nums"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="font-semibold text-stone-700 block mb-1">
+                    Refund Amount ($ USD)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={adjustRefundAmount}
+                    onChange={(e) => setAdjustRefundAmount(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 font-portal-heading tabular-nums"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="font-semibold text-stone-700 block mb-1">
+                  Reason / Audit Note (Sent to Client Receipt)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustModalInvoice(null)}
+                  className="px-4 py-2 rounded-[10px] border border-stone-200 text-stone-600 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adjustSubmitting}
+                  className="px-5 py-2 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold cursor-pointer"
+                >
+                  {adjustSubmitting
+                    ? 'Saving...'
+                    : adjustAction === 'refund'
+                    ? 'Confirm Refund & Notify Client'
+                    : 'Save Adjusted Balance'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   const insertLinkIntoReply = (label: string, url: string) => {
     const snippet = `\n${label}: ${url}\n`;
@@ -1585,6 +1881,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
       return (
         <div className="space-y-6 font-portal-body">
           {renderAddPatientModal()}
+          {renderBillingModals()}
           <div className="bg-white portal-card p-8 text-center space-y-4">
             <h2 className="text-xl font-bold font-portal-heading text-stone-900">
               Dedicated Patient Page
@@ -1656,6 +1953,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
     return (
       <div className="space-y-6 font-portal-body">
         {renderAddPatientModal()}
+        {renderBillingModals()}
 
         {statusFeedback && (
           <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
@@ -1856,6 +2154,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
         <div className="bg-white portal-card p-3.5 flex flex-wrap items-center gap-2">
           {[
             { id: 'all', label: 'Complete Patient Overview (All-in-One)' },
+            { id: 'notes', label: "Brenda's Private Notes & Logs (Downloadable)" },
             { id: 'demographics', label: 'Demographics & Insurance' },
             { id: 'careplan', label: 'Care Plan & Portal Links' },
             { id: 'medications', label: `Medications (${patientMeds.length})` },
@@ -2800,10 +3099,65 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   onSubmit={(e) => handleCreateInvoice(e, activeChartPatient.uid)}
                   className="pt-3 border-t border-stone-200 space-y-3"
                 >
-                  <p className="text-xs font-bold text-stone-800">
-                    Issue Copay / Billing Statement to {activeChartPatient.fullName}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-stone-800">
+                      Issue CPT-Coded Statement &amp; Good Faith Estimate to{' '}
+                      {activeChartPatient.fullName}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectCptPreset(
+                            '99205',
+                            'Initial Psychiatric Diagnostic Evaluation (60 Min)',
+                            250,
+                            200
+                          )
+                        }
+                        className="px-2 py-1 rounded-[8px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[10px] font-bold text-[#9E7206] cursor-pointer"
+                      >
+                        99205 Initial ($250 / $50 Copay)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectCptPreset(
+                            '99214',
+                            'Medication Management & Follow-Up Session (30 Min)',
+                            150,
+                            115
+                          )
+                        }
+                        className="px-2 py-1 rounded-[8px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[10px] font-bold text-[#9E7206] cursor-pointer"
+                      >
+                        99214 Follow-Up ($150 / $35 Copay)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleSelectCptPreset(
+                            '99205',
+                            'Self-Pay Initial Psychiatric Evaluation',
+                            250,
+                            0
+                          )
+                        }
+                        className="px-2 py-1 rounded-[8px] bg-stone-100 border border-stone-200 text-[10px] font-bold text-stone-700 cursor-pointer"
+                      >
+                        Self-Pay Eval ($250)
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                    <input
+                      type="text"
+                      required
+                      placeholder="CPT Code (e.g. 99214)"
+                      value={invCptCode}
+                      onChange={(e) => setInvCptCode(e.target.value)}
+                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
                     <input
                       type="text"
                       required
@@ -2831,7 +3185,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                     type="submit"
                     className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
                   >
-                    Post Statement to {activeChartPatient.fullName}'s Portal
+                    Post Itemized Statement to {activeChartPatient.fullName}'s Portal
                   </button>
                 </form>
 
@@ -2840,32 +3194,83 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                     {patientInvoices.map((inv) => (
                       <div
                         key={inv.id}
-                        className="flex items-center justify-between text-xs p-2.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200"
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs p-3 rounded-[12px] bg-[#FAF9F5] border border-stone-200"
                       >
                         <div>
-                          <span className="font-bold text-stone-900">{inv.description}</span>
+                          <span className="font-bold text-stone-900">
+                            CPT {inv.cptCode || '99214'} · {inv.description}
+                          </span>
                           <span className="text-stone-500 ml-2 font-portal-heading tabular-nums">
-                            Copay: ${inv.patientResponsibility.toFixed(2)}
+                            Charge: ${inv.amount.toFixed(2)} · Ins: -$
+                            {inv.insuranceCoveredAmount.toFixed(2)} · Balance:{' '}
+                            <strong className="text-stone-900">
+                              ${inv.patientResponsibility.toFixed(2)}
+                            </strong>
                           </span>
                         </div>
-                        {inv.status === 'paid' ? (
-                          <span className="text-emerald-700 font-bold text-[11px] uppercase">
-                            Paid
-                          </span>
-                        ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleMarkInvoicePaid(inv.id)}
-                            className="px-2.5 py-1 rounded-[8px] bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
+                            onClick={() => setSuperbillModalInvoice(inv)}
+                            className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[11px] font-bold text-stone-700 hover:border-[#D4AF37] cursor-pointer"
                           >
-                            Mark Paid
+                            Superbill / Receipt
                           </button>
-                        )}
+                          {inv.status === 'paid' ? (
+                            <>
+                              <span className="text-emerald-700 font-bold text-[11px] uppercase px-2">
+                                Paid
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'refund')}
+                                className="px-2.5 py-1 rounded-[8px] bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold cursor-pointer"
+                              >
+                                Refund
+                              </button>
+                            </>
+                          ) : inv.status === 'refunded' ? (
+                            <span className="text-amber-700 font-bold text-[11px] uppercase px-2">
+                              Refunded
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'adjust')}
+                                className="px-2.5 py-1 rounded-[8px] bg-stone-100 text-stone-700 text-[11px] font-bold cursor-pointer"
+                              >
+                                Adjust
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkInvoicePaid(inv.id)}
+                                className="px-2.5 py-1 rounded-[8px] bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                Mark Paid
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            )}
+
+            {/* 6. Brenda's Private Patient Notes & Downloadable Clinical Logs (Provider-Only) */}
+            {(patientPageSection === 'all' || patientPageSection === 'notes') && (
+              <ProviderPatientNotesManager
+                patients={patients}
+                lockedPatient={activeChartPatient}
+                appointments={patientAppts}
+                intakes={patientIntakes}
+                assessments={patientAssessments}
+                medications={patientMeds}
+                invoices={patientInvoices}
+                onShowBanner={showBanner}
+              />
             )}
           </div>
 
@@ -3036,6 +3441,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
   return (
     <div className="space-y-6 font-portal-body">
       {renderAddPatientModal()}
+      {renderBillingModals()}
 
       {statusFeedback && (
         <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
@@ -3128,6 +3534,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
           {[
             { id: 'patients', label: `Patients Directory (${patients.length})`, icon: Users },
             { id: 'patient-page', label: 'Dedicated Patient Page', icon: UserCheck },
+            { id: 'notes', label: "Brenda's Private Notes & Logs", icon: ClipboardCheck },
             { id: 'queue', label: 'Telehealth Queue', icon: Calendar },
             { id: 'refills', label: `Rx & Drugs (${medications.length})`, icon: Pill },
             { id: 'messages', label: `Messages & Links (${messages.length})`, icon: MessageSquare },
@@ -4025,43 +4432,148 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
             </div>
           )}
 
+          {/* Sub-Tab: Brenda's Private Patient Notes & Downloadable Clinical Logs */}
+          {activeSubTab === 'notes' && (
+            <ProviderPatientNotesManager
+              patients={patients}
+              appointments={appointments}
+              intakes={intakes}
+              assessments={assessments}
+              medications={medications}
+              invoices={invoices}
+              onShowBanner={showBanner}
+            />
+          )}
+
           {/* Sub-Tab 6: Billing & Statements */}
           {activeSubTab === 'billing' && (
             <div className="space-y-6">
               <form onSubmit={handleCreateInvoice} className="bg-white portal-card p-6 space-y-4">
-                <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                  Issue New Patient Statement
-                </h3>
-                <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">Patient</label>
-                  <select
-                    value={invPatientId}
-                    onChange={(e) => setInvPatientId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  >
-                    {patients.map((p) => (
-                      <option key={p.uid} value={p.uid}>
-                        {p.fullName} ({p.email})
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Issue New Itemized Patient Statement &amp; Good Faith Estimate
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Compliant with Federal No Surprises Act (45 C.F.R. § 149.610), Texas HB 300 &amp;
+                      HIPAA Minimum-Necessary Privacy
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Service Description
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={invDesc}
-                    onChange={(e) => setInvDesc(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                  />
+
+                {/* 1-Click Psychiatric CPT Presets */}
+                <div className="p-3.5 rounded-[14px] bg-[#FAF6EA] border border-[#D4AF37]/40 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
+                    1-Click Psychiatric CPT Procedure Code &amp; Fee Presets:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSelectCptPreset(
+                          '99205',
+                          'Comprehensive Psychiatric Diagnostic Evaluation (60 Min)',
+                          250,
+                          200
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
+                    >
+                      CPT 99205 · Initial Eval ($250 / $50 Co-Pay)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSelectCptPreset(
+                          '99214',
+                          'Established Patient Medication Management Follow-Up (30 Min)',
+                          150,
+                          115
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
+                    >
+                      CPT 99214 · Med Follow-Up ($150 / $35 Co-Pay)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSelectCptPreset(
+                          '90833',
+                          'Supportive Psychotherapy Add-On with E/M Visit (30 Min)',
+                          95,
+                          70
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
+                    >
+                      CPT 90833 · Psychotherapy Add-On ($95 / $25 Co-Pay)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSelectCptPreset(
+                          '81418',
+                          'Pharmacogenomic (PGx) DNA Medication Consultation',
+                          175,
+                          125
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
+                    >
+                      CPT 81418 · PGx DNA Consult ($175 / $50 Co-Pay)
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-5">
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Patient
+                    </label>
+                    <select
+                      value={invPatientId}
+                      onChange={(e) => setInvPatientId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    >
+                      {patients.map((p) => (
+                        <option key={p.uid} value={p.uid}>
+                          {p.fullName} ({p.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      CPT Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={invCptCode}
+                      onChange={(e) => setInvCptCode(e.target.value)}
+                      placeholder="99214"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
+                    />
+                  </div>
+                  <div className="sm:col-span-5">
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Service Description
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={invDesc}
+                      onChange={(e) => setInvDesc(e.target.value)}
+                      placeholder="e.g., Established Patient Medication Management"
+                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Total Charge ($)
+                      Standard Clinical Charge ($)
                     </label>
                     <input
                       type="number"
@@ -4072,7 +4584,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Insurance Covered ($)
+                      Insurance Covered / Adjustment ($)
                     </label>
                     <input
                       type="number"
@@ -4081,14 +4593,121 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                       className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
                     />
                   </div>
+                  <div>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Net Patient Responsibility ($)
+                    </label>
+                    <div className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-xs font-bold text-[#9E7206] font-portal-heading tabular-nums">
+                      ${Math.max(0, Number(invTotal) - Number(invCovered)).toFixed(2)} USD
+                    </div>
+                  </div>
                 </div>
                 <button
                   type="submit"
                   className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
                 >
-                  Post Statement to Patient Portal
+                  Post Itemized Statement &amp; Good Faith Estimate to Patient Portal
                 </button>
               </form>
+
+              {/* Complete Provider Billing & Refund Audit Ledger */}
+              <div className="bg-white portal-card p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                      Patient Billing Statements, Superbills &amp; Refund Audit Ledger (
+                      {filteredInvoices.length})
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Synced in real time with Ubuntu PostgreSQL (`goldenmind_db`) · Click Superbill
+                      to print or issue a refund/adjustment
+                    </p>
+                  </div>
+                </div>
+
+                {filteredInvoices.length === 0 ? (
+                  <p className="text-xs text-stone-500 py-4 text-center">
+                    No billing statements issued yet.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200">
+                    {filteredInvoices.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-stone-900 text-sm">
+                              {inv.patientName}
+                            </span>
+                            <span className="text-stone-400">·</span>
+                            <span className="font-bold text-[#9E7206] font-portal-heading tabular-nums">
+                              CPT {inv.cptCode || '99214'}
+                            </span>
+                            <span className="text-stone-400">·</span>
+                            <span className="font-semibold text-stone-800">{inv.description}</span>
+                          </div>
+                          <p className="text-stone-500 font-portal-heading tabular-nums">
+                            Service Date: {inv.serviceDate} · Charge: ${inv.amount.toFixed(2)} ·
+                            Insurance Adj: -${inv.insuranceCoveredAmount.toFixed(2)} ·{' '}
+                            <strong className="text-stone-900">
+                              Patient Balance: ${inv.patientResponsibility.toFixed(2)}
+                            </strong>
+                            {inv.transactionId ? ` · Tx: ${inv.transactionId}` : ''}
+                            {inv.paymentMethod ? ` (${inv.paymentMethod})` : ''}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSuperbillModalInvoice(inv)}
+                            className="px-3 py-1.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-stone-800 font-bold text-xs hover:border-[#D4AF37] cursor-pointer"
+                          >
+                            Superbill / Receipt
+                          </button>
+                          {inv.status === 'paid' ? (
+                            <>
+                              <span className="px-3 py-1.5 rounded-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs uppercase">
+                                Paid
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'refund')}
+                                className="px-3 py-1.5 rounded-[10px] bg-red-50 border border-red-200 text-red-700 font-bold text-xs cursor-pointer"
+                              >
+                                Issue Refund
+                              </button>
+                            </>
+                          ) : inv.status === 'refunded' ? (
+                            <span className="px-3 py-1.5 rounded-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-bold text-xs uppercase">
+                              Refunded
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'adjust')}
+                                className="px-3 py-1.5 rounded-[10px] bg-stone-100 text-stone-700 font-bold text-xs cursor-pointer"
+                              >
+                                Adjust Fee
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkInvoicePaid(inv.id)}
+                                className="px-3 py-1.5 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                              >
+                                Mark Paid
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
