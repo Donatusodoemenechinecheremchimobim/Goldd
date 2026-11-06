@@ -35,9 +35,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Welcoming New Patients Across Texas · 100% Telehealth Visits</span>
           </div>
           <div className="hidden md:flex items-center gap-5 shrink-0 text-[#E6C35C]">
-            <a href="tel:+14329343185" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
+            <a href="tel:+14323006667" className="flex items-center gap-1.5 hover:text-[#FFF4BE] transition-colors">
               <Phone className="w-3 h-3 text-[#D4AF37]" />
-              <span>+1 (432) 934-3185</span>
+              <span>(432) 300-6667</span>
             </a>
             <span className="text-stone-700">|</span>
             <button
@@ -367,9 +367,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             <div className="mt-4 text-center space-y-1.5">
-              <a href="tel:+14329343185" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
+              <a href="tel:+14323006667" className="text-xs text-stone-400 hover:text-[#D4AF37] flex items-center justify-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Call Us: +1 (432) 934-3185</span>
+                <span>Call Us: (432) 300-6667</span>
               </a>
               <p className="text-[11px] text-stone-400">
                 Crisis Line: <strong className="text-[#D4AF37]">988</strong> · Poison Control (24/7):{' '}

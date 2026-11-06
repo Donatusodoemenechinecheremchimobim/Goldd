@@ -93,7 +93,7 @@ const PAGE_SEO_MAP: Record<string, { title: string; description: string; queryPa
   contact: {
     title: 'Contact Our Office & Schedule a Telehealth Visit | Golden Mind Psychiatry PLLC',
     description:
-      'Connect with Golden Mind Psychiatry PLLC at +1 (432) 934-3185 or info@goldenmindpsychiatry.org to schedule your Texas telehealth psychiatric evaluation.',
+      'Connect with Golden Mind Psychiatry PLLC at (432) 300-6667 or info@goldenmindpsychiatry.org to schedule your Texas telehealth psychiatric evaluation.',
     queryPath: '/?page=contact',
   },
   portal: {

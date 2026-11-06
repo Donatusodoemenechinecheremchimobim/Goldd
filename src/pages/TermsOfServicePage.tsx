@@ -153,10 +153,10 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onNaviga
               <strong>Parental &amp; Legal Guardian Consent for Minors Under 18 (Texas Family Code Ch. 32):</strong> For any patient under 18 years of age (unless legally emancipated under Texas law), a parent, managing conservator, or legal guardian with legal authority to consent to psychiatric and pharmacological care must attest to guardianship during registration and attend the initial evaluation.
             </li>
             <li>
-              <strong>ACA Section 1557 Non-Discrimination &amp; Language Assistance Notice:</strong> Golden Mind Psychiatry PLLC complies with applicable Federal civil rights laws (Section 1557 of the Affordable Care Act, Title VI of the Civil Rights Act of 1964, Section 504 of the Rehabilitation Act of 1973, and the Age Discrimination Act of 1975) and does not discriminate on the basis of race, color, national origin, age, disability, or sex. Free language assistance and auxiliary aids are available upon request at +1 (432) 934-3185.
+              <strong>ACA Section 1557 Non-Discrimination &amp; Language Assistance Notice:</strong> Golden Mind Psychiatry PLLC complies with applicable Federal civil rights laws (Section 1557 of the Affordable Care Act, Title VI of the Civil Rights Act of 1964, Section 504 of the Rehabilitation Act of 1973, and the Age Discrimination Act of 1975) and does not discriminate on the basis of race, color, national origin, age, disability, or sex. Free language assistance and auxiliary aids are available upon request at (432) 300-6667.
             </li>
             <li>
-              <strong>ADA Title III &amp; WCAG 2.1 Level AA Web Accessibility Statement:</strong> We are committed to ensuring digital accessibility for individuals with visual, auditory, motor, and cognitive disabilities in alignment with WCAG 2.1 Level AA standards. If you experience any difficulty accessing any part of <code className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">goldenmindpsychiatry.org</code> or need an accommodation, please call +1 (432) 934-3185 or email <a href="mailto:info@goldenmindpsychiatry.org" className="text-[#9E7206] underline">info@goldenmindpsychiatry.org</a>.
+              <strong>ADA Title III &amp; WCAG 2.1 Level AA Web Accessibility Statement:</strong> We are committed to ensuring digital accessibility for individuals with visual, auditory, motor, and cognitive disabilities in alignment with WCAG 2.1 Level AA standards. If you experience any difficulty accessing any part of <code className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">goldenmindpsychiatry.org</code> or need an accommodation, please call (432) 300-6667 or email <a href="mailto:info@goldenmindpsychiatry.org" className="text-[#9E7206] underline">info@goldenmindpsychiatry.org</a>.
             </li>
           </ul>
           <p className="text-sm text-[#44403C] leading-relaxed pt-2">
@@ -167,7 +167,7 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ onNaviga
             <div className="flex flex-wrap items-center gap-4 text-xs text-[#44403C]">
               <span className="flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-[#B8860B]" />
-                <a href="tel:+14329343185" className="text-[#9E7206] font-semibold hover:underline">+1 (432) 934-3185</a>
+                <a href="tel:+14323006667" className="text-[#9E7206] font-semibold hover:underline">(432) 300-6667</a>
               </span>
               <span className="flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-[#B8860B]" />

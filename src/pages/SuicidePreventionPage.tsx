@@ -84,7 +84,7 @@ export const SuicidePreventionPage: React.FC<SuicidePreventionPageProps> = ({
       '   • Suicide & Crisis Lifeline: Call or Text 988 (24/7)',
       '   • Poison Control Center: Call 800-222-1222 (24/7)',
       '   • Crisis Text Line: Text HOME to 741741 (24/7)',
-      '   • Golden Mind Psychiatry PLLC (Brenda Hobyani, PMHNP-BC): +1 (432) 934-3185',
+      '   • Golden Mind Psychiatry PLLC (Brenda Hobyani, PMHNP-BC): (432) 300-6667',
       '   • Immediate Medical Emergency: Call 911 or visit nearest ER',
       `\n6. Steps to Keep My Environment Safe:\n${safetyPlan.environmentSafety || '(Not specified)'}`,
       `\n7. What Matters Most to Me & Reasons for Living:\n${safetyPlan.reasonForLiving || '(Not specified)'}`,
@@ -499,7 +499,7 @@ export const SuicidePreventionPage: React.FC<SuicidePreventionPageProps> = ({
                 <strong>Suicide &amp; Crisis Lifeline:</strong> 988 ·{' '}
                 <strong>Poison Control (24/7):</strong> 800-222-1222 ·{' '}
                 <strong>Crisis Text Line:</strong> Text HOME to 741741 ·{' '}
-                <strong>Golden Mind Psychiatry PLLC:</strong> +1 (432) 934-3185
+                <strong>Golden Mind Psychiatry PLLC:</strong> (432) 300-6667
               </p>
             </div>
 

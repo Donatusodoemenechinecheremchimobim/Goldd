@@ -197,7 +197,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onNavigate
               <p className="text-[#44403C]">Use the <strong>1-Click Medical Records Request</strong> button in your Client Portal or contact:</p>
               <p className="text-[#44403C] flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-[#B8860B]" />
-                <a href="tel:+14329343185" className="text-[#9E7206] font-semibold hover:underline">+1 (432) 934-3185</a>
+                <a href="tel:+14323006667" className="text-[#9E7206] font-semibold hover:underline">(432) 300-6667</a>
               </p>
               <p className="text-[#44403C] flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-[#B8860B]" />

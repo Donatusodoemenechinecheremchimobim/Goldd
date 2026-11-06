@@ -1003,7 +1003,7 @@ function buildBrandedEmailHtml(title: string, bodyHtml: string): string {
           <strong style="color:#1C1917;">Brenda Hobyani, MSN, APRN, PMHNP-BC</strong><br />
           Founder &amp; Lead Clinical Director · Golden Mind Psychiatry PLLC<br />
           100% Telehealth Across Texas · Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM<br />
-          Phone: <a href="tel:+14329343185" style="color:#9E7206;text-decoration:none;">(432) 934-3185</a> ·
+          Phone: <a href="tel:+14323006667" style="color:#9E7206;text-decoration:none;">(432) 300-6667</a> ·
           Email: <a href="mailto:${CLINIC_EMAIL}" style="color:#9E7206;text-decoration:none;">${CLINIC_EMAIL}</a> ·
           <a href="${SITE_URL}" style="color:#9E7206;text-decoration:none;">goldenmindpsychiatry.org</a>
         </p>
@@ -3722,7 +3722,7 @@ async function startServer() {
         await ensureStandalonePostgresUser({
           email: 'beehobs@yahoo.com',
           fullName: 'Brenda Hobyani, MSN, APRN, PMHNP-BC',
-          phone: '(432) 934-3185',
+          phone: '(432) 300-6667',
           dateOfBirth: '1980-01-01',
           insuranceProvider: 'Golden Mind Psychiatry PLLC',
           authProvider: 'password',

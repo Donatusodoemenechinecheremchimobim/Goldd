@@ -61,7 +61,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               </div>
               <div className="flex items-center gap-2 text-[#44403C]">
                 <Phone className="w-4 h-4 text-[#B8860B] shrink-0" />
-                <a href="tel:+14329343185" className="hover:text-[#B8860B] transition-colors font-medium">+1 (432) 934-3185</a>
+                <a href="tel:+14323006667" className="hover:text-[#B8860B] transition-colors font-medium">(432) 300-6667</a>
               </div>
               <div className="flex items-center gap-2 text-[#44403C]">
                 <Mail className="w-4 h-4 text-[#B8860B] shrink-0" />
@@ -205,7 +205,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
               <a href="mailto:info@goldenmindpsychiatry.org" className="text-[#9E7206] font-semibold underline">
                 info@goldenmindpsychiatry.org
               </a>
-              , or by calling <a href="tel:+14329343185" className="text-[#9E7206] font-semibold">+1 (432) 934-3185</a>. Electronic records are delivered within 15 business days.
+              , or by calling <a href="tel:+14323006667" className="text-[#9E7206] font-semibold">(432) 300-6667</a>. Electronic records are delivered within 15 business days.
             </div>
             <div>
               <strong className="text-[#1C1917] block">2. Licensing Council &amp; Regulatory Contact:</strong>
@@ -264,7 +264,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
             <strong>Medical, Telehealth &amp; APRN Disclosure:</strong> Information provided on this website is for informational and educational purposes only and does not constitute a formal clinician-patient relationship until an initial synchronous clinical evaluation is conducted. Clinical psychiatric evaluations and medication management are provided by Brenda Hobyani, MSN, APRN, PMHNP-BC in accordance with Texas Occupations Code Chapters 104, 111, and 157. For medical or psychiatric emergencies, call 911, dial 988, call Poison Control at 800-222-1222 (24/7), or visit the nearest emergency room.
           </p>
           <p>
-            <strong>ACA Section 1557 Non-Discrimination &amp; ADA WCAG 2.1 Accessibility Notice:</strong> Golden Mind Psychiatry PLLC complies with applicable Federal civil rights laws and does not discriminate on the basis of race, color, national origin, age, disability, or sex. Free language assistance and reasonable disability accommodations are available by calling +1 (432) 934-3185 or emailing info@goldenmindpsychiatry.org.
+            <strong>ACA Section 1557 Non-Discrimination &amp; ADA WCAG 2.1 Accessibility Notice:</strong> Golden Mind Psychiatry PLLC complies with applicable Federal civil rights laws and does not discriminate on the basis of race, color, national origin, age, disability, or sex. Free language assistance and reasonable disability accommodations are available by calling (432) 300-6667 or emailing info@goldenmindpsychiatry.org.
           </p>
         </div>
       </div>
