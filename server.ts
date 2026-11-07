@@ -19,9 +19,17 @@ const firestoreHttpsAgent = new https.Agent({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CLINIC_EMAIL = process.env.DOCTOR_NOTIFICATION_EMAIL || 'info@goldenmindpsychiatry.org';
+const PRIMARY_CLINIC_INBOX = 'info@goldenmindpsychiatry.org';
+const CLINIC_EMAIL = PRIMARY_CLINIC_INBOX;
 const ADMIN_YAHOO_EMAIL = 'beehobs@yahoo.com';
-const DOCTOR_ALERT_RECIPIENTS = `${CLINIC_EMAIL}, ${ADMIN_YAHOO_EMAIL}`;
+const EXTRA_DOCTOR_EMAIL = (process.env.DOCTOR_NOTIFICATION_EMAIL || '').trim().toLowerCase();
+const DOCTOR_ALERT_RECIPIENTS = Array.from(
+  new Set(
+    [PRIMARY_CLINIC_INBOX, ADMIN_YAHOO_EMAIL, EXTRA_DOCTOR_EMAIL].filter(
+      (e) => e && e.includes('@')
+    )
+  )
+).join(', ');
 const SITE_URL = process.env.APP_URL || 'https://goldenmindpsychiatry.org';
 const LOGO_PNG_PATH = path.join(__dirname, 'public', 'pwa-512x512.png');
 const HAS_LOCAL_LOGO_PNG = fs.existsSync(LOGO_PNG_PATH);
@@ -1186,6 +1194,44 @@ async function sendClinicEmail(opts: {
   return { deliveredViaSmtp: false, smtpError: lastErrMsg };
 }
 
+/**
+ * Guaranteed Clinic Alert Dispatcher:
+ * Always delivers a dedicated direct email to `info@goldenmindpsychiatry.org` first
+ * (so local mailbox delivery on mailserver.businessidentity.llc never depends on external Yahoo relay),
+ * and then dispatches a copy to `beehobs@yahoo.com` (and any configured extra address).
+ */
+async function sendDoctorAlertEmail(opts: {
+  subject: string;
+  html: string;
+  replyTo?: string;
+}): Promise<{ deliveredViaSmtp: boolean; smtpError?: string }> {
+  const primaryRes = await sendClinicEmail({
+    to: PRIMARY_CLINIC_INBOX,
+    subject: opts.subject,
+    html: opts.html,
+    replyTo: opts.replyTo || PRIMARY_CLINIC_INBOX,
+  });
+
+  const secondaryRecipients = Array.from(
+    new Set(
+      [ADMIN_YAHOO_EMAIL, EXTRA_DOCTOR_EMAIL].filter(
+        (e) => e && e.includes('@') && e.toLowerCase() !== PRIMARY_CLINIC_INBOX
+      )
+    )
+  );
+
+  for (const secondaryTo of secondaryRecipients) {
+    void sendClinicEmail({
+      to: secondaryTo,
+      subject: opts.subject,
+      html: opts.html,
+      replyTo: opts.replyTo || PRIMARY_CLINIC_INBOX,
+    });
+  }
+
+  return primaryRes;
+}
+
 async function startServer() {
   const app = express();
   app.disable('x-powered-by');
@@ -1546,9 +1592,23 @@ async function startServer() {
     });
   });
 
-  // 1. Appointment Booking Email Dispatch (Doctor Notification + Patient Confirmation with Logo)
+  // 1. Appointment Booking / Reschedule / Cancellation Email Dispatch (Guaranteed to info@goldenmindpsychiatry.org + Patient Confirmation)
   app.post('/api/email/appointment', async (req, res) => {
     try {
+      const actionType =
+        req.body?.actionType === 'rescheduled'
+          ? 'rescheduled'
+          : req.body?.actionType === 'cancelled'
+          ? 'cancelled'
+          : 'booked';
+      const appointmentId =
+        typeof req.body?.id === 'string' && req.body.id.trim()
+          ? req.body.id.trim()
+          : `appt_${Date.now()}`;
+      const patientId =
+        typeof req.body?.patientId === 'string' && req.body.patientId.trim()
+          ? req.body.patientId.trim()
+          : 'guest';
       const fullName = escapeHtml(req.body?.fullName, 160);
       const email = sanitizeEmailAddress(req.body?.email);
       const phone = escapeHtml(req.body?.phone, 40);
@@ -1557,25 +1617,62 @@ async function startServer() {
       const conditionReason = escapeHtml(req.body?.conditionReason, 200);
       const preferredDate = escapeHtml(req.body?.preferredDate, 64);
       const preferredTime = escapeHtml(req.body?.preferredTime, 100);
-      const insuranceProvider = escapeHtml(req.body?.insuranceProvider, 160);
       const notes = escapeHtml(req.body?.notes, 1500);
       const telehealthUrl = escapeHtml(req.body?.telehealthUrl, 300);
 
-      // Branded Doctor Notification Email to info@goldenmindpsychiatry.org & beehobs@yahoo.com
+      // Fail-safe: Mirror appointment directly to Ubuntu PostgreSQL (`goldenmind_db`)
+      if (!pgConnected) {
+        await initPostgresPool();
+      }
+      if (pgConnected) {
+        void upsertClinicalRecordToPostgres('appointments', appointmentId, {
+          id: appointmentId,
+          patientId,
+          patientName: req.body?.fullName || 'Patient',
+          patientEmail: email,
+          patientPhone: req.body?.phone || '',
+          dateOfBirth: req.body?.dateOfBirth || '',
+          serviceType: req.body?.serviceType || 'Comprehensive Psychiatric Evaluation',
+          conditionReason: req.body?.conditionReason || 'General Psychiatric Evaluation',
+          preferredDate: req.body?.preferredDate || '',
+          preferredTime: req.body?.preferredTime || '',
+          status: actionType === 'cancelled' ? 'cancelled' : 'confirmed',
+          telehealthUrl: req.body?.telehealthUrl || '',
+          notes: req.body?.notes || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      const actionHeading =
+        actionType === 'rescheduled'
+          ? 'Telehealth Appointment Rescheduled by Patient'
+          : actionType === 'cancelled'
+          ? 'Telehealth Appointment Cancelled by Patient'
+          : 'New 100% Telehealth Appointment Booked';
+
+      const actionSubjectPrefix =
+        actionType === 'rescheduled'
+          ? '[Appointment Rescheduled]'
+          : actionType === 'cancelled'
+          ? '[Appointment Cancelled]'
+          : '[New Appointment]';
+
+      // Branded Doctor Notification Email guaranteed to info@goldenmindpsychiatry.org (& beehobs@yahoo.com)
       const doctorHtml = buildBrandedEmailHtml(
-        `New Telehealth Appointment Booking: ${fullName}`,
+        `${actionSubjectPrefix} ${fullName || email}`,
         `
-        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New 100% Telehealth Appointment Booked</h2>
-        <p style="margin:0 0 16px 0;">A patient has booked a telehealth consultation on <strong>goldenmindpsychiatry.org</strong> and the record has been saved in real time to your Provider Portal.</p>
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">${actionHeading}</h2>
+        <p style="margin:0 0 16px 0;">A patient appointment update has been recorded on <strong>goldenmindpsychiatry.org</strong> and synced in real time to your Provider Portal and <strong>goldenmind_db</strong>.</p>
         <table width="100%" cellpadding="8" cellspacing="0" style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:12px;font-size:13px;">
+          <tr><td><strong>Status:</strong></td><td><strong style="color:#9E7206;text-transform:uppercase;">${actionType}</strong></td></tr>
           <tr><td><strong>Patient Name:</strong></td><td>${fullName || 'N/A'}</td></tr>
           <tr><td><strong>Date of Birth:</strong></td><td>${dateOfBirth || 'N/A'}</td></tr>
           <tr><td><strong>Patient Email:</strong></td><td>${email || 'N/A'}</td></tr>
           <tr><td><strong>Phone Number:</strong></td><td>${phone || 'N/A'}</td></tr>
           <tr><td><strong>Service Type:</strong></td><td>${serviceType || 'Comprehensive Psychiatric Evaluation'}</td></tr>
           <tr><td><strong>Primary Concern:</strong></td><td>${conditionReason || 'General Psychiatric Evaluation'}</td></tr>
-          <tr><td><strong>Preferred Date &amp; Window:</strong></td><td>${preferredDate || 'Next Available'} · ${preferredTime || ''}</td></tr>
-          <tr><td><strong>Insurance / Coverage:</strong></td><td>${insuranceProvider || 'N/A'}</td></tr>
+          <tr><td><strong>Date &amp; Time Window:</strong></td><td>${preferredDate || 'Next Available'} · ${preferredTime || ''}</td></tr>
           <tr><td><strong>HIPAA Video Room:</strong></td><td><a href="${telehealthUrl || SITE_URL}" style="color:#9E7206;">${telehealthUrl || 'Provisioned in Portal'}</a></td></tr>
           <tr><td><strong>Patient Notes:</strong></td><td>${notes || 'None provided'}</td></tr>
         </table>
@@ -1589,14 +1686,14 @@ async function startServer() {
 
       // Branded Patient Confirmation Email with Golden Mind Logo
       const patientHtml = buildBrandedEmailHtml(
-        'Your 100% Telehealth Appointment Confirmation — Golden Mind Psychiatry PLLC',
+        'Your 100% Telehealth Appointment Update — Golden Mind Psychiatry PLLC',
         `
         <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Hello ${fullName || 'Valued Patient'},</h2>
-        <p style="margin:0 0 16px 0;">Your <strong>100% Telehealth Video Consultation</strong> with <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> at <strong>Golden Mind Psychiatry PLLC</strong> has been received and saved to your chart.</p>
+        <p style="margin:0 0 16px 0;">Your <strong>100% Telehealth Video Consultation</strong> (${actionType}) with <strong>Brenda Hobyani, MSN, APRN, PMHNP-BC</strong> at <strong>Golden Mind Psychiatry PLLC</strong> has been recorded on your chart.</p>
         <table width="100%" cellpadding="8" cellspacing="0" style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:12px;font-size:13px;">
+          <tr><td><strong>Status:</strong></td><td style="text-transform:capitalize;"><strong>${actionType}</strong></td></tr>
           <tr><td><strong>Focus Area:</strong></td><td>${conditionReason || 'Psychiatric Evaluation'}</td></tr>
           <tr><td><strong>Date &amp; Time Window:</strong></td><td>${preferredDate || 'Next Available'} · ${preferredTime || ''}</td></tr>
-          <tr><td><strong>Insurance / Payment:</strong></td><td>${insuranceProvider || 'N/A'}</td></tr>
           <tr><td><strong>HIPAA Video Link:</strong></td><td><a href="${telehealthUrl || SITE_URL}" style="color:#9E7206;">${telehealthUrl || 'Available in Client Portal'}</a></td></tr>
         </table>
         <p style="margin:16px 0;">Please sign in to your <strong>Client Portal</strong> using <strong>${email}</strong> to complete your Digital Psychiatric Intake Forms and baseline PHQ-9 / GAD-7 check-in prior to your session:</p>
@@ -1608,17 +1705,21 @@ async function startServer() {
         `
       );
 
-      const doctorResult = await sendClinicEmail({
-        to: DOCTOR_ALERT_RECIPIENTS,
-        replyTo: email || CLINIC_EMAIL,
-        subject: `[New Appointment] ${fullName} — ${conditionReason} (${preferredDate || 'Next Available'})`,
+      const doctorResult = await sendDoctorAlertEmail({
+        replyTo: email || PRIMARY_CLINIC_INBOX,
+        subject: `${actionSubjectPrefix} ${fullName || email} — ${conditionReason || 'Telehealth'} (${preferredDate || 'Next Available'})`,
         html: doctorHtml,
       });
 
       if (email) {
         await sendClinicEmail({
           to: email,
-          subject: 'Appointment Confirmation — Golden Mind Psychiatry PLLC',
+          subject:
+            actionType === 'rescheduled'
+              ? 'Appointment Rescheduled Confirmation — Golden Mind Psychiatry PLLC'
+              : actionType === 'cancelled'
+              ? 'Appointment Cancellation Confirmation — Golden Mind Psychiatry PLLC'
+              : 'Appointment Confirmation — Golden Mind Psychiatry PLLC',
           html: patientHtml,
         });
       }
@@ -1630,32 +1731,70 @@ async function startServer() {
     }
   });
 
-  // 2. Confidential Contact Inquiry Email Dispatch to Doctor (info@goldenmindpsychiatry.org & beehobs@yahoo.com)
+  // 2. Confidential Contact Inquiry Email Dispatch Guaranteed to info@goldenmindpsychiatry.org (& beehobs@yahoo.com) + Saved in PostgreSQL
   app.post('/api/email/contact', async (req, res) => {
     try {
       const name = escapeHtml(req.body?.name, 160);
       const email = sanitizeEmailAddress(req.body?.email);
       const phone = escapeHtml(req.body?.phone, 40);
       const message = escapeHtml(req.body?.message, 3000);
+      const nowIso = new Date().toISOString();
+
+      // Save inquiry into PostgreSQL `messages` so Brenda also sees it in her portal
+      if (!pgConnected) {
+        await initPostgresPool();
+      }
+      if (pgConnected) {
+        const inquiryMsgId = `inq_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+        void upsertClinicalRecordToPostgres('messages', inquiryMsgId, {
+          id: inquiryMsgId,
+          patientId: 'website-inquiry',
+          patientName: `${req.body?.name || 'Website Visitor'} (${email || req.body?.phone || 'Inquiry'})`,
+          senderId: email || 'website-inquiry',
+          senderName: req.body?.name || 'Website Visitor',
+          senderRole: 'patient',
+          subject: `[Website Contact Inquiry] from ${req.body?.name || 'Visitor'} (${req.body?.phone || 'No phone'})`,
+          body: `Name: ${req.body?.name || 'N/A'}\nEmail: ${email || 'N/A'}\nPhone: ${req.body?.phone || 'N/A'}\n\nInquiry Message:\n${req.body?.message || ''}`,
+          read: false,
+          createdAt: nowIso,
+        });
+      }
+
       const html = buildBrandedEmailHtml(
-        `New Confidential Inquiry from ${name}`,
+        `New Confidential Website Inquiry from ${name || email}`,
         `
-        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Contact Inquiry</h2>
+        <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">New Patient Contact Inquiry (goldenmindpsychiatry.org)</h2>
+        <p style="margin:0 0 14px 0;">A visitor submitted a confidential inquiry on the Contact page. You can reply directly to this email to respond to <strong>${name || email}</strong>.</p>
         <table width="100%" cellpadding="8" cellspacing="0" style="background:#FAF9F5;border:1px solid #E7E5E4;border-radius:12px;font-size:13px;">
           <tr><td><strong>Name:</strong></td><td>${name || 'N/A'}</td></tr>
           <tr><td><strong>Email:</strong></td><td>${email || 'N/A'}</td></tr>
           <tr><td><strong>Phone:</strong></td><td>${phone || 'N/A'}</td></tr>
-          <tr><td><strong>Message:</strong></td><td>${message || ''}</td></tr>
+          <tr><td><strong>Message:</strong></td><td style="white-space:pre-line;">${message || ''}</td></tr>
         </table>
         `
       );
 
-      const result = await sendClinicEmail({
-        to: DOCTOR_ALERT_RECIPIENTS,
-        replyTo: email || CLINIC_EMAIL,
-        subject: `[Website Inquiry] ${name} — Golden Mind Psychiatry PLLC`,
+      const result = await sendDoctorAlertEmail({
+        replyTo: email || PRIMARY_CLINIC_INBOX,
+        subject: `[Website Inquiry] ${name || email || 'New Inquiry'} — Golden Mind Psychiatry PLLC`,
         html,
       });
+
+      if (email) {
+        const visitorConfirmHtml = buildBrandedEmailHtml(
+          'We Received Your Inquiry — Golden Mind Psychiatry PLLC',
+          `
+          <h2 style="margin:0 0 12px 0;color:#1C1917;font-size:18px;">Hello ${name || 'Valued Visitor'},</h2>
+          <p style="margin:0 0 14px 0;">Thank you for contacting <strong>Golden Mind Psychiatry PLLC</strong>. Your message has been delivered to <strong>info@goldenmindpsychiatry.org</strong> and our care team will respond within 24 business hours.</p>
+          <p style="margin:0;font-size:13px;color:#57534E;">For immediate assistance during practice hours (Mon–Thu 8:00 AM – 4:00 PM, Fri 9:00 AM – 1:00 PM), you may also call us at <strong>(432) 300-6667</strong>.</p>
+          `
+        );
+        void sendClinicEmail({
+          to: email,
+          subject: 'We Received Your Inquiry — Golden Mind Psychiatry PLLC',
+          html: visitorConfirmHtml,
+        });
+      }
 
       res.json({ ok: true, deliveredViaSmtp: result.deliveredViaSmtp });
     } catch (error) {
@@ -1840,8 +1979,8 @@ async function startServer() {
         <p><strong>${fullName || 'New Patient'}</strong> (${email} · ${phone || 'No phone provided'}${insuranceProvider ? ` · Insurance: ${insuranceProvider}` : ''}) has registered for a Client Portal account and was sent a 6-digit verification code via SMTP.</p>
         `
       );
-      const result = await sendClinicEmail({
-        to: DOCTOR_ALERT_RECIPIENTS,
+      const result = await sendDoctorAlertEmail({
+        replyTo: email || PRIMARY_CLINIC_INBOX,
         subject: `[New Portal Registration] ${fullName || email}`,
         html: doctorAlertHtml,
       });
@@ -2137,10 +2276,11 @@ async function startServer() {
     res.json({ ok: true, verified });
   });
 
-  // 4. Instant Portal Message Notification Alert (Client -> Provider beehobs@yahoo.com & info@goldenmindpsychiatry.org, or Provider -> Client)
+  // 4. Instant Portal Message Notification Alert (Client -> Provider info@goldenmindpsychiatry.org & beehobs@yahoo.com, or Provider -> Client)
   app.post('/api/email/message-alert', async (req, res) => {
     try {
       const direction = req.body?.direction === 'provider_to_patient' ? 'provider_to_patient' : 'patient_to_provider';
+      const patientId = sanitizeString(req.body?.patientId, 120) || 'patient';
       const patientName = escapeHtml(req.body?.patientName, 160);
       const patientEmail = sanitizeEmailAddress(req.body?.patientEmail);
       const subject = escapeHtml(req.body?.subject, 240);
@@ -2177,7 +2317,25 @@ async function startServer() {
         return;
       }
 
-      // Default: Client sent a message -> Alert BOTH beehobs@yahoo.com and info@goldenmindpsychiatry.org
+      // Mirror client portal message directly to Ubuntu PostgreSQL (`goldenmind_db`) so it is never lost
+      const messageRecordId =
+        sanitizeString(req.body?.id, 120) ||
+        `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const createdAtIso = new Date().toISOString();
+      await upsertClinicalRecordToPostgres('messages', messageRecordId, {
+        id: messageRecordId,
+        patientId,
+        patientName: sanitizeString(req.body?.patientName, 160) || 'Patient',
+        senderId: patientId,
+        senderName: sanitizeString(req.body?.patientName, 160) || 'Patient',
+        senderRole: 'patient',
+        subject: sanitizeString(req.body?.subject, 240) || 'Client Portal Message',
+        body: sanitizeString(req.body?.body, 4000),
+        read: false,
+        createdAt: createdAtIso,
+      });
+
+      // Default: Client sent a message -> Alert info@goldenmindpsychiatry.org directly (plus beehobs@yahoo.com)
       const adminAlertHtml = buildBrandedEmailHtml(
         `New Client Portal Message from ${patientName || 'Patient'}`,
         `
@@ -2199,9 +2357,8 @@ async function startServer() {
         `
       );
 
-      const result = await sendClinicEmail({
-        to: DOCTOR_ALERT_RECIPIENTS,
-        replyTo: patientEmail || CLINIC_EMAIL,
+      const result = await sendDoctorAlertEmail({
+        replyTo: patientEmail || PRIMARY_CLINIC_INBOX,
         subject: `[Client Portal Message] ${patientName || 'Patient'} — ${subject || 'New Message'}`,
         html: adminAlertHtml,
       });
@@ -2263,9 +2420,8 @@ async function startServer() {
         `
       );
 
-      const result = await sendClinicEmail({
-        to: DOCTOR_ALERT_RECIPIENTS,
-        replyTo: patientEmail || CLINIC_EMAIL,
+      const result = await sendDoctorAlertEmail({
+        replyTo: patientEmail || PRIMARY_CLINIC_INBOX,
         subject: `[Texas HB 300 Records Request] ${patientName} (${requestedAt})`,
         html: providerAlertHtml,
       });

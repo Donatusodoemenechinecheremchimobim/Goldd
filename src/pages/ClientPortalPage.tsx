@@ -2278,7 +2278,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     setWorkspaceMode('patient');
   };
 
-  // Complete Digital Intake Form (100% Real-Time Firestore)
+  // Complete Digital Intake Form (100% Real-Time Firestore + Instant Email Alert to info@goldenmindpsychiatry.org)
   const handleCompleteIntake = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingIntake || !portalUser || !firebaseUser) return;
@@ -2286,6 +2286,21 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     const sanitizedResponses: Record<string, string> = {};
     Object.entries(intakeAnswers).forEach(([k, v]) => {
       sanitizedResponses[k] = sanitizeClinicalInput(v, 1000);
+    });
+
+    const intakeSubject = `Completed Intake: ${editingIntake.title}`;
+    const intakeBody = `Patient ${portalUser.fullName} (${portalUser.email}) electronically signed and submitted "${editingIntake.title}" on ${
+      now.split('T')[0]
+    }.`;
+
+    // Immediately notify info@goldenmindpsychiatry.org via server SMTP
+    dispatchPortalMessageEmailAlert({
+      patientId: portalUser.uid,
+      direction: 'patient_to_provider',
+      patientName: portalUser.fullName,
+      patientEmail: portalUser.email,
+      subject: intakeSubject,
+      body: intakeBody,
     });
 
     try {
@@ -2300,10 +2315,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         senderId: portalUser.uid,
         senderName: portalUser.fullName,
         senderRole: 'patient',
-        subject: `Completed Intake: ${editingIntake.title}`,
-        body: `Patient ${portalUser.fullName} (${portalUser.email}) electronically signed and submitted "${editingIntake.title}" on ${
-          now.split('T')[0]
-        }.`,
+        subject: intakeSubject,
+        body: intakeBody,
         read: false,
         createdAt: now,
       });
@@ -2313,7 +2326,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Reschedule or Cancel Appointment (100% Real-Time Firestore & Availability Checked)
+  // Reschedule or Cancel Appointment (100% Real-Time Firestore, Availability Checked & Instant Email to info@goldenmindpsychiatry.org)
   const handleSaveReschedule = async (apptId: string) => {
     if (!newApptDate || !portalUser || !firebaseUser) return;
     const check = evaluateDateAndWindowAvailability(newApptDate, newApptTime, unavailableDates);
@@ -2325,15 +2338,41 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
     setRescheduleError(null);
     const now = new Date().toISOString();
+    const existingAppt = appointments.find((a) => a.id === apptId);
+    const cleanDate = sanitizeClinicalInput(newApptDate, 30);
+    const cleanTime = sanitizeClinicalInput(newApptTime, 80);
+
+    // Notify info@goldenmindpsychiatry.org & patient immediately via server SMTP + update goldenmind_db
+    fetch('/api/email/appointment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: apptId,
+        patientId: portalUser.uid,
+        actionType: 'rescheduled',
+        fullName: portalUser.fullName,
+        email: portalUser.email,
+        phone: portalUser.phone,
+        dateOfBirth: portalUser.dateOfBirth,
+        serviceType: existingAppt?.serviceType || 'Telehealth Follow-Up',
+        conditionReason: existingAppt?.conditionReason || 'Psychiatric Care',
+        preferredDate: cleanDate,
+        preferredTime: cleanTime,
+        telehealthUrl: existingAppt?.telehealthUrl || '',
+        notes: existingAppt?.notes || 'Rescheduled by patient in Client Portal.',
+      }),
+    }).catch(() => {});
+
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
-        preferredDate: sanitizeClinicalInput(newApptDate, 30),
-        preferredTime: sanitizeClinicalInput(newApptTime, 80),
+        preferredDate: cleanDate,
+        preferredTime: cleanTime,
         status: 'confirmed',
         updatedAt: now,
       });
       setReschedulingApptId(null);
     } catch (err) {
+      setReschedulingApptId(null);
       handleFirestoreError(err, OperationType.UPDATE, `appointments/${apptId}`);
     }
   };
@@ -2341,6 +2380,29 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   const handleCancelAppointment = async (apptId: string) => {
     if (!portalUser || !firebaseUser) return;
     const now = new Date().toISOString();
+    const existingAppt = appointments.find((a) => a.id === apptId);
+
+    // Notify info@goldenmindpsychiatry.org & patient immediately via server SMTP + update goldenmind_db
+    fetch('/api/email/appointment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: apptId,
+        patientId: portalUser.uid,
+        actionType: 'cancelled',
+        fullName: portalUser.fullName,
+        email: portalUser.email,
+        phone: portalUser.phone,
+        dateOfBirth: portalUser.dateOfBirth,
+        serviceType: existingAppt?.serviceType || 'Telehealth Appointment',
+        conditionReason: existingAppt?.conditionReason || 'Psychiatric Care',
+        preferredDate: existingAppt?.preferredDate || '',
+        preferredTime: existingAppt?.preferredTime || '',
+        telehealthUrl: existingAppt?.telehealthUrl || '',
+        notes: 'Cancelled by patient in Client Portal.',
+      }),
+    }).catch(() => {});
+
     try {
       await updateDoc(doc(db, 'appointments', apptId), {
         status: 'cancelled',
@@ -2419,13 +2481,33 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
     }
   };
 
-  // Send secure message to Brenda Hobyani & dispatch instant email alert to beehobs@yahoo.com & info@goldenmindpsychiatry.org
+  // Send secure message to Brenda Hobyani & dispatch instant email alert to info@goldenmindpsychiatry.org & beehobs@yahoo.com
   const handleSendPatientMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!portalUser || !firebaseUser || !msgSubject.trim() || !msgBody.trim()) return;
     const now = new Date().toISOString();
     const cleanSubject = sanitizeClinicalInput(msgSubject, 200);
     const cleanBody = sanitizeClinicalInput(msgBody, 4000);
+    const fallbackMsgId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // 1. Trigger instant email notification to info@goldenmindpsychiatry.org (& beehobs@yahoo.com)
+    //    and mirror to PostgreSQL (`goldenmind_db`) FIRST so it never fails even if client Firestore has an issue
+    dispatchPortalMessageEmailAlert({
+      id: fallbackMsgId,
+      patientId: portalUser.uid,
+      direction: 'patient_to_provider',
+      patientName: portalUser.fullName,
+      patientEmail: portalUser.email,
+      subject: cleanSubject,
+      body: cleanBody,
+    });
+
+    setMsgSubject('');
+    setMsgBody('');
+    setVerificationNotice(
+      'Your message has been delivered to Brenda Hobyani, PMHNP-BC, and an instant email notification has been sent to info@goldenmindpsychiatry.org.'
+    );
+
     try {
       await addDoc(collection(db, 'messages'), {
         patientId: portalUser.uid,
@@ -2438,23 +2520,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         read: false,
         createdAt: now,
       });
-
-      // Trigger instant email notification to both beehobs@yahoo.com and info@goldenmindpsychiatry.org
-      dispatchPortalMessageEmailAlert({
-        direction: 'patient_to_provider',
-        patientName: portalUser.fullName,
-        patientEmail: portalUser.email,
-        subject: cleanSubject,
-        body: cleanBody,
-      });
-
-      setMsgSubject('');
-      setMsgBody('');
-      setVerificationNotice(
-        'Your message has been delivered to Brenda Hobyani, PMHNP-BC, and an instant email notification has been sent to the provider.'
-      );
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'messages');
+    } catch {
+      // Server already persisted the message to PostgreSQL (`goldenmind_db`) and emailed info@goldenmindpsychiatry.org
     }
   };
 

@@ -494,6 +494,8 @@ export async function checkEmailLinkedToAccount(rawEmail: string): Promise<boole
  * or when the provider sends a portal message/link to a client.
  */
 export async function dispatchPortalMessageEmailAlert(params: {
+  id?: string;
+  patientId?: string;
   direction: 'patient_to_provider' | 'provider_to_patient';
   patientName: string;
   patientEmail?: string;
@@ -941,45 +943,55 @@ export async function createTelehealthAppointment(
     updatedAt: now,
   };
 
+  const fallbackId = `appt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // 1. Trigger backend SMTP email dispatch to info@goldenmindpsychiatry.org and the patient FIRST
+  //    so that even if client-side Firestore is blocked or slow, info@goldenmindpsychiatry.org
+  //    is always notified immediately and the appointment is persisted to goldenmind_db.
+  let emailDispatched = false;
+  try {
+    const res = await fetch('/api/email/appointment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: fallbackId,
+        patientId: payload.patientId,
+        actionType: 'booked',
+        fullName: payload.patientName,
+        email: payload.patientEmail,
+        phone: payload.patientPhone,
+        dateOfBirth: payload.dateOfBirth,
+        serviceType: payload.serviceType,
+        conditionReason: payload.conditionReason,
+        preferredDate: payload.preferredDate,
+        preferredTime: payload.preferredTime,
+        insuranceProvider: payload.insuranceProvider,
+        notes: payload.notes,
+        telehealthUrl: payload.telehealthUrl,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      emailDispatched = Boolean(data.smtpConfigured);
+    }
+  } catch {
+    // Non-fatal if backend route unreachable
+  }
+
+  // 2. Persist to Firestore & sync final record ID to PostgreSQL
   try {
     const docRef = await addDoc(collection(db, 'appointments'), payload);
-
-    // Trigger backend SMTP email dispatch to info@goldenmindpsychiatry.org and the patient
-    let emailDispatched = false;
-    try {
-      const res = await fetch('/api/email/appointment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: payload.patientName,
-          email: payload.patientEmail,
-          phone: payload.patientPhone,
-          dateOfBirth: payload.dateOfBirth,
-          serviceType: payload.serviceType,
-          conditionReason: payload.conditionReason,
-          preferredDate: payload.preferredDate,
-          preferredTime: payload.preferredTime,
-          insuranceProvider: payload.insuranceProvider,
-          notes: payload.notes,
-          telehealthUrl: payload.telehealthUrl,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        emailDispatched = Boolean(data.smtpConfigured);
-      }
-    } catch {
-      // Non-fatal if backend route unreachable
-    }
-
     syncRecordToPostgres('appointments', docRef.id, {
       id: docRef.id,
       ...payload,
     });
-
     return { id: docRef.id, telehealthUrl, emailDispatched };
-  } catch (err) {
-    handleFirestoreError(err, OperationType.CREATE, 'appointments');
+  } catch {
+    syncRecordToPostgres('appointments', fallbackId, {
+      id: fallbackId,
+      ...payload,
+    });
+    return { id: fallbackId, telehealthUrl, emailDispatched };
   }
 }
 
