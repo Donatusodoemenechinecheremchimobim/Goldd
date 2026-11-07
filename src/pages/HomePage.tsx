@@ -96,7 +96,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle className="w-4 h-4 text-[#B8860B]" />
-              <span className="font-medium text-[#44403C]">Major Insurances Accepted</span>
+              <span className="font-medium text-[#44403C]">Adults, Teens &amp; Children</span>
             </span>
           </div>
 
@@ -577,7 +577,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenBooking })
           </div>
 
           <p className="text-xs text-[#78716C] pt-2">
-            Insurance Accepted · 100% Telehealth Visits Across Texas
+            100% Telehealth Visits Across Texas · Adults, Teens &amp; Children
           </p>
         </div>
       </section>

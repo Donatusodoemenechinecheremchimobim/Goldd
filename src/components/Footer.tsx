@@ -148,11 +148,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenBooking }) => 
                 </button>
               </li>
               <li>
-                <button onClick={() => handleLink('insurance')} className="text-[#57534E] hover:text-[#9E7206] transition-colors cursor-pointer">
-                  Insurance & Self-Pay Fees
-                </button>
-              </li>
-              <li>
                 <button onClick={() => handleLink('resources')} className="text-[#57534E] hover:text-[#9E7206] transition-colors cursor-pointer">
                   Mental Health Guides &amp; FAQ
                 </button>

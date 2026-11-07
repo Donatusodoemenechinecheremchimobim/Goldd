@@ -1866,26 +1866,6 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   <option value="Non-Binary">Non-Binary</option>
                 </select>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Primary Insurance
-                </label>
-                <select
-                  value={newPatInsurance}
-                  onChange={(e) => setNewPatInsurance(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                >
-                  <option value="Blue Cross Blue Shield (BCBS)">
-                    Blue Cross Blue Shield (BCBS)
-                  </option>
-                  <option value="Aetna">Aetna</option>
-                  <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                  <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                  <option value="Medicare">Medicare</option>
-                  <option value="Medicaid">Medicaid</option>
-                  <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
-                </select>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2131,18 +2111,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   {activeChartPatient.emergencyContact || 'Not listed'}
                 </strong>
                 <br />
-                Insurance:{' '}
-                <strong className="text-[#D4AF37]">
-                  {activeChartPatient.insuranceProvider || 'Self-Pay / Unspecified'}
-                  {activeChartPatient.insuranceMemberId
-                    ? ` (Member ID: ${activeChartPatient.insuranceMemberId}${
-                        activeChartPatient.insuranceGroupNumber
-                          ? `, Grp: ${activeChartPatient.insuranceGroupNumber}`
-                          : ''
-                      })`
-                    : ''}
-                </strong>{' '}
-                · Pharmacy:{' '}
+                Preferred Texas Pharmacy:{' '}
                 <strong className="text-white">
                   {activeChartPatient.preferredPharmacy || 'Not set'}
                 </strong>
@@ -2230,7 +2199,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
           {[
             { id: 'all', label: 'Complete Patient Overview (All-in-One)' },
             { id: 'notes', label: "Brenda's Private Notes & Logs (Downloadable)" },
-            { id: 'demographics', label: 'Demographics & Insurance' },
+            { id: 'demographics', label: 'Patient Demographics' },
             { id: 'careplan', label: 'Care Plan & Portal Links' },
             { id: 'medications', label: `Medications (${patientMeds.length})` },
             { id: 'appointments', label: `Visits & Telehealth (${patientAppts.length})` },
@@ -2239,7 +2208,6 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
               label: `Intakes & Scales (${patientIntakes.length + patientAssessments.length})`,
             },
             { id: 'messages', label: `1-on-1 Messages (${patientMsgs.length})` },
-            { id: 'billing', label: `Billing (${patientInvoices.length})` },
           ].map((sec) => (
             <button
               key={sec.id}
@@ -2273,7 +2241,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   Patient Registration Record
                 </span>
                 <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                  Edit {activeChartPatient.fullName}'s Demographics, Insurance &amp; Pharmacy
+                  Edit {activeChartPatient.fullName}'s Demographics &amp; Pharmacy
                 </h3>
               </div>
               {patientPageSection !== 'demographics' && (
@@ -2392,51 +2360,16 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Primary Insurance Carrier
-                </label>
-                <input
-                  type="text"
-                  value={demoInsurance}
-                  onChange={(e) => setDemoInsurance(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Member / Policy ID
-                </label>
-                <input
-                  type="text"
-                  value={demoMemberId}
-                  onChange={(e) => setDemoMemberId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Group Number
-                </label>
-                <input
-                  type="text"
-                  value={demoGroupNumber}
-                  onChange={(e) => setDemoGroupNumber(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-stone-700 block mb-1">
-                  Primary Clinical Concern
-                </label>
-                <input
-                  type="text"
-                  value={demoPrimaryConcern}
-                  onChange={(e) => setDemoPrimaryConcern(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                />
-              </div>
+            <div>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Primary Clinical Concern
+              </label>
+              <input
+                type="text"
+                value={demoPrimaryConcern}
+                onChange={(e) => setDemoPrimaryConcern(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+              />
             </div>
 
             <div className="flex items-center justify-end gap-2">
@@ -2444,7 +2377,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                 type="submit"
                 className="px-5 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-xs"
               >
-                Save Patient Demographics &amp; Insurance Record
+                Save Patient Demographics &amp; Pharmacy Record
               </button>
             </div>
           </form>
@@ -3062,18 +2995,16 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
               </div>
             )}
 
-            {/* 4. Intake Forms, PHQ-9/GAD-7 & Billing Controls for this Patient */}
-            {(patientPageSection === 'all' ||
-              patientPageSection === 'intakes' ||
-              patientPageSection === 'billing') && (
+            {/* 4. Intake Forms & PHQ-9/GAD-7 Controls for this Patient */}
+            {(patientPageSection === 'all' || patientPageSection === 'intakes') && (
               <div className="bg-white portal-card p-6 space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
                   <div>
                     <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Intake Forms, PHQ-9/GAD-7 &amp; Billing ({activeChartPatient.fullName})
+                      Intake Forms &amp; PHQ-9 / GAD-7 Scales ({activeChartPatient.fullName})
                     </h3>
                     <p className="text-xs text-stone-500">
-                      Assign intake questionnaires or post a copay statement to this patient's portal
+                      Assign intake questionnaires and review submitted clinical assessments
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -3169,168 +3100,6 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                   </div>
                 )}
 
-                {/* Quick Billing Statement Form for this Patient */}
-                <form
-                  onSubmit={(e) => handleCreateInvoice(e, activeChartPatient.uid)}
-                  className="pt-3 border-t border-stone-200 space-y-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-bold text-stone-800">
-                      Issue CPT-Coded Statement &amp; Good Faith Estimate to{' '}
-                      {activeChartPatient.fullName}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSelectCptPreset(
-                            '99205',
-                            'Initial Psychiatric Diagnostic Evaluation (60 Min)',
-                            250,
-                            200
-                          )
-                        }
-                        className="px-2 py-1 rounded-[8px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[10px] font-bold text-[#9E7206] cursor-pointer"
-                      >
-                        99205 Initial ($250 / $50 Copay)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSelectCptPreset(
-                            '99214',
-                            'Medication Management & Follow-Up Session (30 Min)',
-                            150,
-                            115
-                          )
-                        }
-                        className="px-2 py-1 rounded-[8px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-[10px] font-bold text-[#9E7206] cursor-pointer"
-                      >
-                        99214 Follow-Up ($150 / $35 Copay)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSelectCptPreset(
-                            '99205',
-                            'Self-Pay Initial Psychiatric Evaluation',
-                            250,
-                            0
-                          )
-                        }
-                        className="px-2 py-1 rounded-[8px] bg-stone-100 border border-stone-200 text-[10px] font-bold text-stone-700 cursor-pointer"
-                      >
-                        Self-Pay Eval ($250)
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                    <input
-                      type="text"
-                      required
-                      placeholder="CPT Code (e.g. 99214)"
-                      value={invCptCode}
-                      onChange={(e) => setInvCptCode(e.target.value)}
-                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Service Description (e.g. Follow-Up)"
-                      value={invDesc}
-                      onChange={(e) => setInvDesc(e.target.value)}
-                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Total Charge ($)"
-                      value={invTotal || ''}
-                      onChange={(e) => setInvTotal(Number(e.target.value))}
-                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Insurance Covered ($)"
-                      value={invCovered || ''}
-                      onChange={(e) => setInvCovered(Number(e.target.value))}
-                      className="px-3 py-2 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                  >
-                    Post Itemized Statement to {activeChartPatient.fullName}'s Portal
-                  </button>
-                </form>
-
-                {patientInvoices.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    {patientInvoices.map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="flex flex-wrap items-center justify-between gap-2 text-xs p-3 rounded-[12px] bg-[#FAF9F5] border border-stone-200"
-                      >
-                        <div>
-                          <span className="font-bold text-stone-900">
-                            CPT {inv.cptCode || '99214'} · {inv.description}
-                          </span>
-                          <span className="text-stone-500 ml-2 font-portal-heading tabular-nums">
-                            Charge: ${inv.amount.toFixed(2)} · Ins: -$
-                            {inv.insuranceCoveredAmount.toFixed(2)} · Balance:{' '}
-                            <strong className="text-stone-900">
-                              ${inv.patientResponsibility.toFixed(2)}
-                            </strong>
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSuperbillModalInvoice(inv)}
-                            className="px-2.5 py-1 rounded-[8px] bg-white border border-stone-200 text-[11px] font-bold text-stone-700 hover:border-[#D4AF37] cursor-pointer"
-                          >
-                            Superbill / Receipt
-                          </button>
-                          {inv.status === 'paid' ? (
-                            <>
-                              <span className="text-emerald-700 font-bold text-[11px] uppercase px-2">
-                                Paid
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'refund')}
-                                className="px-2.5 py-1 rounded-[8px] bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold cursor-pointer"
-                              >
-                                Refund
-                              </button>
-                            </>
-                          ) : inv.status === 'refunded' ? (
-                            <span className="text-amber-700 font-bold text-[11px] uppercase px-2">
-                              Refunded
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'adjust')}
-                                className="px-2.5 py-1 rounded-[8px] bg-stone-100 text-stone-700 text-[11px] font-bold cursor-pointer"
-                              >
-                                Adjust
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleMarkInvoicePaid(inv.id)}
-                                className="px-2.5 py-1 rounded-[8px] bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
-                              >
-                                Mark Paid
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -3598,7 +3367,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
             {unreadPatientMsgsCount} Unread
           </p>
           <p className="text-[12px] text-stone-500 font-medium mt-3">
-            ${totalRevenueDisbursed.toFixed(2)} disbursed statements
+            Direct HIPAA messaging threads
           </p>
         </div>
       </div>
@@ -3615,7 +3384,6 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
             { id: 'messages', label: `Messages & Links (${messages.length})`, icon: MessageSquare },
             { id: 'charts', label: 'PHQ-9 / GAD-7 Scales', icon: Activity },
             { id: 'intakes', label: 'Intake Forms', icon: FileText },
-            { id: 'billing', label: 'Billing & Copays', icon: CreditCard },
             { id: 'backups', label: 'Backups, PostgreSQL & Lockouts', icon: Database },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -3777,10 +3545,8 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                             <p className="text-xs text-stone-600 leading-relaxed">
                               DOB: <strong>{patient.dateOfBirth || 'Pending'}</strong>
                               {patient.biologicalSex ? ` (${patient.biologicalSex})` : ''} · Phone:{' '}
-                              <strong>{patient.phone || 'Not listed'}</strong> · Insurance:{' '}
-                              <strong>{patient.insuranceProvider || 'Not specified'}</strong>
-                              {patient.insuranceMemberId ? ` (#${patient.insuranceMemberId})` : ''} ·
-                              Pharmacy: {patient.preferredPharmacy || 'Not set'}
+                              <strong>{patient.phone || 'Not listed'}</strong> · Pharmacy:{' '}
+                              {patient.preferredPharmacy || 'Not set'}
                               {patient.address ? ` · Address: ${patient.address}` : ''}
                               {patient.emergencyContact
                                 ? ` · Emergency: ${patient.emergencyContact}`
@@ -4037,10 +3803,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                                   </span>
                                 </div>
                                 <p className="text-xs font-semibold text-stone-800">
-                                  Focus: {appt.conditionReason} ·{' '}
-                                  <span className="text-stone-500 font-normal">
-                                    {appt.insuranceProvider || 'Insurance Verified'}
-                                  </span>
+                                  Focus: {appt.conditionReason}
                                 </p>
                                 <p className="text-xs font-portal-heading tabular-nums text-stone-500">
                                   {appt.preferredDate} · {appt.preferredTime} ·{' '}
@@ -4083,69 +3846,6 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
                     })}
                   </div>
                 )}
-              </div>
-
-              {/* Payment History Table */}
-              <div className="bg-white portal-card overflow-hidden">
-                <div className="px-6 py-5 border-b border-stone-200 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Payment & Statement History
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Insurance disbursements and patient copay ledger
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setActiveSubTab('billing')}
-                    className="px-3.5 py-2 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-xs cursor-pointer"
-                  >
-                    Issue Statement
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-[#FAF9F5] border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                        <th className="py-3.5 px-5">Patient & Service</th>
-                        <th className="py-3.5 px-5">Date</th>
-                        <th className="py-3.5 px-5 text-right">Billed / Covered</th>
-                        <th className="py-3.5 px-5 text-right">Copay</th>
-                        <th className="py-3.5 px-5 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-200 text-xs">
-                      {filteredInvoices.slice(0, 6).map((inv) => (
-                        <tr key={inv.id} className="hover:bg-stone-50/80">
-                          <td className="py-4 px-5">
-                            <p className="font-bold text-stone-900">{inv.patientName}</p>
-                            <p className="text-[11px] text-stone-500">{inv.description}</p>
-                          </td>
-                          <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-600">
-                            {inv.serviceDate}
-                          </td>
-                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
-                            ${inv.amount.toFixed(2)} / -${inv.insuranceCoveredAmount.toFixed(2)}
-                          </td>
-                          <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
-                            ${inv.patientResponsibility.toFixed(2)}
-                          </td>
-                          <td className="py-4 px-5 text-right">
-                            <span
-                              className={`px-3 py-1 rounded-[12px] text-[11px] font-bold uppercase ${
-                                inv.status === 'paid'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-[#FAF6EA] text-[#9E7206]'
-                              }`}
-                            >
-                              {inv.status === 'paid' ? 'Disbursed' : 'Due'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             </>
           )}
@@ -4684,271 +4384,7 @@ cd /var/www/Goldd && sed -i '/^NODE_ENV=/d' .env && git pull origin main && npm 
             />
           )}
 
-          {/* Sub-Tab 6: Billing & Statements */}
-          {activeSubTab === 'billing' && (
-            <div className="space-y-6">
-              <form onSubmit={handleCreateInvoice} className="bg-white portal-card p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Issue New Itemized Patient Statement &amp; Good Faith Estimate
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Compliant with Federal No Surprises Act (45 C.F.R. § 149.610), Texas HB 300 &amp;
-                      HIPAA Minimum-Necessary Privacy
-                    </p>
-                  </div>
-                </div>
 
-                {/* 1-Click Psychiatric CPT Presets */}
-                <div className="p-3.5 rounded-[14px] bg-[#FAF6EA] border border-[#D4AF37]/40 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
-                    1-Click Psychiatric CPT Procedure Code &amp; Fee Presets:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSelectCptPreset(
-                          '99205',
-                          'Comprehensive Psychiatric Diagnostic Evaluation (60 Min)',
-                          250,
-                          200
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
-                    >
-                      CPT 99205 · Initial Eval ($250 / $50 Co-Pay)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSelectCptPreset(
-                          '99214',
-                          'Established Patient Medication Management Follow-Up (30 Min)',
-                          150,
-                          115
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
-                    >
-                      CPT 99214 · Med Follow-Up ($150 / $35 Co-Pay)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSelectCptPreset(
-                          '90833',
-                          'Supportive Psychotherapy Add-On with E/M Visit (30 Min)',
-                          95,
-                          70
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
-                    >
-                      CPT 90833 · Psychotherapy Add-On ($95 / $25 Co-Pay)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSelectCptPreset(
-                          '81418',
-                          'Pharmacogenomic (PGx) DNA Medication Consultation',
-                          175,
-                          125
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-[10px] bg-white border border-[#D4AF37]/50 text-xs font-bold text-stone-800 hover:bg-[#0A0A0A] hover:text-[#D4AF37] cursor-pointer"
-                    >
-                      CPT 81418 · PGx DNA Consult ($175 / $50 Co-Pay)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                  <div className="sm:col-span-5">
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Patient
-                    </label>
-                    <select
-                      value={invPatientId}
-                      onChange={(e) => setInvPatientId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                    >
-                      {patients.map((p) => (
-                        <option key={p.uid} value={p.uid}>
-                          {p.fullName} ({p.email})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      CPT Code
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={invCptCode}
-                      onChange={(e) => setInvCptCode(e.target.value)}
-                      placeholder="99214"
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                  </div>
-                  <div className="sm:col-span-5">
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Service Description
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={invDesc}
-                      onChange={(e) => setInvDesc(e.target.value)}
-                      placeholder="e.g., Established Patient Medication Management"
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Standard Clinical Charge ($)
-                    </label>
-                    <input
-                      type="number"
-                      value={invTotal}
-                      onChange={(e) => setInvTotal(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Insurance Covered / Adjustment ($)
-                    </label>
-                    <input
-                      type="number"
-                      value={invCovered}
-                      onChange={(e) => setInvCovered(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-stone-700 block mb-1">
-                      Net Patient Responsibility ($)
-                    </label>
-                    <div className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/50 text-xs font-bold text-[#9E7206] font-portal-heading tabular-nums">
-                      ${Math.max(0, Number(invTotal) - Number(invCovered)).toFixed(2)} USD
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                >
-                  Post Itemized Statement &amp; Good Faith Estimate to Patient Portal
-                </button>
-              </form>
-
-              {/* Complete Provider Billing & Refund Audit Ledger */}
-              <div className="bg-white portal-card p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                      Patient Billing Statements, Superbills &amp; Refund Audit Ledger (
-                      {filteredInvoices.length})
-                    </h3>
-                    <p className="text-xs text-stone-500">
-                      Synced in real time with Ubuntu PostgreSQL (`goldenmind_db`) · Click Superbill
-                      to print or issue a refund/adjustment
-                    </p>
-                  </div>
-                </div>
-
-                {filteredInvoices.length === 0 ? (
-                  <p className="text-xs text-stone-500 py-4 text-center">
-                    No billing statements issued yet.
-                  </p>
-                ) : (
-                  <div className="divide-y divide-stone-200">
-                    {filteredInvoices.map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-stone-900 text-sm">
-                              {inv.patientName}
-                            </span>
-                            <span className="text-stone-400">·</span>
-                            <span className="font-bold text-[#9E7206] font-portal-heading tabular-nums">
-                              CPT {inv.cptCode || '99214'}
-                            </span>
-                            <span className="text-stone-400">·</span>
-                            <span className="font-semibold text-stone-800">{inv.description}</span>
-                          </div>
-                          <p className="text-stone-500 font-portal-heading tabular-nums">
-                            Service Date: {inv.serviceDate} · Charge: ${inv.amount.toFixed(2)} ·
-                            Insurance Adj: -${inv.insuranceCoveredAmount.toFixed(2)} ·{' '}
-                            <strong className="text-stone-900">
-                              Patient Balance: ${inv.patientResponsibility.toFixed(2)}
-                            </strong>
-                            {inv.transactionId ? ` · Tx: ${inv.transactionId}` : ''}
-                            {inv.paymentMethod ? ` (${inv.paymentMethod})` : ''}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setSuperbillModalInvoice(inv)}
-                            className="px-3 py-1.5 rounded-[10px] bg-[#FAF9F5] border border-stone-200 text-stone-800 font-bold text-xs hover:border-[#D4AF37] cursor-pointer"
-                          >
-                            Superbill / Receipt
-                          </button>
-                          {inv.status === 'paid' ? (
-                            <>
-                              <span className="px-3 py-1.5 rounded-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs uppercase">
-                                Paid
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'refund')}
-                                className="px-3 py-1.5 rounded-[10px] bg-red-50 border border-red-200 text-red-700 font-bold text-xs cursor-pointer"
-                              >
-                                Issue Refund
-                              </button>
-                            </>
-                          ) : inv.status === 'refunded' ? (
-                            <span className="px-3 py-1.5 rounded-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-bold text-xs uppercase">
-                              Refunded
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAdjustOrRefundModal(inv, 'adjust')}
-                                className="px-3 py-1.5 rounded-[10px] bg-stone-100 text-stone-700 font-bold text-xs cursor-pointer"
-                              >
-                                Adjust Fee
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleMarkInvoicePaid(inv.id)}
-                                className="px-3 py-1.5 rounded-[10px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                              >
-                                Mark Paid
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Sub-Tab 7: Database Backups, Ubuntu PostgreSQL (goldenmind_db) Mirror & Account Lockout Center */}
           {activeSubTab === 'backups' && (

@@ -602,17 +602,12 @@ export function isPatientRegistrationComplete(user?: PortalUser | null): boolean
       user.fullName.trim() !== '' &&
       user.fullName.trim().toLowerCase() !== 'patient'
   );
-  const hasInsurance = Boolean(
-    user.insuranceProvider &&
-      user.insuranceProvider.trim() !== '' &&
-      user.insuranceProvider.trim().toLowerCase() !== 'not provided'
-  );
   const hasSex = Boolean(
     user.biologicalSex &&
       user.biologicalSex.trim() !== '' &&
       user.biologicalSex.trim().toLowerCase() !== 'not provided'
   );
-  return hasDob && hasPhone && hasName && hasInsurance && hasSex;
+  return hasDob && hasPhone && hasName && hasSex;
 }
 
 /**

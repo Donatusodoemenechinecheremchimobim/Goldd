@@ -3222,26 +3222,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         />
                       </div>
                     )}
-                    <div className="sm:col-span-2">
-                      <label className="text-xs font-semibold text-stone-700 block mb-1">
-                        Primary Insurance *
-                      </label>
-                      <select
-                        value={insuranceInput}
-                        onChange={(e) => setInsuranceInput(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                      >
-                        <option value="Blue Cross Blue Shield (BCBS)">
-                          Blue Cross Blue Shield (BCBS)
-                        </option>
-                        <option value="Aetna">Aetna</option>
-                        <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                        <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                        <option value="Medicare">Medicare</option>
-                        <option value="Medicaid">Medicaid</option>
-                        <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
-                      </select>
-                    </div>
                   </div>
 
                   {/* Under-18 Minor Guardian Consent (Texas Family Code Chapter 32) */}
@@ -4028,59 +4008,11 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             </div>
 
-            {/* Section 2: Insurance, Pharmacy & Clinical Care Details */}
+            {/* Section 2: Pharmacy & Emergency Contact Details */}
             <div className="space-y-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#9E7206] border-b border-stone-200 pb-1.5">
-                2. Insurance Coverage, Pharmacy &amp; Emergency Contact
+                2. Preferred Texas Pharmacy &amp; Emergency Contact
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Primary Insurance Provider *
-                  </label>
-                  <select
-                    value={regInsurance}
-                    onChange={(e) => setRegInsurance(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                  >
-                    <option value="Blue Cross Blue Shield (BCBS)">
-                      Blue Cross Blue Shield (BCBS)
-                    </option>
-                    <option value="Aetna">Aetna</option>
-                    <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                    <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                    <option value="Medicare">Medicare</option>
-                    <option value="Medicaid">Medicaid</option>
-                    <option value="Self-Pay / Out-of-Network">Self-Pay / Out-of-Network</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Insurance Member / Policy ID
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Optional (e.g., XYZ12345678)"
-                    value={regMemberId}
-                    onChange={(e) => setRegMemberId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-stone-700 block mb-1">
-                    Insurance Group Number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Optional (e.g., GRP9988)"
-                    value={regGroupNumber}
-                    onChange={(e) => setRegGroupNumber(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
-              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -4278,12 +4210,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
       label: 'Secure Messaging',
       icon: MessageSquare,
       badge: unreadProviderMessages.length || undefined,
-    },
-    {
-      id: 'billing',
-      label: 'Payment & Insurance',
-      icon: CreditCard,
-      badge: dueInvoices.length || undefined,
     },
   ];
 
@@ -4798,89 +4724,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         </div>
                       </div>
 
-                      {/* Payment & Statement History Table (Light-Ivory Header, 16px Row Padding, Status Badges) */}
-                      <div className="bg-white portal-card overflow-hidden">
-                        <div className="px-6 py-5 border-b border-stone-200 flex items-center justify-between">
-                          <div>
-                            <h2 className="text-base font-bold font-portal-heading text-stone-900">
-                              Payment & Statement History
-                            </h2>
-                            <p className="text-xs text-stone-500">
-                              Insurance verification, covered benefits, and copay ledger
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setActiveTab('billing')}
-                            className="px-3.5 py-2 rounded-[12px] bg-[#FAF6EA] text-[#9E7206] font-bold text-xs cursor-pointer"
-                          >
-                            Manage Insurance →
-                          </button>
-                        </div>
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead>
-                              <tr className="bg-[#FAF9F5] border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                                <th className="py-3.5 px-5">Service Description</th>
-                                <th className="py-3.5 px-5">Date</th>
-                                <th className="py-3.5 px-5 text-right">Insurance Covered</th>
-                                <th className="py-3.5 px-5 text-right">Your Copay</th>
-                                <th className="py-3.5 px-5 text-right">Status / Action</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-stone-200 text-xs">
-                              {filteredInvoices.length === 0 ? (
-                                <tr>
-                                  <td colSpan={5} className="py-6 px-5 text-center text-stone-500">
-                                    No billing statements or copays due at this time.
-                                  </td>
-                                </tr>
-                              ) : (
-                                filteredInvoices.map((inv) => (
-                                  <tr key={inv.id} className="hover:bg-stone-50/80">
-                                    <td className="py-4 px-5 font-bold text-stone-900">
-                                      {inv.description}
-                                    </td>
-                                    <td className="py-4 px-5 font-portal-heading tabular-nums text-stone-500">
-                                      {inv.serviceDate}
-                                    </td>
-                                    <td className="py-4 px-5 text-right font-portal-heading tabular-nums text-stone-600">
-                                      -${inv.insuranceCoveredAmount.toFixed(2)}
-                                    </td>
-                                    <td className="py-4 px-5 text-right font-portal-heading tabular-nums font-bold text-stone-900">
-                                      ${inv.patientResponsibility.toFixed(2)}
-                                    </td>
-                                    <td className="py-4 px-5 text-right">
-                                      {inv.status === 'paid' ? (
-                                        <div className="inline-flex items-center gap-2">
-                                          <span className="px-3 py-1 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
-                                            Paid
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setActiveSuperbillInvoice(inv)}
-                                            className="px-3 py-1.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                                          >
-                                            Superbill
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => handlePayInvoice(inv)}
-                                          className="px-3.5 py-1.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer"
-                                        >
-                                          Review &amp; Pay ${inv.patientResponsibility.toFixed(2)}
-                                        </button>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
 
                       {/* Provider Care Plan, Diagnosis, Recommended Medications & Shared Links (Live Synced from Provider Chart) */}
                       {(portalUser.diagnosis ||
@@ -5454,7 +5298,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         <p className="text-xs text-stone-600">
                           Preferred Texas Pharmacy on File:{' '}
                           <strong className="text-[#9E7206]">
-                            {prefPharmacy || 'Update in Payment & Insurance tab'}
+                            {prefPharmacy || 'Update your preferred pharmacy below'}
                           </strong>
                         </p>
                         {portalUser.clinicalRecommendations && (
@@ -5618,6 +5462,38 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                           className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
                         >
                           Save Medication & Enable 1-Click Refills
+                        </button>
+                      </form>
+
+                      <form
+                        onSubmit={handleSaveInsuranceProfile}
+                        className="bg-white portal-card p-6 space-y-4"
+                      >
+                        <h3 className="text-base font-bold font-portal-heading text-stone-900">
+                          Preferred Texas Pharmacy (for e-Prescriptions)
+                        </h3>
+                        {profileSavedNotice && (
+                          <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                            Preferred Texas Pharmacy saved to your clinical chart!
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-xs font-semibold text-stone-700 block mb-1">
+                            Pharmacy Name &amp; City / Address
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter your preferred Texas pharmacy name & city/address"
+                            value={prefPharmacy}
+                            onChange={(e) => setPrefPharmacy(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
+                        >
+                          Save Preferred Texas Pharmacy
                         </button>
                       </form>
                     </div>
@@ -5982,334 +5858,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     </div>
                   )}
 
-                  {/* ============================================================
-                      MODULE 7: INSURANCE COVERAGE, PHARMACY & BILLING STATEMENTS
-                     ============================================================ */}
-                  {activeTab === 'billing' && (
-                    <div className="space-y-6">
-                      {billingFeedbackBanner && (
-                        <div className="p-4 rounded-[20px] bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>{billingFeedbackBanner}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setBillingFeedbackBanner(null)}
-                            className="text-emerald-700 underline cursor-pointer shrink-0"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Federal No Surprises Act & HIPAA Financial Transparency Header */}
-                      <div className="bg-[#0A0A0A] text-white rounded-[28px] p-6 border border-[#D4AF37]/40 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold uppercase tracking-widest">
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              HIPAA · PCI-DSS · Federal No Surprises Act (45 C.F.R. § 149.610)
-                            </span>
-                            <h2 className="text-lg font-bold font-portal-heading text-white mt-1.5">
-                              Transparent Patient Billing, Stripe Checkout &amp; Medical Superbills
-                            </h2>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-[#D4AF37]">
-                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Cards</span>
-                            <span className="px-2.5 py-1 rounded-lg bg-white/10">HSA / FSA Medical</span>
-                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Apple Pay</span>
-                            <span className="px-2.5 py-1 rounded-lg bg-white/10">Google Pay</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-stone-300 leading-relaxed">
-                          Before any payment is processed, you will review a complete{' '}
-                          <strong className="text-[#D4AF37]">
-                            Itemized CPT Service Breakdown &amp; Good Faith Estimate
-                          </strong>{' '}
-                          showing the total billed charge, your insurance network adjustment, and
-                          your exact copay or self-pay balance. Every payment automatically
-                          generates an official printable{' '}
-                          <strong className="text-[#D4AF37]">Medical Superbill &amp; Receipt</strong>{' '}
-                          and emails a copy to you and Brenda Hobyani, PMHNP-BC.
-                        </p>
-                      </div>
-
-                      {/* Optional Upfront Appointment Co-Pay / Self-Pay Generator */}
-                      <div className="bg-white portal-card p-6 space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <h3 className="text-base font-bold font-portal-heading text-stone-900">
-                              Pay Upfront Visit Co-Pay or Self-Pay Telehealth Statement
-                            </h3>
-                            <p className="text-xs text-stone-500">
-                              Going into an upcoming telehealth evaluation or follow-up? Generate
-                              your itemized Good Faith Estimate statement below to review disclosures
-                              and pay your co-pay or self-pay deposit now.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="sm:col-span-2">
-                            <label className="text-[11px] font-bold text-stone-700 block mb-1">
-                              Select Clinical CPT Service Type
-                            </label>
-                            <select
-                              value={upfrontServicePreset}
-                              onChange={(e) =>
-                                setUpfrontServicePreset(
-                                  e.target.value as '99205' | '99214' | '90833'
-                                )
-                              }
-                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-800"
-                            >
-                              <option value="99214">
-                                CPT 99214 — Psychiatric Medication Management Follow-Up ($35 Copay / $165 Self-Pay)
-                              </option>
-                              <option value="99205">
-                                CPT 99205 — Initial Psychiatric Diagnostic Evaluation ($45 Copay / $275 Self-Pay)
-                              </option>
-                              <option value="90833">
-                                CPT 99214+90833 — Med Management + Supportive Psychotherapy ($40 Copay / $210 Self-Pay)
-                              </option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-[11px] font-bold text-stone-700 block mb-1">
-                              Coverage Responsibility Type
-                            </label>
-                            <select
-                              value={upfrontPayMode}
-                              onChange={(e) =>
-                                setUpfrontPayMode(e.target.value as 'copay' | 'selfpay')
-                              }
-                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-semibold text-stone-800"
-                            >
-                              <option value="copay">In-Network Insurance Co-Pay</option>
-                              <option value="selfpay">Self-Pay / Out-of-Network Rate</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            disabled={creatingUpfrontInvoice}
-                            onClick={handleCreateUpfrontStatement}
-                            className="px-5 py-2.5 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs hover:bg-stone-800 cursor-pointer flex items-center gap-2"
-                          >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>
-                              {creatingUpfrontInvoice
-                                ? 'Preparing Good Faith Estimate...'
-                                : 'Review Itemized Good Faith Estimate & Pay'}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Provider-Issued & Self-Generated Billing Ledger */}
-                      <div className="bg-white portal-card overflow-hidden">
-                        <div className="px-6 py-5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <h2 className="text-lg font-bold font-portal-heading text-stone-900">
-                              Billing Statements, Receipts &amp; Superbill Ledger
-                            </h2>
-                            <p className="text-xs text-stone-500">
-                              Click &ldquo;Review &amp; Pay&rdquo; on any due balance to inspect the
-                              itemized CPT breakdown before paying, or &ldquo;Superbill &amp;
-                              Receipt&rdquo; on paid statements to print or save as PDF.
-                            </p>
-                          </div>
-                        </div>
-                        <div className="divide-y divide-stone-200 p-6">
-                          {invoices.length === 0 ? (
-                            <p className="text-xs text-stone-500 text-center py-4">
-                              No billing statements have been issued yet. Statements appear here in
-                              real time once posted by your provider, or you can generate an upfront
-                              visit co-pay statement above.
-                            </p>
-                          ) : (
-                            invoices.map((inv) => (
-                              <div
-                                key={inv.id}
-                                className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded bg-[#FAF6EA] border border-[#D4AF37]/40 text-[#9E7206] font-bold text-[10px]">
-                                      CPT {inv.cptCode || '99214'}
-                                    </span>
-                                    <p className="font-bold font-portal-heading text-stone-900 text-sm">
-                                      {inv.description}
-                                    </p>
-                                  </div>
-                                  <p className="text-stone-500 font-portal-heading tabular-nums">
-                                    Service Date: {inv.serviceDate} · Total Billed: $
-                                    {Number(inv.amount || 0).toFixed(2)} · Insurance Adjustment: -$
-                                    {Number(inv.insuranceCoveredAmount || 0).toFixed(2)}
-                                  </p>
-                                  {inv.transactionId && (
-                                    <p className="text-[11px] text-emerald-700 font-semibold">
-                                      Paid via {inv.paymentMethod || 'Stripe'} · Ref:{' '}
-                                      {inv.transactionId}
-                                    </p>
-                                  )}
-                                  {inv.status === 'refunded' && (
-                                    <p className="text-[11px] text-amber-700 font-semibold">
-                                      Refunded (${Number(inv.refundAmount || inv.patientResponsibility || 0).toFixed(2)}){' '}
-                                      {inv.refundReason ? `— ${inv.refundReason}` : ''}
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3 shrink-0">
-                                  <div className="text-right font-portal-heading tabular-nums">
-                                    <p className="text-[11px] text-stone-500">
-                                      Your Copay / Balance
-                                    </p>
-                                    <p className="text-base font-bold text-stone-900">
-                                      ${Number(inv.patientResponsibility || 0).toFixed(2)}
-                                    </p>
-                                  </div>
-                                  {inv.status === 'paid' ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="px-3 py-2 rounded-[12px] bg-emerald-100 text-emerald-800 font-bold text-[11px] uppercase">
-                                        Paid
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveSuperbillInvoice(inv)}
-                                        className="px-3.5 py-2 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs hover:bg-stone-800 cursor-pointer flex items-center gap-1.5"
-                                      >
-                                        <FileText className="w-3.5 h-3.5" />
-                                        <span>Superbill &amp; Receipt</span>
-                                      </button>
-                                    </div>
-                                  ) : inv.status === 'refunded' ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="px-3 py-2 rounded-[12px] bg-amber-100 text-amber-800 font-bold text-[11px] uppercase">
-                                        Refunded
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveSuperbillInvoice(inv)}
-                                        className="px-3.5 py-2 rounded-[12px] bg-stone-100 text-stone-800 font-bold text-xs hover:bg-stone-200 cursor-pointer"
-                                      >
-                                        View Superbill
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveSuperbillInvoice(inv)}
-                                        className="px-3 py-2.5 rounded-[12px] bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs cursor-pointer"
-                                      >
-                                        Preview GFE
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePayInvoice(inv)}
-                                        className="px-4 py-2.5 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs cursor-pointer shadow-sm"
-                                      >
-                                        Review &amp; Pay $
-                                        {Number(inv.patientResponsibility || 0).toFixed(2)}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      <form
-                        onSubmit={handleSaveInsuranceProfile}
-                        className="bg-white portal-card p-6 space-y-4"
-                      >
-                        <h2 className="text-lg font-bold font-portal-heading text-stone-900">
-                          Insurance Coverage & Preferred Texas Pharmacy
-                        </h2>
-                        {profileSavedNotice && (
-                          <div className="p-3.5 rounded-[12px] bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-                            Insurance & Pharmacy profile saved to database!
-                          </div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-xs font-semibold text-stone-700 block mb-1">
-                              Primary Insurance Carrier
-                            </label>
-                            <select
-                              value={insCarrier}
-                              onChange={(e) => setInsCarrier(e.target.value)}
-                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                            >
-                              <option value="">Select Insurance Carrier...</option>
-                              <option value="Blue Cross Blue Shield (BCBS)">
-                                Blue Cross Blue Shield (BCBS)
-                              </option>
-                              <option value="Aetna">Aetna</option>
-                              <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                              <option value="UnitedHealthcare / Optum">
-                                UnitedHealthcare / Optum
-                              </option>
-                              <option value="Medicare">Medicare</option>
-                              <option value="Self-Pay / Out-of-Network Superbill">
-                                Self-Pay / Out-of-Network Superbill
-                              </option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-stone-700 block mb-1">
-                              Member ID
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Enter your Insurance Member ID"
-                              value={insMemberId}
-                              onChange={(e) => setInsMemberId(e.target.value)}
-                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-stone-700 block mb-1">
-                              Group Number
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Enter your Group Number"
-                              value={insGroupId}
-                              onChange={(e) => setInsGroupId(e.target.value)}
-                              className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs font-portal-heading tabular-nums"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-stone-700 block mb-1">
-                            Preferred Texas Pharmacy (for e-Prescriptions)
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Enter your preferred Texas pharmacy name & city/address"
-                            value={prefPharmacy}
-                            onChange={(e) => setPrefPharmacy(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs"
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          className="w-full py-3 rounded-[12px] bg-[#0A0A0A] text-[#D4AF37] font-bold text-xs cursor-pointer"
-                        >
-                          Save Insurance & Pharmacy Details
-                        </button>
-                      </form>
-                    </div>
-                  )}
                 </div>
 
                 {/* ==============================================================
@@ -6481,28 +6029,6 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
         onClose={() => setActiveTelehealthAppt(null)}
         viewerRole={isVerifiedProviderAccount ? 'provider' : 'patient'}
       />
-
-      {/* HIPAA & Federal No Surprises Act Pre-Payment Good Faith Estimate & Consent Modal */}
-      {activeCheckoutInvoice && (
-        <PrePaymentConsentModal
-          invoice={activeCheckoutInvoice}
-          patientEmail={portalUser?.email}
-          onClose={() => setActiveCheckoutInvoice(null)}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
-      )}
-
-      {/* Printable Medical Superbill & Official Payment Receipt Modal */}
-      {activeSuperbillInvoice && (
-        <PrintableSuperbillModal
-          invoice={activeSuperbillInvoice}
-          patientEmail={portalUser?.email}
-          patientDob={portalUser?.dateOfBirth}
-          patientInsurance={portalUser?.insuranceProvider}
-          patientMemberId={portalUser?.insuranceMemberId}
-          onClose={() => setActiveSuperbillInvoice(null)}
-        />
-      )}
     </div>
   );
 };

@@ -233,17 +233,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 </span>
               </div>
               {provisionedRoomUrl && (
-                <div className="flex justify-between py-1 border-b border-stone-200 font-mono">
+                <div className="flex justify-between py-1 font-mono">
                   <span className="text-[#78716C]">HIPAA Video Room:</span>
                   <span className="text-emerald-700 font-semibold truncate max-w-[240px]">
                     {provisionedRoomUrl}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between py-1">
-                <span className="text-[#78716C]">Coverage / Payment:</span>
-                <span className="text-[#9E7206] font-semibold">{formData.insuranceProvider}</span>
-              </div>
             </div>
 
             <p className="text-xs text-[#78716C] leading-relaxed">
@@ -316,47 +312,25 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
 
             {/* Condition or Service Focus */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-[#9E7206] uppercase tracking-wider block mb-1.5">
-                  2. Primary Concern / Condition
-                </label>
-                <select
-                  value={formData.conditionReason}
-                  onChange={(e) => setFormData({ ...formData, conditionReason: e.target.value })}
-                  className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] focus:outline-none"
-                >
-                  {conditionsData.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                  <option value="General Psychiatric Evaluation">General Psychiatric Evaluation</option>
-                  <option value="Medication Second Opinion / Refinement">
-                    Medication Second Opinion / Refinement
+            <div>
+              <label className="text-xs font-semibold text-[#9E7206] uppercase tracking-wider block mb-1.5">
+                2. Primary Concern / Condition
+              </label>
+              <select
+                value={formData.conditionReason}
+                onChange={(e) => setFormData({ ...formData, conditionReason: e.target.value })}
+                className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] focus:outline-none"
+              >
+                {conditionsData.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
                   </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[#9E7206] uppercase tracking-wider block mb-1.5">
-                  Insurance / Payment
-                </label>
-                <select
-                  value={formData.insuranceProvider}
-                  onChange={(e) => setFormData({ ...formData, insuranceProvider: e.target.value })}
-                  className="w-full bg-[#FAF8F5] border border-stone-200 focus:border-[#D4AF37] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] focus:outline-none"
-                >
-                  <option value="Blue Cross Blue Shield (BCBS)">Blue Cross Blue Shield (BCBS)</option>
-                  <option value="Aetna">Aetna</option>
-                  <option value="Cigna / Evernorth">Cigna / Evernorth</option>
-                  <option value="UnitedHealthcare / Optum">UnitedHealthcare / Optum</option>
-                  <option value="Medicare">Medicare</option>
-                  <option value="Self-Pay / Out-of-Network Superbill">
-                    Self-Pay / Out-of-Network (Superbill)
-                  </option>
-                </select>
-              </div>
+                ))}
+                <option value="General Psychiatric Evaluation">General Psychiatric Evaluation</option>
+                <option value="Medication Second Opinion / Refinement">
+                  Medication Second Opinion / Refinement
+                </option>
+              </select>
             </div>
 
             {/* Patient Personal Information */}

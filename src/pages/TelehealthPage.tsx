@@ -181,10 +181,6 @@ export const TelehealthPage: React.FC<TelehealthPageProps> = ({ onOpenBooking })
             {
               q: 'What do I need to prepare for my virtual appointment?',
               a: 'You simply need a private, quiet room with adequate lighting and a stable internet connection on a smartphone, tablet, or computer with a camera and microphone.'
-            },
-            {
-              q: 'Does insurance cover telepsychiatry visits?',
-              a: 'Yes! Major commercial insurers (Aetna, BCBS, Cigna, UnitedHealthcare) and Medicare cover telehealth psychiatric visits with parity in Texas.'
             }
           ].map((item, i) => (
             <div key={i} className="p-5 rounded-2xl bg-white border border-stone-200 space-y-1.5 shadow-2xs">

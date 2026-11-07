@@ -164,17 +164,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            <button
-              onClick={() => handleNavClick('insurance')}
-              className={`hover:text-[#D4AF37] transition-colors whitespace-nowrap cursor-pointer py-1 relative ${
-                currentPage === 'insurance' ? 'text-[#D4AF37] font-semibold' : 'text-stone-200'
-              }`}
-            >
-              Insurance
-              {currentPage === 'insurance' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full"></span>
-              )}
-            </button>
 
             <button
               onClick={() => handleNavClick('resources')}
@@ -318,12 +307,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               Telehealth
             </button>
 
-            <button
-              onClick={() => handleNavClick('insurance')}
-              className="w-full text-left py-3.5 text-lg font-medium text-stone-200 hover:text-[#D4AF37] border-b border-stone-800/80 transition-colors"
-            >
-              Insurance
-            </button>
 
             <button
               onClick={() => handleNavClick('resources')}

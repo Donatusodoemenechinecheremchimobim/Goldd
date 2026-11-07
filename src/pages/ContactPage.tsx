@@ -48,7 +48,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onOpenBooking }) => {
             Contact Golden Mind Psychiatry PLLC
           </h1>
           <p className="text-base sm:text-lg text-[#57534E] max-w-2xl mx-auto font-light leading-relaxed">
-            We are here to answer your questions regarding evaluations, medication management, insurance coverage, and telehealth appointments.
+            We are here to answer your questions regarding evaluations, medication management, and telehealth appointments across Texas.
           </p>
         </div>
       </section>
