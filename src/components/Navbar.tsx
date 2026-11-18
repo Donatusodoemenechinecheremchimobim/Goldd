@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoldenMindLogo } from './GoldenMindLogo';
 import {
+  Menu,
   X,
   ChevronDown,
   Calendar,
@@ -89,9 +90,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Main Top Navigation Bar: Floating Frosted Obsidian Glass on Mobile, Architectural Black Bar on Desktop */}
-      <header className="sticky top-2.5 lg:top-0 z-40 mx-3 lg:mx-0 rounded-2xl lg:rounded-none bg-[#09090B]/75 lg:bg-black backdrop-blur-2xl backdrop-saturate-150 lg:backdrop-blur-none border border-[#D4AF37]/35 lg:border-x-0 lg:border-t-0 lg:border-b lg:border-[#D4AF37]/45 shadow-[0_14px_40px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.14)] lg:shadow-xl transition-all duration-300">
-        <div className="max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-16 lg:h-20 flex items-center justify-between gap-2 xl:gap-4">
+      {/* Main Top Navigation Bar (Deep Pure Black Background with Radiant Gold Letters) */}
+      <header className="sticky top-0 z-40 bg-black border-b border-[#D4AF37]/45 transition-all duration-300 shadow-xl">
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-20 flex items-center justify-between gap-2 xl:gap-4">
           {/* Zone 1: Brand Wordmark / Logo with Gold Letters */}
           <button
             onClick={() => handleNavClick('home')}
@@ -236,14 +237,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </nav>
 
-          {/* Zone 3: Desktop CTAs + High-Class Mobile Glass Action Trigger */}
+          {/* Zone 3: Client Portal + Book an Appointment + Mobile Hamburger */}
           <div className="flex items-center gap-2 xl:gap-2.5 shrink-0">
             <button
               onClick={() => handleNavClick('portal')}
               className={`hidden sm:inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 rounded-full text-xs font-semibold border transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                 currentPage === 'portal'
                   ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]'
-                  : 'bg-white/[0.06] lg:bg-stone-900 backdrop-blur-md text-[#D4AF37] border-[#D4AF37]/50 hover:border-[#D4AF37]'
+                  : 'bg-stone-900 text-[#D4AF37] border-[#D4AF37]/50 hover:border-[#D4AF37]'
               }`}
             >
               <span>Client Portal</span>
@@ -257,68 +258,27 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Book an Appointment</span>
             </button>
 
-            {/* Quick Mobile Portal Button on <640px */}
-            <button
-              onClick={() => handleNavClick('portal')}
-              className={`sm:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl border backdrop-blur-md transition-all cursor-pointer shrink-0 ${
-                currentPage === 'portal'
-                  ? 'bg-[#D4AF37]/20 border-[#D4AF37] text-[#F3E5AB]'
-                  : 'bg-white/[0.07] border-white/15 text-[#E6C35C] hover:border-[#D4AF37]/50'
-              }`}
-              aria-label="Open Client Portal"
-              title="Client Portal"
-            >
-              <Lock className="w-4 h-4" />
-            </button>
-
-            {/* Refined Mobile Glassmorphism Menu Trigger */}
+            {/* Mobile Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="lg:hidden inline-flex items-center gap-2 h-10 min-w-[44px] px-3.5 rounded-xl bg-gradient-to-b from-white/[0.13] to-white/[0.04] hover:from-white/[0.18] hover:to-white/[0.08] backdrop-blur-xl border border-[#D4AF37]/45 text-[#F3E5AB] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] active:scale-95 shrink-0"
-              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              className="lg:hidden p-2.5 rounded-xl bg-black text-[#D4AF37] hover:bg-stone-900 border-2 border-[#D4AF37]/70 transition-all shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              aria-label={mobileMenuOpen ? 'Close Menu' : 'Open Menu'}
               aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
-                <X className="w-4 h-4 text-[#D4AF37]" />
+                <X className="w-6 h-6 text-[#D4AF37]" />
               ) : (
-                <svg
-                  className="w-4 h-4 text-[#D4AF37]"
-                  viewBox="0 0 20 14"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M1 2.5H19"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M5 7H19"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M9 11.5H19"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <Menu className="w-6 h-6 text-[#D4AF37]" />
               )}
-              <span className="text-xs font-semibold tracking-wide whitespace-nowrap">
-                {mobileMenuOpen ? 'Close' : 'Menu'}
-              </span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* High-Class Frosted Obsidian Glassmorphism Mobile Navigation Menu */}
+      {/* High-Class Frosted Obsidian Glassmorphism Mobile Navigation Menu (Raised near top) */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-50 lg:hidden bg-black/60 backdrop-blur-md flex items-end sm:items-center justify-center p-2.5 sm:p-5 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 lg:hidden bg-black/60 backdrop-blur-md flex items-start sm:items-center justify-center pt-3 px-2.5 pb-4 sm:p-5 animate-in fade-in duration-200"
           role="dialog"
           aria-modal="true"
           aria-label="Mobile Navigation Menu"
@@ -326,7 +286,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg max-h-[90dvh] flex flex-col rounded-[28px] overflow-hidden bg-[#0B0B0E]/82 backdrop-blur-2xl backdrop-saturate-150 border border-[#D4AF37]/35 shadow-[0_28px_90px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.16)] text-stone-100"
+            className="relative w-full max-w-lg max-h-[88dvh] flex flex-col rounded-[28px] overflow-hidden bg-[#0B0B0E]/82 backdrop-blur-2xl backdrop-saturate-150 border border-[#D4AF37]/35 shadow-[0_28px_90px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.16)] text-stone-100"
           >
             {/* Subtle Specular Gold Ambient Top Highlight */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#D4AF37]/[0.12] via-[#D4AF37]/[0.03] to-transparent" />

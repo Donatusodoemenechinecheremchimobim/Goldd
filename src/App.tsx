@@ -4,8 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { MotionConfig } from 'motion/react';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { SmoothScrollEngine } from './components/SmoothScrollEngine';
 import { HomePage } from './pages/HomePage';
 import { AboutPage } from './pages/AboutPage';
 import { ServicesPage } from './pages/ServicesPage';
@@ -280,13 +282,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-[#1C1917] font-sans antialiased selection:bg-[#D4AF37]/30 selection:text-[#5B4208]">
-      {/* Radiant Souls Style Navigation with Golden Mind Branding */}
-      <Navbar
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        onOpenBooking={handleOpenBooking}
-      />
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen flex flex-col bg-white text-[#1C1917] font-sans antialiased selection:bg-[#D4AF37]/30 selection:text-[#5B4208]">
+        <SmoothScrollEngine pageKey={`${currentPage}-${currentParam || ''}`} />
+        {/* Radiant Souls Style Navigation with Golden Mind Branding */}
+        <Navbar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          onOpenBooking={handleOpenBooking}
+        />
 
       {/* Main Content Area */}
       <main className="flex-1">
@@ -429,6 +433,7 @@ export default function App() {
         prefillCondition={prefillCondition}
         onNavigateToPortal={() => handleNavigate('portal')}
       />
-    </div>
+      </div>
+    </MotionConfig>
   );
 }
