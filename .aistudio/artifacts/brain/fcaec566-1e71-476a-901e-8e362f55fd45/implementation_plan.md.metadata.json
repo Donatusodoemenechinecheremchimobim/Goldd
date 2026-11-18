@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for guaranteed SMTP email notifications to info@goldenmindpsychiatry.org across all appointment bookings, reschedules, cancellations, messages, and telehealth room launches, plus a high-end WebRTC HD Telehealth Video Sanctuary hosted directly on the Ubuntu server (Goldd).",
-  "updatedAt":  "2026-11-07T20:09:00.000564742Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

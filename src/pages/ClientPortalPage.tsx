@@ -2942,83 +2942,41 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
   if (!firebaseUser || !portalUser) {
     return (
       <section className="min-h-[84vh] bg-[#FAF9F5] py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center font-portal-body">
-        <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 bg-white border border-stone-200 rounded-[32px] overflow-hidden shadow-xl">
-          {/* Left Sanctuary Branding Column */}
-          <div className="lg:col-span-5 bg-[#0A0A0A] text-white p-8 sm:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-[#D4AF37]/30 relative overflow-hidden">
-            <div className="w-32 h-32 bg-white/5 absolute -right-8 -bottom-8 rounded-full pointer-events-none" />
-            <div className="space-y-6 relative z-10">
-              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#D4AF37]">
-                <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-                <span>HIPAA-Encrypted Client Portal</span>
+        <div
+          className={`${
+            isRegistering ? 'max-w-2xl' : 'max-w-md'
+          } w-full bg-white border border-stone-200 rounded-[28px] overflow-hidden shadow-xl transition-all`}
+        >
+          {/* Compact Header */}
+          <div className="bg-[#0A0A0A] text-white px-6 py-5 sm:px-8 sm:py-6 border-b border-[#D4AF37]/30 flex items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-[#D4AF37]">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>Client Portal</span>
               </div>
-
-              <h1 className="text-3xl font-bold font-portal-heading text-white leading-tight">
-                Golden Mind Psychiatry Client Portal
+              <h1 className="text-xl sm:text-2xl font-bold font-portal-heading text-white mt-0.5">
+                Golden Mind Psychiatry
               </h1>
-
-              <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
-                Welcome to your private digital care sanctuary with{' '}
-                <strong className="text-[#D4AF37]">Brenda Hobyani, PMHNP-BC</strong>. Our practice
-                is <strong className="text-white">100% Telehealth-Only</strong>, serving adults,
-                teens, and children across Texas from the comfort of home.
-              </p>
-
-              <div className="space-y-3 pt-2 text-xs text-stone-300">
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Mandatory 6-Digit Email Verification:</strong> Account registration dispatches a
-                    6-digit verification code directly to your email inbox before portal access is unlocked.
-                  </span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
-                  <span>
-                    <strong>1-Click HIPAA Video Sessions:</strong> Join your encrypted
-                    telepsychiatry video room directly from your private portal.
-                  </span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Practice Hours:</strong> Monday – Thursday: 8:00 AM – 4:00 PM · Friday:
-                    9:00 AM – 1:00 PM.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-8 mt-8 border-t border-stone-800 text-[11px] text-stone-400 space-y-1 relative z-10">
-              <p>
-                Need immediate crisis support? Call or text{' '}
-                <strong className="text-[#D4AF37]">988</strong> for the Suicide &amp; Crisis Lifeline.
-              </p>
-              <p>
-                Poison Control (24/7): Call{' '}
-                <a href="tel:8002221222" className="text-[#D4AF37] font-bold hover:underline">
-                  800-222-1222
-                </a>
-              </p>
             </div>
           </div>
 
-          {/* Right Authentication Form Column */}
-          <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center space-y-5">
-            {/* Segmented Mode Tabs: Sign In vs New Client Registration */}
-            <div className="grid grid-cols-2 p-1 rounded-[16px] bg-[#FAF9F5] border border-stone-200">
+          {/* Form Body */}
+          <div className="p-6 sm:p-8 flex flex-col justify-center space-y-5">
+            {/* Segmented Mode Tabs */}
+            <div className="grid grid-cols-2 p-1 rounded-[14px] bg-[#FAF9F5] border border-stone-200">
               <button
                 type="button"
                 onClick={() => {
                   setIsRegistering(false);
                   setAuthError(null);
                 }}
-                className={`py-2.5 px-3 rounded-[12px] text-xs font-bold transition-all cursor-pointer ${
+                className={`py-2 px-3 rounded-[10px] text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   !isRegistering
                     ? 'bg-[#0A0A0A] text-[#D4AF37] shadow-xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                Sign In (Existing Client)
+                Sign In
               </button>
               <button
                 type="button"
@@ -3026,25 +2984,14 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   setIsRegistering(true);
                   setAuthError(null);
                 }}
-                className={`py-2.5 px-3 rounded-[12px] text-xs font-bold transition-all cursor-pointer ${
+                className={`py-2 px-3 rounded-[10px] text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   isRegistering
                     ? 'bg-[#0A0A0A] text-[#D4AF37] shadow-xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                New Client Registration
+                Create Account
               </button>
-            </div>
-
-            <div className="border-b border-stone-200 pb-3">
-              <h2 className="text-2xl font-bold font-portal-heading text-stone-900">
-                {isRegistering ? 'Create Your Client Portal Account' : 'Sign In to Client Portal'}
-              </h2>
-              <p className="text-xs text-stone-500 mt-1">
-                {isRegistering
-                  ? 'Register with your email to receive a verification link in your inbox'
-                  : 'Sign in with Google or your verified email and password'}
-              </p>
             </div>
 
             {authError && (
@@ -3057,7 +3004,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     onClick={handleForgotPassword}
                     className="font-bold text-[#9E7206] underline cursor-pointer"
                   >
-                    Send Password Reset Link to {emailInput.trim() || 'My Email Inbox'}
+                    Reset Password
                   </button>
                 </div>
               </div>
@@ -3070,137 +3017,101 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
               </div>
             )}
 
-            {/* 1-Click Login Providers with Official Brand Logos */}
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* 1-Click Google Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('google')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-white hover:bg-stone-50 text-stone-900 font-bold text-xs flex items-center justify-center gap-2.5 border border-stone-300 hover:border-[#D4AF37] transition-all cursor-pointer shadow-xs disabled:opacity-60"
-                >
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      fill="#4285F4"
-                      d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
-                    />
-                  </svg>
-                  <span>
-                    {oauthLoadingProvider === 'google'
-                      ? 'Connecting to Google...'
-                      : '1-Click Login with Google'}
-                  </span>
-                </button>
+            {/* Symbol-Only Sign-In Icons */}
+            <div className="flex items-center justify-center gap-3">
+              {/* Google Symbol */}
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('google')}
+                disabled={oauthLoadingProvider !== null}
+                aria-label="Continue with Google"
+                title="Google"
+                className="w-12 h-12 rounded-2xl bg-white hover:bg-stone-50 flex items-center justify-center border border-stone-300 hover:border-[#D4AF37] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                  />
+                </svg>
+              </button>
 
-                {/* 1-Click Yahoo Mail Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('yahoo')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-[#6001D2] hover:bg-[#5001b0] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#6001D2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
-                >
-                  <span className="w-5 h-5 rounded-md bg-white flex items-center justify-center shrink-0">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#6001D2" aria-hidden="true">
-                      <path d="M12.92 15.04L17.58 4h-3.41l-2.85 7.22L8.45 4H4.83l4.79 11.04v5.96h3.3v-5.96zm5.79-2.87l1.46-8.17h-3.32l-.91 8.17h2.77zm-.31 5.83a1.88 1.88 0 100-3.76 1.88 1.88 0 000 3.76z" />
-                    </svg>
-                  </span>
-                  <span>
-                    {oauthLoadingProvider === 'yahoo'
-                      ? 'Connecting to Yahoo...'
-                      : '1-Click Login with Yahoo'}
-                  </span>
-                </button>
+              {/* X Symbol */}
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('twitter')}
+                disabled={oauthLoadingProvider !== null}
+                aria-label="Continue with X"
+                title="X"
+                className="w-12 h-12 rounded-2xl bg-black hover:bg-stone-900 text-white flex items-center justify-center border border-black transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </button>
 
-                {/* 1-Click X (Twitter) Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('twitter')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-black hover:bg-stone-900 text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-black transition-all cursor-pointer shadow-xs disabled:opacity-60"
-                >
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  <span>
-                    {oauthLoadingProvider === 'twitter'
-                      ? 'Connecting to X...'
-                      : '1-Click Login with X'}
-                  </span>
-                </button>
+              {/* Facebook Symbol */}
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('facebook')}
+                disabled={oauthLoadingProvider !== null}
+                aria-label="Continue with Facebook"
+                title="Facebook"
+                className="w-12 h-12 rounded-2xl bg-[#1877F2] hover:bg-[#1464cc] text-white flex items-center justify-center border border-[#1877F2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+              </button>
 
-                {/* 1-Click Facebook Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('facebook')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-[#1877F2] hover:bg-[#1464cc] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#1877F2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
-                >
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                  <span>
-                    {oauthLoadingProvider === 'facebook'
-                      ? 'Connecting to Facebook...'
-                      : '1-Click Login with Facebook'}
-                  </span>
-                </button>
+              {/* Yahoo Symbol */}
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('yahoo')}
+                disabled={oauthLoadingProvider !== null}
+                aria-label="Continue with Yahoo"
+                title="Yahoo"
+                className="w-12 h-12 rounded-2xl bg-[#6001D2] hover:bg-[#5001b0] text-white flex items-center justify-center border border-[#6001D2] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12.92 15.04L17.58 4h-3.41l-2.85 7.22L8.45 4H4.83l4.79 11.04v5.96h3.3v-5.96zm5.79-2.87l1.46-8.17h-3.32l-.91 8.17h2.77zm-.31 5.83a1.88 1.88 0 100-3.76 1.88 1.88 0 000 3.76z" />
+                </svg>
+              </button>
 
-                {/* 1-Click Microsoft (Outlook / Hotmail / Live) Sign-In */}
-                <button
-                  type="button"
-                  onClick={() => handleOAuthSignIn('microsoft')}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-[#0078D4] hover:bg-[#0064b1] text-white font-bold text-xs flex items-center justify-center gap-2.5 border border-[#0078D4] transition-all cursor-pointer shadow-xs disabled:opacity-60"
-                >
-                  <span className="w-5 h-5 rounded-md bg-white flex items-center justify-center shrink-0">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 23 23" aria-hidden="true">
-                      <path fill="#f25022" d="M1 1h10v10H1z" />
-                      <path fill="#7fba00" d="M12 1h10v10H12z" />
-                      <path fill="#00a4ef" d="M1 12h10v10H1z" />
-                      <path fill="#ffb900" d="M12 12h10v10H12z" />
-                    </svg>
-                  </span>
-                  <span>
-                    {oauthLoadingProvider === 'microsoft'
-                      ? 'Connecting to Outlook...'
-                      : '1-Click Login with Outlook'}
-                  </span>
-                </button>
-
-                {/* 1-Click Magic Email Link */}
-                <button
-                  type="button"
-                  onClick={handleSendMagicSignInLink}
-                  disabled={oauthLoadingProvider !== null}
-                  className="py-3 px-4 rounded-[12px] bg-[#FAF6EA] hover:bg-[#f3ebd3] text-[#9E7206] font-bold text-xs flex items-center justify-center gap-2 border border-[#D4AF37]/50 transition-all cursor-pointer disabled:opacity-60"
-                >
-                  <MailCheck className="w-4 h-4 text-[#9E7206] shrink-0" />
-                  <span>
-                    {oauthLoadingProvider === 'magic'
-                      ? 'Connecting...'
-                      : '1-Click Email Link'}
-                  </span>
-                </button>
-              </div>
+              {/* Outlook / Microsoft Symbol */}
+              <button
+                type="button"
+                onClick={() => handleOAuthSignIn('microsoft')}
+                disabled={oauthLoadingProvider !== null}
+                aria-label="Continue with Outlook"
+                title="Outlook"
+                className="w-12 h-12 rounded-2xl bg-white hover:bg-stone-50 flex items-center justify-center border border-stone-300 hover:border-[#0078D4] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 23 23" aria-hidden="true">
+                  <path fill="#f25022" d="M1 1h10v10H1z" />
+                  <path fill="#7fba00" d="M12 1h10v10H12z" />
+                  <path fill="#00a4ef" d="M1 12h10v10H1z" />
+                  <path fill="#ffb900" d="M12 12h10v10H12z" />
+                </svg>
+              </button>
             </div>
 
-            <div className="relative flex py-1 items-center">
+            <div className="relative flex items-center">
               <div className="grow border-t border-stone-200" />
               <span className="shrink mx-3 text-[11px] uppercase tracking-wider text-stone-400">
-                Or with Email &amp; Password
+                Or
               </span>
               <div className="grow border-t border-stone-200" />
             </div>
@@ -3295,7 +3206,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                   {isDobUnder18(dobInput) && (
                     <div className="p-3.5 rounded-[12px] bg-[#FAF6EA] border border-[#D4AF37]/60 space-y-2.5">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-[#9E7206]">
-                        Minor Patient (Under Age 18) — Texas Family Code Ch. 32 Guardian Consent
+                        Minor Patient (Under Age 18) — Guardian Consent
                       </p>
                       <div>
                         <label className="text-xs font-semibold text-stone-700 block mb-1">
@@ -3329,7 +3240,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <label className="text-xs font-semibold text-stone-700 block mb-1">
                     Email Address *
@@ -3338,13 +3249,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     ref={emailInputRef}
                     type="email"
                     required
-                    placeholder={
-                      selectedEmailProvider === 'yahoo'
-                        ? 'name@yahoo.com'
-                        : selectedEmailProvider === 'microsoft'
-                        ? 'name@outlook.com'
-                        : 'you@yahoo.com, @outlook.com, @gmail.com...'
-                    }
+                    placeholder="you@example.com"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200 text-xs focus:outline-none focus:border-[#D4AF37]"
@@ -3358,9 +3263,9 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     <button
                       type="button"
                       onClick={handleForgotPassword}
-                      className="text-[11px] font-bold text-[#9E7206] hover:underline cursor-pointer"
+                      className="text-[11px] font-semibold text-[#9E7206] hover:underline cursor-pointer"
                     >
-                      Reset Password?
+                      Forgot Password?
                     </button>
                   </div>
                   <div className="relative">
@@ -3391,37 +3296,10 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 </div>
               </div>
 
-              {/* US Email Domain Quick-Select Bar */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 mr-1">
-                  Quick US Mail:
-                </span>
-                {[
-                  '@yahoo.com',
-                  '@outlook.com',
-                  '@hotmail.com',
-                  '@icloud.com',
-                  '@aol.com',
-                  '@att.net',
-                  '@sbcglobal.net',
-                  '@comcast.net',
-                  '@gmail.com',
-                ].map((domain) => (
-                  <button
-                    key={domain}
-                    type="button"
-                    onClick={() => handleSelectEmailDomain(domain)}
-                    className="px-2 py-1 rounded-[8px] bg-[#FAF9F5] hover:bg-[#FAF6EA] border border-stone-200 hover:border-[#D4AF37] text-[10px] font-semibold text-stone-600 hover:text-[#9E7206] transition-colors cursor-pointer"
-                  >
-                    {domain}
-                  </button>
-                ))}
-              </div>
-
               {isRegistering && (
                 <div className="p-3.5 rounded-[12px] bg-[#FAF9F5] border border-stone-200/90 space-y-2 text-[11px] text-stone-700">
                   <p className="font-bold uppercase tracking-wider text-[10px] text-[#9E7206]">
-                    Mandatory Texas &amp; Federal Healthcare Consents
+                    Required Consents
                   </p>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
@@ -3432,9 +3310,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       className="mt-0.5 accent-[#9E7206] shrink-0"
                     />
                     <span>
-                      <strong>HIPAA, Texas HB 300 &amp; No Surprises Act Notice:</strong> I
-                      acknowledge the HIPAA &amp; Texas Medical Records Privacy Act (HB 300) Notice
-                      of Privacy Practices and my right to a Federal Good Faith Estimate. *
+                      I acknowledge the HIPAA &amp; Texas HB 300 Notice of Privacy Practices and
+                      Federal Good Faith Estimate. *
                     </span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
@@ -3446,10 +3323,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       className="mt-0.5 accent-[#9E7206] shrink-0"
                     />
                     <span>
-                      <strong>Texas Telehealth Consent &amp; Location Attestation:</strong> I consent
-                      to telehealth psychiatric services with Brenda Hobyani, MSN, APRN, PMHNP-BC and
-                      confirm I will be physically located in the State of Texas during telehealth
-                      sessions (Tex. Occ. Code Ch. 111). *
+                      I consent to Texas telehealth psychiatric services with Brenda Hobyani,
+                      PMHNP-BC and confirm I will be located in Texas during sessions. *
                     </span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
@@ -3461,9 +3336,8 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                       className="mt-0.5 accent-[#9E7206] shrink-0"
                     />
                     <span>
-                      <strong>FCC / TCPA Transactional SMS &amp; Email Consent:</strong> I consent to
-                      receive appointment links, verification codes, and care reminders via SMS/email
-                      (reply STOP to opt out). *
+                      I consent to receive appointment links, verification codes, and care reminders
+                      via SMS/email. *
                     </span>
                   </label>
                 </div>
@@ -3473,21 +3347,17 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 type="submit"
                 className="w-full py-3 rounded-[12px] bg-gold-gradient text-[#1C1917] font-bold text-xs sm:text-sm cursor-pointer hover:opacity-95 transition-opacity"
               >
-                {isRegistering
-                  ? 'Create Account & Continue to Registration'
-                  : 'Sign In / Continue to Client Portal'}
+                {isRegistering ? 'Create Account' : 'Sign In'}
               </button>
-
-              <div className="text-center pt-1">
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  className="text-xs font-bold text-[#9E7206] hover:underline cursor-pointer"
-                >
-                  Forgot or need to reset your password? Go to Reset Password Page →
-                </button>
-              </div>
             </form>
+
+            <div className="pt-3 border-t border-stone-100 text-center text-[11px] text-stone-500">
+              Need immediate crisis support? Call or text{' '}
+              <strong className="text-stone-800">988</strong> · Poison Control:{' '}
+              <a href="tel:8002221222" className="text-[#9E7206] font-semibold hover:underline">
+                800-222-1222
+              </a>
+            </div>
           </div>
         </div>
 
@@ -3563,18 +3433,18 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                 )}
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#9E7206]">
-                    1-Click Identity Authentication
+                    Account Sign-In
                   </span>
                   <h3 className="text-lg font-bold font-portal-heading text-stone-900">
                     {oneClickModalProvider === 'google'
                       ? 'Continue with Google'
                       : oneClickModalProvider === 'yahoo'
-                      ? 'Continue with Yahoo Mail'
+                      ? 'Continue with Yahoo'
                       : oneClickModalProvider === 'twitter'
                       ? 'Continue with X'
                       : oneClickModalProvider === 'facebook'
                       ? 'Continue with Facebook'
-                      : 'Continue with Microsoft Outlook'}
+                      : 'Continue with Outlook'}
                   </h3>
                 </div>
               </div>
@@ -3592,7 +3462,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                     ? 'Facebook account email address'
                     : 'Microsoft (@outlook.com / @hotmail.com / @live.com)'}
                 </strong>{' '}
-                below to sign in or register in one click.
+                below to sign in.
               </p>
 
               {oneClickError && (
@@ -3615,7 +3485,7 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
                         }}
                         className="font-bold text-[#9E7206] underline cursor-pointer"
                       >
-                        Send 1-Click Email Reset Link to {oneClickEmail}
+                        Send Password Reset Link to {oneClickEmail}
                       </button>
                     )}
                   </div>
@@ -3904,37 +3774,19 @@ export const ClientPortalPage: React.FC<ClientPortalPageProps> = ({
             onSubmit={handleCompleteClientRegistrationRecord}
             className="p-6 sm:p-8 space-y-6"
           >
-            {/* Prominent Notification Banner for 1-Click Sign-Up Users */}
             <div className="p-4 rounded-[16px] bg-[#FAF6EA] border border-[#D4AF37] text-xs text-stone-800 flex items-start gap-3 shadow-xs">
               <AlertCircle className="w-5 h-5 text-[#9E7206] shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-bold text-[#9E7206] uppercase tracking-wider text-[11px]">
-                  {usedOneClickMethod
-                    ? '1-Click Sign-Up Notice — Required Registration Details'
-                    : 'Required Client Portal Registration Details'}
+                  Required Client Portal Registration Details
                 </p>
                 <p className="leading-relaxed text-stone-700">
-                  {usedOneClickMethod ? (
-                    <>
-                      Because you signed up using the <strong>1-Click Login method</strong>, please
-                      fill in the mandatory registration details below (
-                      <strong>
-                        Full Legal Name, Mobile Phone Number, Date of Birth, Gender, and Primary
-                        Insurance
-                      </strong>
-                      —the same required details that clients who register with a standard email
-                      address must complete) before continuing to your Client Portal.
-                    </>
-                  ) : (
-                    <>
-                      Please complete your required registration details below (
-                      <strong>
-                        Full Legal Name, Mobile Phone Number, Date of Birth, Gender, and Primary
-                        Insurance
-                      </strong>
-                      ) before continuing into your Client Portal.
-                    </>
-                  )}
+                  Please complete your required registration details below (
+                  <strong>
+                    Full Legal Name, Mobile Phone Number, Date of Birth, Gender, and Primary
+                    Insurance
+                  </strong>
+                  ) before continuing into your Client Portal.
                 </p>
               </div>
             </div>
